@@ -1,15 +1,22 @@
 [CmdletBinding()]
 param(
-    [ValidateSet("camera", "synthetic", "replay")]
+    [ValidateSet("camera", "mp4", "synthetic", "replay")]
     [string]$Source = "camera",
 
+    [ValidateSet("jumping-jacks", "slow-balance")]
+    [string]$DemoVideo = "slow-balance",
+
+    [Alias("VideoPath")]
     [string]$ReplayPath = "",
+    [switch]$LoopReplay,
     [int]$CameraIndex = 0,
     [ValidateSet("auto", "dshow", "msmf", "v4l2", "avfoundation", "gstreamer")]
     [string]$CameraBackend = "auto",
     [switch]$MirrorInput,
     [string]$PoseModel = "",
     [switch]$FreeBase,
+    [ValidateSet("visual", "joints")]
+    [string]$ViewerMode = "visual",
     [switch]$Headless,
     [int]$MaxFrames = 0,
     [string]$PythonExe = "",
@@ -45,7 +52,7 @@ if ($needsSetup) {
 }
 
 if ($Source -eq "replay" -and [string]::IsNullOrWhiteSpace($ReplayPath)) {
-    throw "-ReplayPath is required when -Source replay is selected."
+    throw "-VideoPath is required when -Source replay is selected."
 }
 if ($CameraIndex -lt 0) {
     throw "-CameraIndex must be non-negative."
@@ -57,12 +64,24 @@ if ($MaxFrames -lt 0) {
 $teleopArguments = @(
     "-m", "robot_human_interface.app.teleop",
     "--source", $Source,
+    "--demo-video", $DemoVideo,
     "--camera-index", "$CameraIndex"
     "--camera-backend", $CameraBackend
+    "--viewer-mode", $ViewerMode
 )
 
 if ($ReplayPath) {
-    $teleopArguments += @("--replay-path", $ReplayPath)
+    if (-not [System.IO.Path]::IsPathRooted($ReplayPath)) {
+        $ReplayPath = Join-Path $projectRoot $ReplayPath
+    }
+    $ReplayPath = [System.IO.Path]::GetFullPath($ReplayPath)
+    if (-not (Test-Path -LiteralPath $ReplayPath -PathType Leaf)) {
+        throw "Video file does not exist: $ReplayPath"
+    }
+    $teleopArguments += @("--video-path", $ReplayPath)
+}
+if ($LoopReplay) {
+    $teleopArguments += "--loop-replay"
 }
 if ($PoseModel) {
     $teleopArguments += @("--pose-model", $PoseModel)

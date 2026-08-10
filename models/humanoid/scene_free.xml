@@ -1,5 +1,6 @@
-<mujoco model="humanoid_v4_proxy_free">
-  <compiler angle="degree" autolimits="true" coordinate="local"/>
+<mujoco model="humanoid_v4_free">
+  <compiler angle="degree" autolimits="true" coordinate="local"
+            meshdir="meshes" inertiagrouprange="2 2"/>
   <option timestep="0.002" integrator="implicitfast" solver="Newton" iterations="80"
           gravity="0 0 -9.81" cone="elliptic"/>
   <include file="robot.xml"/>

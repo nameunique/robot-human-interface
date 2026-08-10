@@ -1,10 +1,36 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
+from collections.abc import Iterator
+
 import mujoco
+import mujoco.viewer
 import numpy as np
 import pytest
 
 from robot_human_interface.simulation import HumanoidSimulation, LatestJointCommandBuffer
+
+
+class _FakeViewer:
+    def __init__(self) -> None:
+        self.opt = mujoco.MjvOption()
+        self.running = True
+        self.lock_count = 0
+        self.sync_count = 0
+
+    def is_running(self) -> bool:
+        return self.running
+
+    @contextmanager
+    def lock(self) -> Iterator[None]:
+        self.lock_count += 1
+        yield
+
+    def sync(self) -> None:
+        self.sync_count += 1
+
+    def close(self) -> None:
+        self.running = False
 
 
 def _self_contact_pairs(simulation: HumanoidSimulation) -> list[tuple[str, str]]:
@@ -51,7 +77,59 @@ def test_fixed_home_has_no_proxy_self_contact_and_tracks_targets() -> None:
         max_tracking_error = float(
             np.max(np.abs(settled.joint_positions_rad - simulation.home_positions_rad))
         )
-        assert max_tracking_error < np.deg2rad(2.0)
+        # The legs now carry gravity through bilateral ground contacts instead
+        # of hanging from a world weld, so a small compliant deflection is real.
+        assert max_tracking_error < np.deg2rad(3.0)
+
+
+def test_grounded_mode_is_supported_by_both_feet_and_robot_weight() -> None:
+    with HumanoidSimulation("fixed") as simulation:
+        initial_height = float(simulation.get_state().base_position_m[2])
+        settled = simulation.step(200)
+        ground_contacts: set[str] = set()
+        normal_force = 0.0
+        for contact_id, contact in enumerate(simulation.data.contact):
+            first = mujoco.mj_id2name(
+                simulation.model, mujoco.mjtObj.mjOBJ_GEOM, int(contact.geom1)
+            )
+            second = mujoco.mj_id2name(
+                simulation.model, mujoco.mjtObj.mjOBJ_GEOM, int(contact.geom2)
+            )
+            if "ground" not in {first, second}:
+                continue
+            ground_contacts.update({first, second})
+            force = np.zeros(6, dtype=np.float64)
+            mujoco.mj_contactForce(simulation.model, simulation.data, contact_id, force)
+            normal_force += float(force[0])
+
+        assert {"foot_rl_geom", "foot_ll_geom"} <= ground_contacts
+        robot_mass = 2.933134
+        assert normal_force == pytest.approx(robot_mass * 9.81, rel=0.03)
+        assert settled.base_position_m[2] < initial_height
+
+
+def test_free_mode_initially_transfers_weight_through_both_feet() -> None:
+    with HumanoidSimulation("free") as simulation:
+        simulation.step(100)
+        contacted_feet: set[str] = set()
+        normal_force = 0.0
+        for contact_id, contact in enumerate(simulation.data.contact):
+            names = {
+                mujoco.mj_id2name(
+                    simulation.model, mujoco.mjtObj.mjOBJ_GEOM, int(contact.geom1)
+                ),
+                mujoco.mj_id2name(
+                    simulation.model, mujoco.mjtObj.mjOBJ_GEOM, int(contact.geom2)
+                ),
+            }
+            if "ground" in names:
+                contacted_feet.update(names)
+                force = np.zeros(6, dtype=np.float64)
+                mujoco.mj_contactForce(simulation.model, simulation.data, contact_id, force)
+                normal_force += float(force[0])
+
+        assert {"foot_rl_geom", "foot_ll_geom"} <= contacted_feet
+        assert normal_force == pytest.approx(2.933134 * 9.81, rel=0.05)
 
 
 def test_targets_are_reordered_and_clamped() -> None:
@@ -97,6 +175,81 @@ def test_reset_normalizes_base_quaternion() -> None:
         )
         np.testing.assert_allclose(state.base_position_m, (0.0, 0.0, 1.0), atol=1e-12)
         np.testing.assert_allclose(state.base_orientation_wxyz, (1.0, 0.0, 0.0, 0.0))
+
+
+def test_view_modes_apply_deterministic_layers_under_viewer_lock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    viewer = _FakeViewer()
+    callbacks: list[object] = []
+
+    def fake_launch_passive(
+        model: mujoco.MjModel,
+        data: mujoco.MjData,
+        *,
+        key_callback: object,
+    ) -> _FakeViewer:
+        assert model is not None
+        assert data is not None
+        callbacks.append(key_callback)
+        return viewer
+
+    monkeypatch.setattr(mujoco.viewer, "launch_passive", fake_launch_passive)
+
+    with HumanoidSimulation("fixed") as simulation:
+        assert simulation.launch_viewer("visual") is viewer
+        assert simulation.viewer_mode == "visual"
+        np.testing.assert_array_equal(viewer.opt.geomgroup, (1, 1, 0, 0, 0, 0))
+        np.testing.assert_array_equal(viewer.opt.sitegroup, (0, 0, 0, 0, 0, 0))
+        assert viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_JOINT] == 0
+        assert viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_AUTOCONNECT] == 0
+
+        assert simulation.set_view_mode("joints") == "joints"
+        np.testing.assert_array_equal(viewer.opt.geomgroup, (1, 0, 0, 0, 0, 0))
+        np.testing.assert_array_equal(viewer.opt.jointgroup, (1, 0, 0, 0, 0, 0))
+        assert viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_JOINT] == 1
+        assert viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_AUTOCONNECT] == 1
+
+        assert simulation.toggle_view_mode() == "visual"
+        assert viewer.lock_count == 3
+        assert viewer.sync_count == 3
+        with pytest.raises(ValueError, match="visual.*joints"):
+            simulation.set_view_mode("invalid")  # type: ignore[arg-type]
+
+    assert len(callbacks) == 1
+    assert not viewer.running
+
+
+def test_viewer_v_key_defers_toggle_until_simulation_sync(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    viewer = _FakeViewer()
+    callback = None
+
+    def fake_launch_passive(
+        _model: mujoco.MjModel,
+        _data: mujoco.MjData,
+        *,
+        key_callback: object,
+    ) -> _FakeViewer:
+        nonlocal callback
+        callback = key_callback
+        return viewer
+
+    monkeypatch.setattr(mujoco.viewer, "launch_passive", fake_launch_passive)
+
+    with HumanoidSimulation("fixed") as simulation:
+        simulation.launch_viewer()
+        assert callable(callback)
+        callback(ord("V"))
+        assert simulation.viewer_mode == "visual"
+        assert viewer.lock_count == 1
+
+        simulation.sync_viewer()
+        assert simulation.viewer_mode == "joints"
+        assert viewer.lock_count == 2
+        assert viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_JOINT] == 1
+        assert viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_AUTOCONNECT] == 1
 
 
 def test_latest_command_buffer_returns_copies() -> None:

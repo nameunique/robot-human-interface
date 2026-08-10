@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from threading import Event
 from types import TracebackType
-from typing import Any, Literal, TypeAlias
+from typing import Any, Literal, TypeAlias, cast
 
 import mujoco
 import numpy as np
@@ -18,6 +19,31 @@ from .types import HumanoidState, LatestJointCommandBuffer
 FloatArray = NDArray[np.float64]
 PathLike: TypeAlias = str | Path
 SceneName: TypeAlias = Literal["fixed", "free"]
+ViewMode: TypeAlias = Literal["visual", "joints"]
+
+
+def _validate_view_mode(view_mode: str) -> ViewMode:
+    if view_mode not in {"visual", "joints"}:
+        raise ValueError("view_mode must be 'visual' or 'joints'")
+    return cast(ViewMode, view_mode)
+
+
+def _configure_view_options(options: mujoco.MjvOption, view_mode: ViewMode) -> None:
+    """Apply one deterministic visual layer preset to a viewer option struct."""
+
+    options.geomgroup[:] = 0
+    options.geomgroup[0] = 1  # Ground and other environment geoms.
+    options.jointgroup[:] = 0
+    options.jointgroup[0] = 1
+    options.sitegroup[:] = 0
+    options.flags[mujoco.mjtVisFlag.mjVIS_JOINT] = 0
+    options.flags[mujoco.mjtVisFlag.mjVIS_AUTOCONNECT] = 0
+
+    if view_mode == "visual":
+        options.geomgroup[1] = 1  # Render meshes; collision group 2 stays hidden.
+    else:
+        options.flags[mujoco.mjtVisFlag.mjVIS_JOINT] = 1
+        options.flags[mujoco.mjtVisFlag.mjVIS_AUTOCONNECT] = 1
 
 
 def _project_root() -> Path:
@@ -38,9 +64,10 @@ class HumanoidSimulation:
     Parameters
     ----------
     scene:
-        ``"fixed"`` welds the free torso to world and is the camera-retargeting
-        default. ``"free"`` allows the robot to fall. A path may also point at
-        a custom compatible MJCF scene.
+        ``"fixed"`` attaches the free torso to a vertical carriage: the feet
+        carry gravity while horizontal position and attitude stay stabilized.
+        It is the camera-retargeting default. ``"free"`` allows the robot to
+        fall. A path may also point at a custom compatible MJCF scene.
     joint_config_path:
         Canonical YAML schema. It supplies order, limits and neutral targets.
 
@@ -63,6 +90,9 @@ class HumanoidSimulation:
         self.model = mujoco.MjModel.from_xml_path(str(self.model_path))
         self.data = mujoco.MjData(self.model)
         self._viewer: Any | None = None
+        self._viewer_mode: ViewMode = "visual"
+        self._viewer_toggle_requested = Event()
+        self._viewer_options_dirty = Event()
         self._closed = False
 
         self._joint_ids = np.asarray(
@@ -285,14 +315,50 @@ class HumanoidSimulation:
             contact_count=int(self.data.ncon),
         )
 
-    def launch_viewer(self) -> Any:
+    @property
+    def viewer_mode(self) -> ViewMode:
+        return self._viewer_mode
+
+    def set_view_mode(self, view_mode: ViewMode) -> ViewMode:
+        """Select a viewer preset without changing collision or dynamics state."""
+
+        self._ensure_open()
+        accepted = _validate_view_mode(view_mode)
+        self._viewer_mode = accepted
+        self._viewer_options_dirty.set()
+        self.sync_viewer()
+        return accepted
+
+    def toggle_view_mode(self) -> ViewMode:
+        """Toggle between the render-mesh and joint-skeleton presets."""
+
+        next_mode: ViewMode = "joints" if self._viewer_mode == "visual" else "visual"
+        return self.set_view_mode(next_mode)
+
+    def _viewer_key_callback(self, keycode: int) -> None:
+        # The callback runs on the viewer thread.  Defer all viewer mutations to
+        # sync_viewer(), which is owned by the simulation thread.
+        if keycode in (ord("V"), ord("v")):
+            self._viewer_toggle_requested.set()
+
+    def launch_viewer(self, view_mode: ViewMode = "visual") -> Any:
         """Launch MuJoCo's passive viewer; physics remains caller-owned."""
 
         self._ensure_open()
+        accepted = _validate_view_mode(view_mode)
         if self._viewer is None:
             import mujoco.viewer
 
-            self._viewer = mujoco.viewer.launch_passive(self.model, self.data)
+            self._viewer_mode = accepted
+            self._viewer_options_dirty.set()
+            self._viewer = mujoco.viewer.launch_passive(
+                self.model,
+                self.data,
+                key_callback=self._viewer_key_callback,
+            )
+            self.sync_viewer()
+        elif accepted != self._viewer_mode:
+            self.set_view_mode(accepted)
         return self._viewer
 
     @property
@@ -300,8 +366,20 @@ class HumanoidSimulation:
         return self._viewer is not None and bool(self._viewer.is_running())
 
     def sync_viewer(self) -> None:
-        if self._viewer is not None and self._viewer.is_running():
-            self._viewer.sync()
+        viewer = self._viewer
+        if viewer is None or not viewer.is_running():
+            return
+
+        if self._viewer_toggle_requested.is_set():
+            self._viewer_toggle_requested.clear()
+            self._viewer_mode = "joints" if self._viewer_mode == "visual" else "visual"
+            self._viewer_options_dirty.set()
+
+        if self._viewer_options_dirty.is_set():
+            with viewer.lock():
+                _configure_view_options(viewer.opt, self._viewer_mode)
+            self._viewer_options_dirty.clear()
+        viewer.sync()
 
     def _assert_finite(self) -> None:
         arrays = (self.data.qpos, self.data.qvel, self.data.ctrl, self.data.actuator_force)
@@ -316,6 +394,8 @@ class HumanoidSimulation:
         if self._viewer is not None:
             self._viewer.close()
             self._viewer = None
+        self._viewer_toggle_requested.clear()
+        self._viewer_options_dirty.clear()
         self._closed = True
 
     def __enter__(self) -> "HumanoidSimulation":

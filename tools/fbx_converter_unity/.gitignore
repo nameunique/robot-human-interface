@@ -1,0 +1,11 @@
+/Library/
+/Logs/
+/Temp/
+/UserSettings/
+/Assets/Input/
+/Assets/Input.meta
+/Assets/Editor.meta
+/Assets/Editor/*.meta
+/Packages/packages-lock.json
+/ProjectSettings/*
+!/ProjectSettings/ProjectVersion.txt

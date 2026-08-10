@@ -225,7 +225,12 @@ class SyntheticCameraSource:
 
 
 class OpenCVVideoSource:
-    """Replay a video file through the same frame API as the live camera."""
+    """Replay a video file through the same frame API as the live camera.
+
+    Media timestamps are derived from the source FPS rather than wall-clock
+    decode time.  Optional real-time pacing only delays frame delivery; it
+    therefore cannot introduce timestamp jitter into pose estimation.
+    """
 
     def __init__(
         self,
@@ -233,16 +238,21 @@ class OpenCVVideoSource:
         *,
         mirror: bool = False,
         loop: bool = False,
+        realtime: bool = False,
         clock: Callable[[], float] = monotonic,
+        sleeper: Callable[[float], None] = sleep,
     ) -> None:
         self.path = Path(path)
         self.mirror = mirror
         self.loop = loop
+        self.realtime = realtime
         self._clock = clock
+        self._sleep = sleeper
         self._capture = None
         self._sequence = 0
         self._fps = 30.0
         self._start_timestamp: float | None = None
+        self._last_delivery_timestamp: float | None = None
 
     def open(self) -> "OpenCVVideoSource":
         if self._capture is not None:
@@ -255,8 +265,24 @@ class OpenCVVideoSource:
         reported_fps = float(capture.get(cv2.CAP_PROP_FPS))
         self._fps = reported_fps if np.isfinite(reported_fps) and reported_fps > 0.0 else 30.0
         self._capture = capture
+        self._sequence = 0
         self._start_timestamp = self._clock()
+        self._last_delivery_timestamp = None
         return self
+
+    def _pace_delivery(self) -> None:
+        if not self.realtime:
+            return
+        now = self._clock()
+        if self._last_delivery_timestamp is not None:
+            deadline = self._last_delivery_timestamp + 1.0 / self._fps
+            delay = deadline - now
+            if delay > 0.0:
+                self._sleep(delay)
+                now = self._clock()
+        # A long UI pause makes ``now`` later than the old deadline. Starting
+        # the next interval here avoids a burst of catch-up frames on resume.
+        self._last_delivery_timestamp = now
 
     def read(self) -> CameraFrame | None:
         if self._capture is None:
@@ -269,6 +295,7 @@ class OpenCVVideoSource:
             ok, image = self._capture.read()
         if not ok or image is None:
             return None
+        self._pace_delivery()
         if self.mirror:
             image = np.ascontiguousarray(image[:, ::-1])
         assert self._start_timestamp is not None
@@ -281,6 +308,7 @@ class OpenCVVideoSource:
         capture, self._capture = self._capture, None
         if capture is not None:
             capture.release()
+        self._last_delivery_timestamp = None
 
     def __enter__(self) -> "OpenCVVideoSource":
         return self.open()

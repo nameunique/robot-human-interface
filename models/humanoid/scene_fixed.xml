@@ -1,11 +1,27 @@
-<mujoco model="humanoid_v4_proxy_fixed">
-  <compiler angle="degree" autolimits="true" coordinate="local"/>
+<mujoco model="humanoid_v4_grounded_fixed">
+  <compiler angle="degree" autolimits="true" coordinate="local"
+            meshdir="meshes" inertiagrouprange="2 2"/>
   <option timestep="0.002" integrator="implicitfast" solver="Newton" iterations="80"
           gravity="0 0 -9.81" cone="elliptic"/>
   <include file="robot.xml"/>
 
-  <!-- The model retains its free root so fixed/free scenes share one robot.xml. -->
+  <!--
+    A mass-light carriage can move only along world Z. Welding the torso to
+    this carriage stabilizes horizontal position and attitude without holding
+    the robot above the floor: gravity lowers the whole robot until its feet
+    carry the vertical load. The torso keeps its free joint so fixed/free
+    scenes continue to share robot.xml and the runtime state layout.
+  -->
+  <worldbody>
+    <body name="standing_carriage">
+      <joint name="standing_vertical" type="slide" axis="0 0 1" limited="false" damping="0.1"/>
+      <inertial pos="0 0 0" mass="0.000001"
+                diaginertia="0.000000001 0.000000001 0.000000001"/>
+    </body>
+  </worldbody>
+
   <equality>
-    <weld name="fixed_base" body1="torso" solref="0.002 1" solimp="0.99 0.999 0.0001"/>
+    <weld name="fixed_base" body1="torso" body2="standing_carriage"
+          solref="0.002 1" solimp="0.99 0.999 0.0001"/>
   </equality>
 </mujoco>

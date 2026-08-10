@@ -13,6 +13,13 @@ import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 WINDOW_NAME = "Robot human interface - camera skeleton"
+BUNDLED_VIDEO_PATHS = {
+    "jumping-jacks": PROJECT_ROOT / "assets" / "videos" / "jumping_jacks_demo.mp4",
+    "slow-balance": PROJECT_ROOT / "assets" / "videos" / "slow_balance_demo.mp4",
+}
+DEFAULT_BUNDLED_VIDEO = "slow-balance"
+# Legacy constant name retained for callers that expect one default demo path.
+DEMO_VIDEO_PATH = BUNDLED_VIDEO_PATHS[DEFAULT_BUNDLED_VIDEO]
 LOGGER = logging.getLogger(__name__)
 
 
@@ -61,14 +68,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--source",
-        choices=("camera", "synthetic", "replay"),
+        choices=("camera", "mp4", "synthetic", "replay"),
         default="camera",
-        help="Frame/pose source. Synthetic needs no camera or MediaPipe inference.",
+        help=(
+            "Frame/pose source. 'mp4' uses the bundled demo video, 'replay' "
+            "uses --video-path, and synthetic needs no camera or MediaPipe inference."
+        ),
     )
     parser.add_argument(
         "--headless",
         action="store_true",
         help="Do not open the MuJoCo viewer or OpenCV skeleton window.",
+    )
+    parser.add_argument(
+        "--demo-video",
+        choices=tuple(BUNDLED_VIDEO_PATHS),
+        default=DEFAULT_BUNDLED_VIDEO,
+        help="Bundled video used with --source mp4 (default: slow-balance).",
     )
     parser.add_argument(
         "--max-frames",
@@ -86,9 +102,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--fixed-base",
         action="store_false",
         dest="free_base",
-        help="Weld the torso to world (default).",
+        help="Use the grounded vertical stabilizer so the feet carry the robot (default).",
     )
     parser.set_defaults(free_base=False)
+    parser.add_argument(
+        "--viewer-mode",
+        choices=("visual", "joints"),
+        default="visual",
+        help="Initial MuJoCo rendering: imported robot meshes or joint skeleton.",
+    )
     parser.add_argument("--camera-index", type=int, default=int(camera_defaults.get("index", 0)))
     parser.add_argument(
         "--camera-backend",
@@ -111,7 +133,7 @@ def build_parser() -> argparse.ArgumentParser:
         dest="mirror_input",
     )
     parser.set_defaults(mirror_input=bool(camera_defaults.get("mirror", False)))
-    parser.add_argument("--replay-path", type=Path)
+    parser.add_argument("--replay-path", "--video-path", dest="replay_path", type=Path)
     parser.add_argument("--loop-replay", action="store_true")
     parser.add_argument(
         "--pose-model",
@@ -160,7 +182,22 @@ def _validate_args(args: argparse.Namespace) -> None:
         if not 0.0 <= value <= 1.0:
             raise ValueError(f"--{name.replace('_', '-')} must be within [0, 1]")
     if args.source == "replay" and args.replay_path is None:
-        raise ValueError("--replay-path is required when --source replay is selected")
+        raise ValueError("--video-path is required when --source replay is selected")
+
+
+def _video_path(args: argparse.Namespace) -> Path:
+    """Return the explicit replay path or the repository's licensed demo MP4."""
+
+    path = BUNDLED_VIDEO_PATHS[args.demo_video] if args.source == "mp4" else args.replay_path
+    if path is None:
+        raise ValueError("--video-path is required when --source replay is selected")
+    resolved = path.expanduser()
+    if not resolved.is_absolute():
+        resolved = PROJECT_ROOT / resolved
+    resolved = resolved.resolve()
+    if not resolved.is_file():
+        raise FileNotFoundError(f"video file does not exist: {resolved}")
+    return resolved
 
 
 def _make_perception(args: argparse.Namespace) -> tuple[Any, Any]:
@@ -202,11 +239,11 @@ def _make_perception(args: argparse.Namespace) -> tuple[Any, Any]:
             )
         )
     else:
-        assert args.replay_path is not None
         source = OpenCVVideoSource(
-            args.replay_path.expanduser().resolve(),
+            _video_path(args),
             mirror=args.mirror_input,
             loop=args.loop_replay,
+            realtime=not args.headless,
         )
 
     pose = MediaPipePoseLandmarker(
@@ -235,6 +272,9 @@ def _draw_status(
     calibrating: bool,
     calibration_progress: float,
     base_mode: str,
+    view_mode: str,
+    source_label: str,
+    frame_index: int,
 ) -> np.ndarray:
     import cv2
 
@@ -243,8 +283,17 @@ def _draw_status(
     cv2.putText(image, status, (16, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
     cv2.putText(
         image,
-        f"base={base_mode} | C calibrate | R reset | Space pause | Esc exit",
+        f"source={source_label} | frame={frame_index} | base={base_mode} | view={view_mode}",
         (16, 58),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.48,
+        (235, 235, 235),
+        1,
+    )
+    cv2.putText(
+        image,
+        "V visual/joints | C calibrate | R reset | Space pause | Esc exit",
+        (16, 84),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.48,
         (235, 235, 235),
@@ -254,13 +303,34 @@ def _draw_status(
         cv2.putText(
             image,
             f"calibration {calibration_progress * 100:3.0f}% - hold neutral pose",
-            (16, 84),
+            (16, 110),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.55,
             (60, 220, 255),
             2,
         )
     return image
+
+
+def _create_display_window(cv2: Any, image: np.ndarray) -> None:
+    """Create a resizable preview that also fits portrait phone videos."""
+
+    flags = int(cv2.WINDOW_NORMAL) | int(getattr(cv2, "WINDOW_KEEPRATIO", 0))
+    cv2.namedWindow(WINDOW_NAME, flags)
+    height, width = image.shape[:2]
+    scale = min(1.0, 1100.0 / width, 850.0 / height)
+    cv2.resizeWindow(
+        WINDOW_NAME,
+        max(320, int(round(width * scale))),
+        max(320, int(round(height * scale))),
+    )
+
+
+def _display_window_is_open(cv2: Any) -> bool:
+    try:
+        return float(cv2.getWindowProperty(WINDOW_NAME, cv2.WND_PROP_VISIBLE)) >= 1.0
+    except cv2.error:
+        return False
 
 
 def _handle_key(
@@ -284,6 +354,9 @@ def _handle_key(
         retargeter.reset()
         simulation.reset()
         LOGGER.info("simulation and retargeter reset")
+    elif key in (ord("v"), ord("V")):
+        mode = simulation.toggle_view_mode()
+        LOGGER.info("MuJoCo viewer mode: %s", mode)
     return True, paused
 
 
@@ -304,6 +377,7 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
     simulation = HumanoidSimulation(base_mode)
     display_enabled = not args.headless
     viewer_started = False
+    display_window_created = False
     paused = False
     frames = 0
     skeleton_frames = 0
@@ -311,13 +385,48 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
     command_min: np.ndarray | None = None
     command_max: np.ndarray | None = None
     final_base_height = float(simulation.get_state().base_position_m[2])
+    last_pose_overlay: np.ndarray | None = None
+    last_command_stale = True
+    source_label = args.source
+    if args.source in {"mp4", "replay"}:
+        source_label = _video_path(args).name
 
     try:
         if display_enabled:
-            simulation.launch_viewer()
+            simulation.launch_viewer(args.viewer_mode)
             viewer_started = True
 
         while args.max_frames <= 0 or frames < args.max_frames:
+            if display_enabled and paused:
+                import cv2
+
+                simulation.sync_viewer()
+                if last_pose_overlay is not None:
+                    paused_overlay = _draw_status(
+                        last_pose_overlay.copy(),
+                        paused=True,
+                        stale=last_command_stale,
+                        calibrating=retargeter.is_calibrating,
+                        calibration_progress=retargeter.calibration_progress,
+                        base_mode=base_mode,
+                        view_mode=simulation.viewer_mode,
+                        source_label=source_label,
+                        frame_index=frames,
+                    )
+                    cv2.imshow(WINDOW_NAME, paused_overlay)
+                keep_running, paused = _handle_key(
+                    cv2.waitKey(20) & 0xFF,
+                    simulation=simulation,
+                    retargeter=retargeter,
+                    paused=paused,
+                )
+                if not keep_running or not _display_window_is_open(cv2):
+                    break
+                if viewer_started and not simulation.viewer_is_running:
+                    LOGGER.info("MuJoCo viewer was closed")
+                    break
+                continue
+
             frame = source.read()
             if frame is None:
                 break
@@ -346,6 +455,11 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
                 import cv2
 
                 overlay = draw_pose_overlay(frame.image_bgr, skeleton, confidence_threshold=0.5)
+                last_pose_overlay = overlay.copy()
+                last_command_stale = command.stale
+                if not display_window_created:
+                    _create_display_window(cv2, overlay)
+                    display_window_created = True
                 _draw_status(
                     overlay,
                     paused=paused,
@@ -353,6 +467,9 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
                     calibrating=retargeter.is_calibrating,
                     calibration_progress=retargeter.calibration_progress,
                     base_mode=base_mode,
+                    view_mode=simulation.viewer_mode,
+                    source_label=source_label,
+                    frame_index=frames,
                 )
                 cv2.imshow(WINDOW_NAME, overlay)
                 keep_running, paused = _handle_key(
@@ -363,11 +480,16 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
                 )
                 if not keep_running:
                     break
+                if not _display_window_is_open(cv2):
+                    LOGGER.info("skeleton preview window was closed")
+                    break
                 if viewer_started and not simulation.viewer_is_running:
                     LOGGER.info("MuJoCo viewer was closed")
                     break
+        if args.source in {"mp4", "replay"} and frames == 0:
+            raise RuntimeError(f"video did not yield a decodable frame: {_video_path(args)}")
     finally:
-        if display_enabled:
+        if display_enabled and display_window_created:
             try:
                 import cv2
 

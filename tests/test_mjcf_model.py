@@ -86,17 +86,39 @@ def test_mjcf_matches_limits_axes_and_provisional_total_mass(scene: str) -> None
             atol=1e-9,
         )
 
-    assert float(np.sum(model.body_mass)) == pytest.approx(2.933134, abs=1e-8)
+    robot_mass = float(np.sum(model.body_mass))
+    carriage_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "standing_carriage")
+    if carriage_id >= 0:
+        robot_mass -= float(model.body_mass[carriage_id])
+    assert robot_mass == pytest.approx(2.933134, abs=1e-8)
 
 
-def test_fixed_and_free_scenes_differ_only_by_base_constraint() -> None:
+def test_fixed_scene_uses_vertical_carriage_while_free_scene_has_no_constraint() -> None:
     fixed = _load_model("fixed")
     free = _load_model("free")
     assert fixed.neq == 1
     assert free.neq == 0
     assert mujoco.mj_id2name(fixed, mujoco.mjtObj.mjOBJ_EQUALITY, 0) == "fixed_base"
-    assert fixed.nq == free.nq == 27
-    assert fixed.nv == free.nv == 26
+    assert mujoco.mj_name2id(fixed, mujoco.mjtObj.mjOBJ_JOINT, "standing_vertical") >= 0
+    assert mujoco.mj_name2id(free, mujoco.mjtObj.mjOBJ_JOINT, "standing_vertical") == -1
+    assert fixed.nq == 28
+    assert fixed.nv == 27
+    assert free.nq == 27
+    assert free.nv == 26
+
+
+@pytest.mark.parametrize("scene", ["fixed", "free"])
+def test_visual_meshes_and_collision_proxies_are_separate_layers(scene: str) -> None:
+    model = _load_model(scene)
+    assert model.nmesh == 21
+    assert len(tuple((MODEL_DIR / "meshes").glob("*.obj"))) == 21
+
+    groups, counts = np.unique(model.geom_group, return_counts=True)
+    assert dict(zip(groups.tolist(), counts.tolist(), strict=True)) == {0: 1, 1: 21, 2: 21}
+    visual_ids = np.flatnonzero(model.geom_group == 1)
+    assert np.all(model.geom_contype[visual_ids] == 0)
+    assert np.all(model.geom_conaffinity[visual_ids] == 0)
+    assert mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, 0) == "ground"
 
 
 @pytest.mark.parametrize("scene", ["fixed", "free"])

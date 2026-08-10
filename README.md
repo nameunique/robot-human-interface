@@ -9,9 +9,11 @@
 использовался только как read-only источник параметров и визуальной геометрии.
 
 > Это исследовательский прототип, а не готовый контур управления реальным
-> роботом. Текущий retargeter не удерживает равновесие, а физика робота пока
-> основана на явно помеченной primitive proxy-модели. По умолчанию запускается
-> fixed-base сцена.
+> роботом. Текущий retargeter не удерживает равновесие. Визуальная оболочка уже
+> собрана из 21 исходного Unity-меша, но collision shapes, inertia/CoM и gains
+> пока остаются явно помеченными provisional. По умолчанию запускается
+> grounded-fixed сцена: стопы несут вес, а вертикальная направляющая не даёт
+> корпусу завалиться до появления balance-controller.
 
 ## Windows: пошаговый запуск
 
@@ -114,12 +116,42 @@ Get-PnpDevice -Class Camera
 
 Откроются два окна:
 
-1. `MuJoCo : humanoid_v4_proxy_fixed` — симуляция робота;
+1. `MuJoCo : humanoid_v4_grounded_fixed` — симуляция робота;
 2. `Robot human interface - camera skeleton` — синтетический кадр и скелет.
 
 Чтобы остановить программу, выберите окно `camera skeleton` и нажмите `Esc`.
+В окне MuJoCo нажмите `V`, чтобы переключаться между полноценной 3D-моделью и
+кинематическим видом суставов.
 
-### 7. Запуск с реальной камерой
+### 7. Запуск на встроенном MP4
+
+В репозитории есть два лицензированных видео с человеком в полный рост. По
+умолчанию запускается медленный 65-секундный тест: сначала плавные движения
+руками, затем баланс последовательно на каждой ноге. Он проходит через тот же
+MediaPipe → retargeting → MuJoCo pipeline, что и камера:
+
+```powershell
+.\scripts\run_camera_teleop.ps1 -Source mp4 -LoopReplay
+```
+
+То же самое с явным выбором теста:
+
+```powershell
+.\scripts\run_camera_teleop.ps1 -Source mp4 -DemoVideo slow-balance -LoopReplay
+```
+
+Старый быстрый ролик с jumping jacks сохранён как отдельный вариант:
+
+```powershell
+.\scripts\run_camera_teleop.ps1 -Source mp4 -DemoVideo jumping-jacks -LoopReplay
+```
+
+Медленный ролик воспроизводится с частотой 29,97 FPS, но движения внутри него
+замедлены ровно в два раза. Откроются окно исходного кадра со скелетом и MuJoCo
+viewer с роботом. Источник, авторы, лицензии, преобразования и контрольные суммы
+записаны в `assets/README.md`.
+
+### 8. Запуск с реальной камерой
 
 Из того же PowerShell и той же папки выполните:
 
@@ -142,17 +174,18 @@ Get-PnpDevice -Class Camera
 .\scripts\run_camera_teleop.ps1 -Source camera -CameraBackend msmf
 ```
 
-### 8. Клавиши управления во время работы
+### 9. Клавиши управления во время работы
 
 Клавиши обрабатываются, когда активно окно `Robot human interface - camera
 skeleton`:
 
 - `C` — начать калибровку нейтральной позы; встаньте ровно и не двигайтесь;
 - `R` — сбросить MuJoCo и состояние retargeter;
-- `Space` — поставить симуляцию на паузу или продолжить;
+- `V` — переключить MuJoCo между 3D-моделью и видом суставов;
+- `Space` — заморозить/продолжить видео и симуляцию;
 - `Esc` — закрыть приложение.
 
-### 9. Полная автоматическая проверка
+### 10. Полная автоматическая проверка
 
 ```powershell
 .\scripts\run_checks.ps1
@@ -161,7 +194,7 @@ skeleton`:
 Команда проверяет импорты, запускает весь `pytest` и выполняет конечный
 camera-free end-to-end smoke test.
 
-### 10. Повторный запуск после перезагрузки Windows
+### 11. Повторный запуск после перезагрузки Windows
 
 Повторно устанавливать зависимости не нужно. Откройте PowerShell и выполните:
 
@@ -175,6 +208,12 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 ```powershell
 .\scripts\run_camera_teleop.ps1 -Source camera
+```
+
+Для встроенного MP4 замените её на:
+
+```powershell
+.\scripts\run_camera_teleop.ps1 -Source mp4 -LoopReplay
 ```
 
 Обработка идёт по незеркальному кадру, чтобы физическая правая сторона человека
@@ -192,10 +231,33 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\scripts\run_camera_teleop.ps1 -Source synthetic -Headless -MaxFrames 120
 ```
 
-С replay-видео:
+Встроенное MP4 с реальным человеком:
 
 ```powershell
-.\scripts\run_camera_teleop.ps1 -Source replay -ReplayPath "C:\data\motion.mp4"
+.\scripts\run_camera_teleop.ps1 -Source mp4 -LoopReplay
+```
+
+С произвольным MP4 пользователя:
+
+```powershell
+.\scripts\run_camera_teleop.ps1 -Source replay -VideoPath "C:\data\motion.mp4"
+```
+
+Чтобы зациклить пользовательский файл:
+
+```powershell
+.\scripts\run_camera_teleop.ps1 -Source replay -VideoPath "C:\data\motion.mp4" -LoopReplay
+```
+
+Начальный вид робота можно выбрать из PowerShell; во время работы клавиша `V`
+переключает его без перезапуска и без изменения физики:
+
+```powershell
+# Полная оболочка из OBJ, режим по умолчанию
+.\scripts\run_camera_teleop.ps1 -Source mp4 -LoopReplay -ViewerMode visual
+
+# Только суставы и связи между ними
+.\scripts\run_camera_teleop.ps1 -Source mp4 -LoopReplay -ViewerMode joints
 ```
 
 Свободная база включается только явно:
@@ -207,9 +269,10 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 В этом режиме нет balance-controller, поэтому робот закономерно может упасть.
 
 MVP выполняет по 16 шагов MuJoCo (`2 ms`) на один входной кадр; это соответствует
-примерно 30 Hz. Headless/replay могут идти быстрее wall clock, а нестандартный
-FPS требует `--physics-steps-per-frame` через `-AdditionalArguments`. Для
-реального робота perception и servo/balance loops должны быть разделены.
+примерно 30 Hz. Оконный MP4/replay синхронизируется с FPS файла, а headless может
+идти быстрее wall clock. Нестандартный FPS требует
+`--physics-steps-per-frame` через `-AdditionalArguments`. Для реального робота
+perception и servo/balance loops должны быть разделены.
 
 Запуск только стандартного MuJoCo viewer:
 
@@ -309,18 +372,24 @@ WebSocket-протоколом:
 
 ## Модель MuJoCo
 
-- `scene_fixed.xml` использует weld базы и является безопасным default для
-  проверки интерфейса;
+- `scene_fixed.xml` связывает torso с кареткой, которая свободно движется по
+  вертикали: обе стопы физически принимают вес робота, а x/y и ориентация базы
+  стабилизированы для безопасной проверки копирующего интерфейса;
 - `scene_free.xml` оставляет free joint базы и предназначен для будущего
   balance-controller;
+- 21 OBJ-меш из Unity используется только для визуализации; `V` переключает
+  mesh-вид и суставную схему, не затрагивая состояние и контакты;
+- земля относится к render group 0, OBJ — к group 1, физические collision
+  primitives — к group 2;
 - 20 position actuators следуют каноническому порядку независимо от внутреннего
   body traversal MuJoCo;
 - масса torso и 20 rigid bodies перенесена из активной Unity-модели; суммарно
   `2.933134 kg`;
 - joint hierarchy, axes, anchors, limits и start pose извлечены из активного
   prefab;
-- primitive geoms, inertia/CoM, actuator gains, friction, collision shapes,
-  масштаб `0.35` и преобразование Unity LH → MuJoCo RH пока **provisional**.
+- OBJ-геометрия получена из исходных FBX через изолированный Unity batch-import;
+  primitive collisions, inertia/CoM, actuator gains, friction, масштаб `0.35`
+  и преобразование Unity LH → MuJoCo RH пока **provisional**.
 
 Unity не сериализует CoM и inertia: PhysX вычисляет их из convex MeshCollider во
 время запуска. Поэтому выдать эти величины за точные было бы неверно. До
@@ -355,10 +424,10 @@ MediaPipe monocular world landmarks нельзя считать точным и�
 ## Структура
 
 ```text
-assets/                         MediaPipe bundle и копии 21 Unity FBX
+assets/                         MediaPipe bundle, тестовый MP4 и копии 21 Unity FBX
 config/                         joint/camera/retargeting параметры
 docs/                           протокол извлечения и ограничения
-models/humanoid/                MJCF robot + fixed/free scenes
+models/humanoid/                MJCF, fixed/free scenes и 21 visual OBJ
 scripts/                        setup, запуск и проверки Windows
 src/robot_human_interface/
   app/                          end-to-end цикл и CLI
@@ -368,6 +437,7 @@ src/robot_human_interface/
   retargeting/                  geometry, calibration, safety fallback
   simulation/                   MuJoCo API и state/command boundary
 tests/                          unit, model, physics и integration tests
+tools/fbx_converter_unity/      изолированный FBX → OBJ batch-конвертер
 ```
 
 ## Переезд на Ubuntu 24.04
@@ -436,15 +506,18 @@ jerk, recovery from pushes и sim-to-sim/sim-to-real gap.
 - MuJoCo `3.11.0`, MediaPipe `0.10.35`, OpenCV `5.0.0`;
 - обе MJCF-сцены загружаются, 20 actuator mappings совпадают со схемой;
 - 1000 physics steps для fixed/free остаются finite;
-- self-contact proxy в home pose устранён; максимальная tracking error после
-  1000 шагов около `1.20°`;
+- grounded-fixed после усадки имеет контакты обеих стоп и передаёт на пол около
+  `28.8 N`, то есть практически полный вес робота;
+- visual sole и collision sole согласованы с плоскостью примерно до `1 mm`;
+- self-contact proxy в home pose устранён; максимальная tracking error под
+  собственным весом после 1000 шагов меньше `3°`;
 - synthetic end-to-end: 30/30 skeleton frames, 0 stale commands;
-- `38 passed` в полном pytest-наборе;
-- 21 FBX-копия совпадает с Unity-источниками по SHA-256;
+- `47 passed` в полном pytest-наборе;
+- 21 FBX-копия сохранена, а 21 OBJ-меш компилируется в обеих MJCF-сценах;
 - Unity git status остался чистым.
 
-Лог: `artifacts/verification.log`. Offscreen-кадр:
-`artifacts/mujoco_fixed_home.png`.
+Лог: `artifacts/verification.log`. Проверенные offscreen-кадры обоих режимов:
+`artifacts/mujoco_fixed_home.png` и `artifacts/mujoco_joints_home.png`.
 
 На машине, где собирался проект, Windows не обнаружила ни одного устройства
 класса Camera, поэтому физический webcam frame проверить было невозможно.
