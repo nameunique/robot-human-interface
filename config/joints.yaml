@@ -1,0 +1,280 @@
+# Canonical 20-actuator schema shared by the MuJoCo proxy and future adapters.
+#
+# IMPORTANT: source axes/anchors/limits/masses were extracted from the active
+# `control` model in Unity.  The Unity prefab has no serialized CoM or inertia
+# tensors.  All MuJoCo geometry, inertia derived from that geometry, actuator
+# gains and the 0.35 model-space-to-metre scale are therefore PROVISIONAL.
+schema_version: 1
+robot_model: humanoid_v4_proxy
+parameter_status: provisional
+source:
+  unity_prefab: Assets/Prefabs/Resourses/humanoid/humanoid_v4.prefab
+  unity_project: humanoidconfigurator
+  prefab_sha256: F2C571CF4D97198B13FB429BD811103FAA16AF815754F1D06885B3059FE907ED
+  active_object: control
+  start_pose: Assets/StreamingAssets/zero_poses/start_pose_hum_1.json
+units:
+  internal_angle: rad
+  source_angle: deg
+  length: m
+  mass: kg
+coordinates:
+  source: Unity left-handed, x right / y up / z forward
+  target: MuJoCo right-handed, x forward / y left / z up
+  # v_mj = (-z_unity, -x_unity, y_unity) * scale.  The mapping preserves
+  # right/left placement and must be checked against the real robot before HIL.
+  unity_to_mujoco_vector: [-z, -x, y]
+  model_space_to_metre_scale: 0.35
+  verification_status: provisional_visual_check_required
+physical_parameters:
+  status: provisional
+  torso_mass_kg: 1.0
+  total_mass_kg: 2.933134
+  inertia: derived_by_mujoco_from_proxy_primitives
+  center_of_mass: derived_by_mujoco_from_proxy_primitives
+  collision_geometry: primitive_proxy
+  actuator_gains: engineering_initial_guess
+
+joint_order:
+  - shoulder_rh
+  - shoulder_lh
+  - elbow_rh
+  - elbow_lh
+  - wrist_rh
+  - wrist_lh
+  - rotat_axis_rl
+  - rotat_axis_ll
+  - motors_thigh_rl
+  - motors_thigh_ll
+  - knee_rl
+  - knee_ll
+  - shin_rl
+  - shin_ll
+  - motors_feet_rl
+  - motors_feet_ll
+  - foot_rl
+  - foot_ll
+  - neck
+  - head
+
+joints:
+  - index: 0
+    name: shoulder_rh
+    parent: torso
+    unity_axis: [-1.0, 0.0, 0.0]
+    unity_anchor: [0.58, 3.127, -0.01]
+    mujoco_axis: [0.0, 1.0, 0.0]
+    limit_deg: [-180.0, 180.0]
+    limit_rad: [-3.141592653589793, 3.141592653589793]
+    home_deg: 30.0
+    home_rad: 0.5235987755982988
+    mass_kg: 0.0107
+  - index: 1
+    name: shoulder_lh
+    parent: torso
+    unity_axis: [-1.0, 0.0, 0.0]
+    unity_anchor: [-0.58, 3.127, -0.01]
+    mujoco_axis: [0.0, 1.0, 0.0]
+    limit_deg: [-180.0, 180.0]
+    limit_rad: [-3.141592653589793, 3.141592653589793]
+    home_deg: 30.0
+    home_rad: 0.5235987755982988
+    mass_kg: 0.0107
+  - index: 2
+    name: elbow_rh
+    parent: shoulder_rh
+    unity_axis: [0.0, 0.0, 1.0]
+    unity_anchor: [0.83, 2.947, 0.20]
+    mujoco_axis: [-1.0, 0.0, 0.0]
+    limit_deg: [-50.0, 160.0]
+    limit_rad: [-0.8726646259971648, 2.792526803190927]
+    home_deg: 15.0
+    home_rad: 0.2617993877991494
+    mass_kg: 0.0886
+  - index: 3
+    name: elbow_lh
+    parent: shoulder_lh
+    unity_axis: [0.0, 0.0, -1.0]
+    unity_anchor: [-0.83, 2.947, 0.18]
+    mujoco_axis: [1.0, 0.0, 0.0]
+    limit_deg: [-50.0, 160.0]
+    limit_rad: [-0.8726646259971648, 2.792526803190927]
+    home_deg: 15.0
+    home_rad: 0.2617993877991494
+    mass_kg: 0.0921
+  - index: 4
+    name: wrist_rh
+    parent: elbow_rh
+    unity_axis: [0.0, 0.0, -1.0]
+    unity_anchor: [0.83, 2.242, 0.20]
+    mujoco_axis: [1.0, 0.0, 0.0]
+    limit_deg: [-90.0, 90.0]
+    limit_rad: [-1.5707963267948966, 1.5707963267948966]
+    home_deg: 15.0
+    home_rad: 0.2617993877991494
+    mass_kg: 0.0921
+  - index: 5
+    name: wrist_lh
+    parent: elbow_lh
+    unity_axis: [0.0, 0.0, 1.0]
+    unity_anchor: [-0.83, 2.242, 0.18]
+    mujoco_axis: [-1.0, 0.0, 0.0]
+    limit_deg: [-90.0, 90.0]
+    limit_rad: [-1.5707963267948966, 1.5707963267948966]
+    home_deg: 15.0
+    home_rad: 0.2617993877991494
+    mass_kg: 0.0921
+  - index: 6
+    name: rotat_axis_rl
+    parent: torso
+    unity_axis: [0.0, 1.0, 0.0]
+    unity_anchor: [0.40, 2.0, 0.0]
+    mujoco_axis: [0.0, 0.0, 1.0]
+    limit_deg: [-40.0, 40.0]
+    limit_rad: [-0.6981317007977318, 0.6981317007977318]
+    home_deg: 0.0
+    home_rad: 0.0
+    mass_kg: 0.0142
+  - index: 7
+    name: rotat_axis_ll
+    parent: torso
+    unity_axis: [0.0, -1.0, 0.0]
+    unity_anchor: [-0.40, 2.0, 0.0]
+    mujoco_axis: [0.0, 0.0, -1.0]
+    limit_deg: [-40.0, 40.0]
+    limit_rad: [-0.6981317007977318, 0.6981317007977318]
+    home_deg: 0.0
+    home_rad: 0.0
+    mass_kg: 0.0142
+  - index: 8
+    name: motors_thigh_rl
+    parent: rotat_axis_rl
+    unity_axis: [0.0, 0.0, 1.0]
+    unity_anchor: [0.40, 1.747, -0.210]
+    mujoco_axis: [-1.0, 0.0, 0.0]
+    limit_deg: [-40.0, 40.0]
+    limit_rad: [-0.6981317007977318, 0.6981317007977318]
+    home_deg: 5.0
+    home_rad: 0.08726646259971647
+    mass_kg: 0.143017
+  - index: 9
+    name: motors_thigh_ll
+    parent: rotat_axis_ll
+    unity_axis: [0.0, 0.0, -1.0]
+    unity_anchor: [-0.40, 1.747, -0.212]
+    mujoco_axis: [1.0, 0.0, 0.0]
+    limit_deg: [-40.0, 40.0]
+    limit_rad: [-0.6981317007977318, 0.6981317007977318]
+    home_deg: 5.0
+    home_rad: 0.08726646259971647
+    mass_kg: 0.143017
+  - index: 10
+    name: knee_rl
+    parent: motors_thigh_rl
+    unity_axis: [-1.0, 0.0, 0.0]
+    unity_anchor: [0.60, 1.747, 0.0]
+    mujoco_axis: [0.0, 1.0, 0.0]
+    limit_deg: [-30.0, 90.0]
+    limit_rad: [-0.5235987755982988, 1.5707963267948966]
+    home_deg: 28.0
+    home_rad: 0.4886921905584123
+    mass_kg: 0.0334
+  - index: 11
+    name: knee_ll
+    parent: motors_thigh_ll
+    unity_axis: [-1.0, 0.0, 0.0]
+    unity_anchor: [-0.60, 1.747, 0.0]
+    mujoco_axis: [0.0, 1.0, 0.0]
+    limit_deg: [-30.0, 90.0]
+    limit_rad: [-0.5235987755982988, 1.5707963267948966]
+    home_deg: 28.0
+    home_rad: 0.4886921905584123
+    mass_kg: 0.0334
+  - index: 12
+    name: shin_rl
+    parent: knee_rl
+    unity_axis: [1.0, 0.0, 0.0]
+    unity_anchor: [0.60, 0.953, -0.10]
+    mujoco_axis: [0.0, -1.0, 0.0]
+    limit_deg: [-10.0, 150.0]
+    limit_rad: [-0.17453292519943295, 2.6179938779914944]
+    home_deg: 45.0
+    home_rad: 0.7853981633974483
+    mass_kg: 0.0972
+  - index: 13
+    name: shin_ll
+    parent: knee_ll
+    unity_axis: [1.0, 0.0, 0.0]
+    unity_anchor: [-0.60, 0.953, -0.10]
+    mujoco_axis: [0.0, -1.0, 0.0]
+    limit_deg: [-10.0, 150.0]
+    limit_rad: [-0.17453292519943295, 2.6179938779914944]
+    home_deg: 45.0
+    home_rad: 0.7853981633974483
+    mass_kg: 0.0972
+  - index: 14
+    name: motors_feet_rl
+    parent: shin_rl
+    unity_axis: [-1.0, 0.0, 0.0]
+    unity_anchor: [0.61, 0.160, 0.0]
+    mujoco_axis: [0.0, 1.0, 0.0]
+    limit_deg: [-75.0, 75.0]
+    limit_rad: [-1.3089969389957472, 1.3089969389957472]
+    home_deg: 20.0
+    home_rad: 0.3490658503988659
+    mass_kg: 0.142
+  - index: 15
+    name: motors_feet_ll
+    parent: shin_ll
+    unity_axis: [-1.0, 0.0, 0.0]
+    unity_anchor: [-0.60, 0.160, 0.0]
+    mujoco_axis: [0.0, 1.0, 0.0]
+    limit_deg: [-75.0, 75.0]
+    limit_rad: [-1.3089969389957472, 1.3089969389957472]
+    home_deg: 20.0
+    home_rad: 0.3490658503988659
+    mass_kg: 0.142
+  - index: 16
+    name: foot_rl
+    parent: motors_feet_rl
+    unity_axis: [0.0, 0.0, 1.0]
+    unity_anchor: [0.42, 0.170, -0.21]
+    mujoco_axis: [-1.0, 0.0, 0.0]
+    limit_deg: [-60.0, 45.0]
+    limit_rad: [-1.0471975511965976, 0.7853981633974483]
+    home_deg: -5.0
+    home_rad: -0.08726646259971647
+    mass_kg: 0.2
+  - index: 17
+    name: foot_ll
+    parent: motors_feet_ll
+    unity_axis: [0.0, 0.0, -1.0]
+    unity_anchor: [-0.40, 0.160, -0.21]
+    mujoco_axis: [1.0, 0.0, 0.0]
+    limit_deg: [-60.0, 45.0]
+    limit_rad: [-1.0471975511965976, 0.7853981633974483]
+    home_deg: -5.0
+    home_rad: -0.08726646259971647
+    mass_kg: 0.2
+  - index: 18
+    name: neck
+    parent: torso
+    unity_axis: [0.0, -1.0, 0.0]
+    unity_anchor: [0.0, 3.280, -0.148]
+    mujoco_axis: [0.0, 0.0, -1.0]
+    limit_deg: [-180.0, 180.0]
+    limit_rad: [-3.141592653589793, 3.141592653589793]
+    home_deg: 0.0
+    home_rad: 0.0
+    mass_kg: 0.0107
+  - index: 19
+    name: head
+    parent: neck
+    unity_axis: [-1.0, 0.0, 0.0]
+    unity_anchor: [-0.20, 3.543, -0.1479]
+    mujoco_axis: [0.0, 1.0, 0.0]
+    limit_deg: [-25.0, 70.0]
+    limit_rad: [-0.4363323129985824, 1.2217304763960306]
+    home_deg: 0.0
+    home_rad: 0.0
+    mass_kg: 0.2765

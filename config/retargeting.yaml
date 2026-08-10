@@ -1,0 +1,13 @@
+retargeting:
+  mode: whole_body
+  confidence_threshold: 0.55
+  minimum_coverage: 0.75
+  smoothing_time_constant_s: 0.10
+  hold_seconds: 0.35
+  return_seconds: 1.0
+  # Leave false for MediaPipePoseLandmarker: it canonicalizes CameraFrame.mirrored.
+  mirrored_input: false
+  # Optional name-to-number overrides; defaults are 1.0 for every joint.
+  joint_scales: {}
+  # Optional name-to-sign overrides; values must be +1 or -1.
+  joint_signs: {}

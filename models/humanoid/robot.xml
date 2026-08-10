@@ -1,0 +1,209 @@
+<mujocoinclude>
+  <!--
+    Primitive 20-DOF proxy for Unity humanoid_v4.
+
+    Joint names/order, hierarchy, source axes, limits, anchors and masses come
+    from the active Unity `control` object.  The visual/collision primitives,
+    their resulting inertias, actuator gains and scale are provisional.  This
+    model is suitable for integration and controller prototyping, not yet for
+    validated sim-to-real dynamics.
+
+    The torso always has a free joint. scene_fixed.xml constrains it to world
+    using a weld; scene_free.xml leaves it unconstrained so the robot can fall.
+  -->
+  <statistic center="0 0 0.65" extent="1.5"/>
+
+  <visual>
+    <headlight ambient="0.35 0.35 0.35" diffuse="0.75 0.75 0.75" specular="0.2 0.2 0.2"/>
+    <rgba haze="0.15 0.18 0.22 1"/>
+    <global azimuth="130" elevation="-18"/>
+  </visual>
+
+  <asset>
+    <texture name="ground_tex" type="2d" builtin="checker" width="512" height="512"
+             rgb1="0.18 0.20 0.23" rgb2="0.10 0.11 0.13"/>
+    <material name="ground_mat" texture="ground_tex" texrepeat="4 4" reflectance="0.08"/>
+    <material name="torso_mat" rgba="0.15 0.42 0.72 1"/>
+    <material name="right_mat" rgba="0.80 0.30 0.20 1"/>
+    <material name="left_mat" rgba="0.20 0.65 0.42 1"/>
+    <material name="joint_mat" rgba="0.16 0.18 0.22 1"/>
+    <material name="head_mat" rgba="0.80 0.82 0.86 1"/>
+  </asset>
+
+  <default>
+    <joint limited="true" damping="0.045" armature="0.001" frictionloss="0.002"/>
+    <geom condim="3" friction="0.9 0.02 0.001" solref="0.004 1" solimp="0.95 0.99 0.001"/>
+    <position ctrllimited="true" forcelimited="true" kp="20" kv="1.5"/>
+  </default>
+
+  <worldbody>
+    <light name="key_light" pos="1.5 -1.5 2.5" dir="-0.4 0.4 -1" directional="true"/>
+    <geom name="ground" type="plane" pos="0 0 0" size="3 3 0.05" material="ground_mat"
+          friction="1.0 0.02 0.002" mass="0"/>
+    <camera name="overview" pos="2.2 -2.2 1.5" xyaxes="0.707 0.707 0 -0.28 0.28 0.92"/>
+
+    <!-- Torso reference is a provisional proxy CoM near Unity model y=2.65. -->
+    <body name="torso" pos="0 0 0.9275">
+      <freejoint name="base_free"/>
+      <geom name="torso_geom" type="box" pos="0 0 0" size="0.105 0.205 0.225"
+            mass="1.0" material="torso_mat"/>
+      <site name="imu_site" pos="0 0 0.12" size="0.012" rgba="1 0.8 0.1 1"/>
+
+      <!-- Right arm. Local positions are differences of converted Unity anchors. -->
+      <body name="shoulder_rh" pos="-0.0315 -0.203 0.16695">
+        <joint name="shoulder_rh" axis="0 1 0" range="-180 180"/>
+        <geom name="shoulder_rh_geom" type="capsule" fromto="0 0 0 -0.0735 -0.0875 -0.063"
+              size="0.024" mass="0.0107" material="right_mat"/>
+        <body name="elbow_rh" pos="-0.0735 -0.0875 -0.063">
+          <joint name="elbow_rh" axis="-1 0 0" range="-50 160"/>
+          <geom name="elbow_rh_geom" type="capsule" fromto="0 0 0 0 0 -0.24675"
+                size="0.027" mass="0.0886" material="right_mat"/>
+          <body name="wrist_rh" pos="0 0 -0.24675">
+            <joint name="wrist_rh" axis="1 0 0" range="-90 90"/>
+            <geom name="wrist_rh_geom" type="capsule" fromto="0 0 0 0.035 0 -0.105"
+                  size="0.025" mass="0.0921" material="right_mat"/>
+          </body>
+        </body>
+      </body>
+
+      <!-- Left arm. -->
+      <body name="shoulder_lh" pos="-0.0315 0.203 0.16695">
+        <joint name="shoulder_lh" axis="0 1 0" range="-180 180"/>
+        <geom name="shoulder_lh_geom" type="capsule" fromto="0 0 0 -0.0665 0.0875 -0.063"
+              size="0.024" mass="0.0107" material="left_mat"/>
+        <body name="elbow_lh" pos="-0.0665 0.0875 -0.063">
+          <joint name="elbow_lh" axis="1 0 0" range="-50 160"/>
+          <geom name="elbow_lh_geom" type="capsule" fromto="0 0 0 0 0 -0.24675"
+                size="0.027" mass="0.0921" material="left_mat"/>
+          <body name="wrist_lh" pos="0 0 -0.24675">
+            <joint name="wrist_lh" axis="-1 0 0" range="-90 90"/>
+            <geom name="wrist_lh_geom" type="capsule" fromto="0 0 0 0.035 0 -0.105"
+                  size="0.025" mass="0.0921" material="left_mat"/>
+          </body>
+        </body>
+      </body>
+
+      <!-- Right leg: hip yaw -> hip roll -> hip pitch -> knee -> ankle pitch -> ankle roll. -->
+      <body name="rotat_axis_rl" pos="-0.035 -0.14 -0.2275">
+        <joint name="rotat_axis_rl" axis="0 0 1" range="-40 40" damping="0.08" armature="0.003"/>
+        <geom name="rotat_axis_rl_geom" type="capsule" fromto="0 0 0 0.0735 0 -0.08855"
+              size="0.027" mass="0.0142" material="joint_mat"/>
+        <body name="motors_thigh_rl" pos="0.0735 0 -0.08855">
+          <joint name="motors_thigh_rl" axis="-1 0 0" range="-40 40" damping="0.08" armature="0.003"/>
+          <geom name="motors_thigh_rl_geom" type="capsule" fromto="0 0 0 -0.0735 -0.07 0"
+                size="0.034" mass="0.143017" material="right_mat"/>
+          <body name="knee_rl" pos="-0.0735 -0.07 0">
+            <joint name="knee_rl" axis="0 1 0" range="-30 90" damping="0.10" armature="0.004"/>
+            <geom name="knee_rl_geom" type="capsule" fromto="0 0 0 0.035 0 -0.2779"
+                  size="0.039" mass="0.0334" material="right_mat"/>
+            <body name="shin_rl" pos="0.035 0 -0.2779">
+              <joint name="shin_rl" axis="0 -1 0" range="-10 150" damping="0.10" armature="0.004"/>
+              <geom name="shin_rl_geom" type="capsule" fromto="0 0 0 -0.035 -0.0035 -0.27755"
+                    size="0.036" mass="0.0972" material="right_mat"/>
+              <body name="motors_feet_rl" pos="-0.035 -0.0035 -0.27755">
+                <joint name="motors_feet_rl" axis="0 1 0" range="-75 75" damping="0.10" armature="0.004"/>
+                <geom name="motors_feet_rl_geom" type="capsule" fromto="0 0 0 0.0735 0.0665 0.0035"
+                      size="0.030" mass="0.142" material="joint_mat"/>
+                <body name="foot_rl" pos="0.0735 0.0665 0.0035">
+                  <joint name="foot_rl" axis="-1 0 0" range="-60 45" damping="0.10" armature="0.004"/>
+                  <geom name="foot_rl_geom" type="box" pos="0.060 0 -0.030" size="0.105 0.066 0.030"
+                        mass="0.2" material="right_mat" friction="1.1 0.02 0.002"/>
+                  <site name="right_foot_contact" pos="0.060 0 -0.060" size="0.008" rgba="1 0.8 0.1 1"/>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+
+      <!-- Left leg. -->
+      <body name="rotat_axis_ll" pos="-0.035 0.14 -0.2275">
+        <joint name="rotat_axis_ll" axis="0 0 -1" range="-40 40" damping="0.08" armature="0.003"/>
+        <geom name="rotat_axis_ll_geom" type="capsule" fromto="0 0 0 0.0742 0 -0.08855"
+              size="0.027" mass="0.0142" material="joint_mat"/>
+        <body name="motors_thigh_ll" pos="0.0742 0 -0.08855">
+          <joint name="motors_thigh_ll" axis="1 0 0" range="-40 40" damping="0.08" armature="0.003"/>
+          <geom name="motors_thigh_ll_geom" type="capsule" fromto="0 0 0 -0.0742 0.07 0"
+                size="0.034" mass="0.143017" material="left_mat"/>
+          <body name="knee_ll" pos="-0.0742 0.07 0">
+            <joint name="knee_ll" axis="0 1 0" range="-30 90" damping="0.10" armature="0.004"/>
+            <geom name="knee_ll_geom" type="capsule" fromto="0 0 0 0.035 0 -0.2779"
+                  size="0.039" mass="0.0334" material="left_mat"/>
+            <body name="shin_ll" pos="0.035 0 -0.2779">
+              <joint name="shin_ll" axis="0 -1 0" range="-10 150" damping="0.10" armature="0.004"/>
+              <geom name="shin_ll_geom" type="capsule" fromto="0 0 0 -0.035 0 -0.27755"
+                    size="0.036" mass="0.0972" material="left_mat"/>
+              <body name="motors_feet_ll" pos="-0.035 0 -0.27755">
+                <joint name="motors_feet_ll" axis="0 1 0" range="-75 75" damping="0.10" armature="0.004"/>
+                <geom name="motors_feet_ll_geom" type="capsule" fromto="0 0 0 0.0735 -0.07 0"
+                      size="0.030" mass="0.142" material="joint_mat"/>
+                <body name="foot_ll" pos="0.0735 -0.07 0">
+                  <joint name="foot_ll" axis="1 0 0" range="-60 45" damping="0.10" armature="0.004"/>
+                  <geom name="foot_ll_geom" type="box" pos="0.060 0 -0.030" size="0.105 0.066 0.030"
+                        mass="0.2" material="left_mat" friction="1.1 0.02 0.002"/>
+                  <site name="left_foot_contact" pos="0.060 0 -0.060" size="0.008" rgba="1 0.8 0.1 1"/>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+
+      <!-- Neck and head. -->
+      <body name="neck" pos="0.0168 0 0.2205">
+        <joint name="neck" axis="0 0 -1" range="-180 180"/>
+        <geom name="neck_geom" type="capsule" fromto="0 0 0 -0.000035 0.07 0.09205"
+              size="0.026" mass="0.0107" material="joint_mat"/>
+        <body name="head" pos="-0.000035 0.07 0.09205">
+          <joint name="head" axis="0 1 0" range="-25 70"/>
+          <geom name="head_geom" type="ellipsoid" pos="0 0 0.070" size="0.085 0.095 0.105"
+                mass="0.2765" material="head_mat"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <contact>
+    <!--
+      Proxy capsules intentionally meet inside each physical ankle assembly.
+      shin and foot are separated by the motors_feet body, so MuJoCo's normal
+      parent/child collision filter does not suppress this non-adjacent pair.
+      Excluding only these same-leg pairs removes an artificial ~7 mm overlap;
+      foot-to-ground collision remains enabled.
+    -->
+    <exclude name="right_ankle_internal" body1="shin_rl" body2="foot_rl"/>
+    <exclude name="left_ankle_internal" body1="shin_ll" body2="foot_ll"/>
+  </contact>
+
+  <!-- Actuator order is the legacy WebSocket/Unity order, independent of qpos order. -->
+  <actuator>
+    <position name="shoulder_rh" joint="shoulder_rh" kp="16" kv="1.1" ctrlrange="-3.141592654 3.141592654" forcerange="-4 4"/>
+    <position name="shoulder_lh" joint="shoulder_lh" kp="16" kv="1.1" ctrlrange="-3.141592654 3.141592654" forcerange="-4 4"/>
+    <position name="elbow_rh" joint="elbow_rh" kp="14" kv="1.0" ctrlrange="-0.872664626 2.792526803" forcerange="-3 3"/>
+    <position name="elbow_lh" joint="elbow_lh" kp="14" kv="1.0" ctrlrange="-0.872664626 2.792526803" forcerange="-3 3"/>
+    <position name="wrist_rh" joint="wrist_rh" kp="10" kv="0.8" ctrlrange="-1.570796327 1.570796327" forcerange="-2 2"/>
+    <position name="wrist_lh" joint="wrist_lh" kp="10" kv="0.8" ctrlrange="-1.570796327 1.570796327" forcerange="-2 2"/>
+    <position name="rotat_axis_rl" joint="rotat_axis_rl" kp="38" kv="3.0" ctrlrange="-0.698131701 0.698131701" forcerange="-10 10"/>
+    <position name="rotat_axis_ll" joint="rotat_axis_ll" kp="38" kv="3.0" ctrlrange="-0.698131701 0.698131701" forcerange="-10 10"/>
+    <position name="motors_thigh_rl" joint="motors_thigh_rl" kp="42" kv="3.2" ctrlrange="-0.698131701 0.698131701" forcerange="-12 12"/>
+    <position name="motors_thigh_ll" joint="motors_thigh_ll" kp="42" kv="3.2" ctrlrange="-0.698131701 0.698131701" forcerange="-12 12"/>
+    <position name="knee_rl" joint="knee_rl" kp="48" kv="3.6" ctrlrange="-0.523598776 1.570796327" forcerange="-14 14"/>
+    <position name="knee_ll" joint="knee_ll" kp="48" kv="3.6" ctrlrange="-0.523598776 1.570796327" forcerange="-14 14"/>
+    <position name="shin_rl" joint="shin_rl" kp="48" kv="3.6" ctrlrange="-0.174532925 2.617993878" forcerange="-14 14"/>
+    <position name="shin_ll" joint="shin_ll" kp="48" kv="3.6" ctrlrange="-0.174532925 2.617993878" forcerange="-14 14"/>
+    <position name="motors_feet_rl" joint="motors_feet_rl" kp="42" kv="3.2" ctrlrange="-1.308996939 1.308996939" forcerange="-12 12"/>
+    <position name="motors_feet_ll" joint="motors_feet_ll" kp="42" kv="3.2" ctrlrange="-1.308996939 1.308996939" forcerange="-12 12"/>
+    <position name="foot_rl" joint="foot_rl" kp="36" kv="2.8" ctrlrange="-1.047197551 0.785398163" forcerange="-10 10"/>
+    <position name="foot_ll" joint="foot_ll" kp="36" kv="2.8" ctrlrange="-1.047197551 0.785398163" forcerange="-10 10"/>
+    <position name="neck" joint="neck" kp="8" kv="0.6" ctrlrange="-3.141592654 3.141592654" forcerange="-2 2"/>
+    <position name="head" joint="head" kp="8" kv="0.6" ctrlrange="-0.436332313 1.221730476" forcerange="-2 2"/>
+  </actuator>
+
+  <sensor>
+    <framequat name="base_orientation" objtype="body" objname="torso"/>
+    <gyro name="base_gyro" site="imu_site"/>
+    <accelerometer name="base_accelerometer" site="imu_site"/>
+    <framepos name="right_foot_position" objtype="site" objname="right_foot_contact"/>
+    <framepos name="left_foot_position" objtype="site" objname="left_foot_contact"/>
+  </sensor>
+</mujocoinclude>

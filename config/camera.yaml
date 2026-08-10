@@ -1,0 +1,15 @@
+camera:
+  index: 0
+  width: 1280
+  height: 720
+  fps: 30.0
+  # Keep inference unmirrored so anatomical left/right remains physical.
+  # A UI may mirror only its displayed overlay.
+  mirror: false
+  backend: auto
+
+pose:
+  model_asset_path: assets/models/pose_landmarker_full.task
+  min_pose_detection_confidence: 0.5
+  min_pose_presence_confidence: 0.5
+  min_tracking_confidence: 0.5
