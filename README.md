@@ -13,47 +13,175 @@
 > основана на явно помеченной primitive proxy-модели. По умолчанию запускается
 > fixed-base сцена.
 
-## Быстрый запуск на Windows
+## Windows: пошаговый запуск
 
-Требуется 64-битный Python 3.12 и, для реального режима, камера Windows.
-MuJoCo отдельно устанавливать в систему не нужно: официальный Python wheel
-содержит нативную библиотеку.
+Все команды ниже нужно вводить в **PowerShell**, а не в Python-консоль. Подойдёт
+Windows Terminal с профилем PowerShell или обычное приложение «Windows
+PowerShell». Запуск от администратора не требуется. В примеры не нужно копировать
+приглашение вида `PS C:\...>` — вводите только сами команды из блоков.
 
-Из PowerShell в корне проекта:
+### 1. Один раз установите Python 3.12 x64
+
+При установке Python желательно включить пункт `Add python.exe to PATH`. MuJoCo
+отдельно устанавливать в Windows не нужно: он будет установлен в локальное
+окружение проекта.
+
+Откройте PowerShell и проверьте версию:
 
 ```powershell
-Set-ExecutionPolicy -Scope Process Bypass
-.\scripts\run_camera_teleop.ps1
+python --version
 ```
 
-Первый запуск автоматически создаёт `.venv`, ставит точные версии из
-`requirements.lock.txt` и устанавливает локальный пакет. Всё остаётся внутри
-`robot-human-interface`.
+Ожидаемый результат начинается с `Python 3.12`. Посмотреть, какой исполняемый
+файл найден Windows, можно так:
 
-Явная подготовка окружения:
+```powershell
+where.exe python
+```
+
+Если в системе несколько Python, запомните полный путь к версии 3.12 — его можно
+передать скрипту на шаге 5.
+
+### 2. В PowerShell перейдите в папку проекта
+
+На текущем компьютере проект находится здесь:
+
+```powershell
+Set-Location "C:\Users\k_desktop\Desktop\robot-human-interface"
+```
+
+Если проект был перенесён, замените путь на фактический. Убедитесь, что вы
+находитесь в правильной папке:
+
+```powershell
+Get-Location
+Test-Path .\scripts\setup_windows.ps1
+```
+
+`Test-Path` должен вывести `True`. Все последующие команды выполняются **из этой
+папки**.
+
+### 3. Разрешите PowerShell-скрипты для текущего окна
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+Это разрешение действует только до закрытия текущего PowerShell и не изменяет
+глобальные настройки Windows.
+
+### 4. Проверьте, что камера доступна Windows
+
+Этот шаг нужен только для управления по реальной камере. Подключите камеру и
+выполните:
+
+```powershell
+Get-PnpDevice -Class Camera
+```
+
+Если список пуст, сначала подключите/включите камеру. Для запуска synthetic-
+режима камера не требуется.
+
+### 5. Подготовьте локальное окружение проекта
+
+На первом запуске выполните:
 
 ```powershell
 .\scripts\setup_windows.ps1
 ```
 
-Если Python 3.12 не находится автоматически:
+Скрипт создаст `.venv` внутри `robot-human-interface`, установит точные версии
+из `requirements.lock.txt` и сам проект. Глобальный Python и другие проекты не
+изменяются. Повторный вызов безопасен: существующая `.venv` будет использована
+повторно.
+
+Если скрипт не нашёл Python 3.12 автоматически, укажите полный путь, полученный
+на шаге 1. Пример:
 
 ```powershell
-.\scripts\setup_windows.ps1 -PythonExe "C:\path\to\python.exe"
+.\scripts\setup_windows.ps1 -PythonExe "C:\Program Files\Python312\python.exe"
 ```
 
-Клавиши в окне камеры:
+Успешная установка заканчивается сообщением `Windows setup complete`.
 
-- `C` — собрать нейтральную калибровку позы;
-- `R` — сбросить симуляцию и состояние retargeter;
-- `Space` — пауза/продолжение;
-- `Esc` — корректно завершить приложение.
+### 6. Первый безопасный запуск без камеры
+
+Сначала проверьте весь pipeline на синтетическом скелете:
+
+```powershell
+.\scripts\run_camera_teleop.ps1 -Source synthetic
+```
+
+Откроются два окна:
+
+1. `MuJoCo : humanoid_v4_proxy_fixed` — симуляция робота;
+2. `Robot human interface - camera skeleton` — синтетический кадр и скелет.
+
+Чтобы остановить программу, выберите окно `camera skeleton` и нажмите `Esc`.
+
+### 7. Запуск с реальной камерой
+
+Из того же PowerShell и той же папки выполните:
+
+```powershell
+.\scripts\run_camera_teleop.ps1 -Source camera
+```
+
+Короткая эквивалентная команда, поскольку `camera` является режимом по
+умолчанию:
+
+```powershell
+.\scripts\run_camera_teleop.ps1
+```
+
+Если нужна другая камера или backend Windows:
+
+```powershell
+.\scripts\run_camera_teleop.ps1 -Source camera -CameraIndex 1
+.\scripts\run_camera_teleop.ps1 -Source camera -CameraBackend dshow
+.\scripts\run_camera_teleop.ps1 -Source camera -CameraBackend msmf
+```
+
+### 8. Клавиши управления во время работы
+
+Клавиши обрабатываются, когда активно окно `Robot human interface - camera
+skeleton`:
+
+- `C` — начать калибровку нейтральной позы; встаньте ровно и не двигайтесь;
+- `R` — сбросить MuJoCo и состояние retargeter;
+- `Space` — поставить симуляцию на паузу или продолжить;
+- `Esc` — закрыть приложение.
+
+### 9. Полная автоматическая проверка
+
+```powershell
+.\scripts\run_checks.ps1
+```
+
+Команда проверяет импорты, запускает весь `pytest` и выполняет конечный
+camera-free end-to-end smoke test.
+
+### 10. Повторный запуск после перезагрузки Windows
+
+Повторно устанавливать зависимости не нужно. Откройте PowerShell и выполните:
+
+```powershell
+Set-Location "C:\Users\k_desktop\Desktop\robot-human-interface"
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\scripts\run_camera_teleop.ps1 -Source synthetic
+```
+
+Для реальной камеры замените последнюю строку на:
+
+```powershell
+.\scripts\run_camera_teleop.ps1 -Source camera
+```
 
 Обработка идёт по незеркальному кадру, чтобы физическая правая сторона человека
-однозначно управляла суставами `*_rh`. Отображение при необходимости можно
-зеркалировать отдельно. Значения камеры и confidence по умолчанию читаются из
-`config/camera.yaml`; CLI имеет приоритет. Если источник уже требует отражения,
-передайте `-MirrorInput` — после inference стороны будут канонизированы обратно.
+однозначно управляла суставами `*_rh`. Значения камеры и confidence по умолчанию
+читаются из `config/camera.yaml`; параметры командной строки имеют приоритет.
+Если источник требует отражения, добавьте `-MirrorInput` — после inference
+анатомические стороны будут канонизированы обратно.
 
 ## Запуск без камеры
 
