@@ -134,6 +134,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.set_defaults(balance_controller=True)
     parser.add_argument(
+        "--retargeting",
+        choices=("ik", "geometric"),
+        default="ik",
+        help=(
+            "Human-to-robot mapping. 'ik' minimizes whole-body pose error under "
+            "the robot joint limits; 'geometric' keeps the original scalar baseline."
+        ),
+    )
+    parser.add_argument(
         "--viewer-mode",
         choices=("visual", "joints"),
         default="visual",
@@ -364,6 +373,7 @@ def _draw_status(
     balance_enabled: bool,
     support_intent: str,
     support_phase: str,
+    retargeting_mode: str,
     source_label: str,
     frame_index: int,
 ) -> np.ndarray:
@@ -375,7 +385,8 @@ def _draw_status(
     cv2.putText(
         image,
         (
-            f"source={source_label} | frame={frame_index} | base={base_mode} | "
+            f"source={source_label} | frame={frame_index} | retarget={retargeting_mode} | "
+            f"base={base_mode} | "
             f"balance={'motor' if balance_enabled else 'off'} | "
             f"support={support_intent}/{support_phase} | view={view_mode}"
         ),
@@ -490,12 +501,15 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
         load_standing_balance_config,
         load_support_control_config,
     )
-    from robot_human_interface.retargeting import GeometricRetargeter
+    from robot_human_interface.retargeting import GeometricRetargeter, MujocoIKRetargeter
     from robot_human_interface.simulation import HumanoidSimulation
 
     robot_publisher = _make_robot_publisher(args)
     source, pose = _make_perception(args)
-    retargeter = GeometricRetargeter.from_yaml(
+    retargeter_type = (
+        MujocoIKRetargeter if args.retargeting == "ik" else GeometricRetargeter
+    )
+    retargeter = retargeter_type.from_yaml(
         joints_path=PROJECT_ROOT / "config" / "joints.yaml",
         retargeting_path=PROJECT_ROOT / "config" / "retargeting.yaml",
     )
@@ -576,6 +590,7 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
                         balance_enabled=balance_enabled,
                         support_intent=support_intent_estimator.intent.value,
                         support_phase=support_machine.phase.value,
+                        retargeting_mode=args.retargeting,
                         source_label=source_label,
                         frame_index=frames,
                     )
@@ -775,6 +790,7 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
                     balance_enabled=balance_enabled,
                     support_intent=support_intent_estimator.intent.value,
                     support_phase=support_machine.phase.value,
+                    retargeting_mode=args.retargeting,
                     source_label=source_label,
                     frame_index=frames,
                 )

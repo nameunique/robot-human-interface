@@ -391,6 +391,11 @@ class HumanoidSimulation:
                 self.data,
                 key_callback=self._viewer_key_callback,
             )
+            # Reset to MuJoCo's model-aware full-body FREE camera.  Selecting
+            # the named overview camera here used mjCAMERA_FIXED, which makes
+            # mouse orbit/pan/zoom ineffective in the passive viewer.
+            with self._viewer.lock():
+                mujoco.mjv_defaultFreeCamera(self.model, self._viewer.cam)
             self.sync_viewer()
         elif accepted != self._viewer_mode:
             self.set_view_mode(accepted)

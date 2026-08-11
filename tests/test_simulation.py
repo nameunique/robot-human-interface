@@ -14,6 +14,7 @@ from robot_human_interface.simulation import HumanoidSimulation, LatestJointComm
 class _FakeViewer:
     def __init__(self) -> None:
         self.opt = mujoco.MjvOption()
+        self.cam = mujoco.MjvCamera()
         self.running = True
         self.lock_count = 0
         self.sync_count = 0
@@ -198,6 +199,10 @@ def test_view_modes_apply_deterministic_layers_under_viewer_lock(
 
     with HumanoidSimulation("fixed") as simulation:
         assert simulation.launch_viewer("visual") is viewer
+        assert viewer.cam.type == mujoco.mjtCamera.mjCAMERA_FREE
+        assert viewer.cam.fixedcamid == -1
+        assert viewer.cam.distance > 0.0
+        assert np.isfinite(viewer.cam.lookat).all()
         assert simulation.viewer_mode == "visual"
         np.testing.assert_array_equal(viewer.opt.geomgroup, (1, 1, 0, 0, 0, 0))
         np.testing.assert_array_equal(viewer.opt.sitegroup, (0, 0, 0, 0, 0, 0))
@@ -211,8 +216,22 @@ def test_view_modes_apply_deterministic_layers_under_viewer_lock(
         assert viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_AUTOCONNECT] == 1
 
         assert simulation.toggle_view_mode() == "visual"
-        assert viewer.lock_count == 3
-        assert viewer.sync_count == 3
+        # Camera changes made by MuJoCo's mouse handler must survive syncs;
+        # only rendering layers are controlled by the application.
+        initial_azimuth = float(viewer.cam.azimuth)
+        mujoco.mjv_moveCamera(
+            simulation.model,
+            mujoco.mjtMouse.mjMOUSE_ROTATE_H,
+            0.1,
+            0.0,
+            viewer.cam,
+        )
+        moved_azimuth = float(viewer.cam.azimuth)
+        assert moved_azimuth != initial_azimuth
+        simulation.sync_viewer()
+        assert viewer.cam.azimuth == moved_azimuth
+        assert viewer.lock_count == 4
+        assert viewer.sync_count == 4
         with pytest.raises(ValueError, match="visual.*joints"):
             simulation.set_view_mode("invalid")  # type: ignore[arg-type]
 
@@ -243,11 +262,11 @@ def test_viewer_v_key_defers_toggle_until_simulation_sync(
         assert callable(callback)
         callback(ord("V"))
         assert simulation.viewer_mode == "visual"
-        assert viewer.lock_count == 1
+        assert viewer.lock_count == 2
 
         simulation.sync_viewer()
         assert simulation.viewer_mode == "joints"
-        assert viewer.lock_count == 2
+        assert viewer.lock_count == 3
         assert viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_JOINT] == 1
         assert viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_AUTOCONNECT] == 1
 

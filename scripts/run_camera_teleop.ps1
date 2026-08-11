@@ -15,6 +15,8 @@ param(
     [switch]$MirrorInput,
     [string]$PoseModel = "",
     [switch]$FreeBase,
+    [ValidateSet("ik", "geometric")]
+    [string]$Retargeting = "ik",
     [ValidateSet("visual", "joints")]
     [string]$ViewerMode = "visual",
     [string]$RobotWebSocketUrl = "",
@@ -75,6 +77,7 @@ $teleopArguments = @(
     "--demo-video", $DemoVideo,
     "--camera-index", "$CameraIndex"
     "--camera-backend", $CameraBackend
+    "--retargeting", $Retargeting
     "--viewer-mode", $ViewerMode
 )
 

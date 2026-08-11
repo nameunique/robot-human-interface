@@ -28,6 +28,10 @@ from robot_human_interface.skeleton import JOINT_NAMES, RobotJointCommand
 
 
 FloatArray = NDArray[np.float64]
+UPPER_BODY_INDICES = np.asarray((0, 1, 2, 3, 4, 5, 18, 19), dtype=np.int64)
+LOWER_BODY_INDICES = np.arange(6, 18, dtype=np.int64)
+RIGHT_LEG_INDICES = np.asarray((6, 8, 10, 12, 14, 16), dtype=np.int64)
+LEFT_LEG_INDICES = np.asarray((7, 9, 11, 13, 15, 17), dtype=np.int64)
 
 
 class SupportIntent(str, Enum):
@@ -59,6 +63,7 @@ class SupportControlConfig:
     load_confirm_duration_s: float = 0.15
     stance_load_timeout_s: float = 1.5
     lift_duration_s: float = 1.5
+    minimum_hold_duration_s: float = 0.25
     lower_duration_s: float = 3.0
     touchdown_confirm_duration_s: float = 0.15
     touchdown_preload_duration_s: float = 8.0
@@ -70,10 +75,16 @@ class SupportControlConfig:
     max_swing_load_fraction: float = 0.35
     min_touchdown_force_n: float = 4.0
     min_touchdown_total_force_n: float = 20.0
+    early_touchdown_max_swing_progress: float = 0.45
     start_max_tilt_rad: float = 12.0 * pi / 180.0
     active_max_tilt_rad: float = 18.0 * pi / 180.0
     start_max_angular_speed_rad_s: float = 1.0
     active_max_angular_speed_rad_s: float = 3.0
+    swing_reference_blend: float = 0.25
+    max_swing_reference_delta_rad: float = 12.0 * pi / 180.0
+    single_support_upper_body_scale: float = 0.15
+    upper_body_rate_limit_rad_s: float = 2.5
+    lower_body_rate_limit_rad_s: float = 1.2
     cancel_on_stale_reference: bool = True
 
     def __post_init__(self) -> None:
@@ -91,6 +102,11 @@ class SupportControlConfig:
         )
         if not np.isfinite(durations).all() or any(value <= 0.0 for value in durations):
             raise ValueError("support phase durations must be finite and positive")
+        if (
+            not np.isfinite(self.minimum_hold_duration_s)
+            or self.minimum_hold_duration_s < 0.0
+        ):
+            raise ValueError("minimum_hold_duration_s must be finite and non-negative")
         if self.stance_load_timeout_s < self.load_confirm_duration_s:
             raise ValueError("stance_load_timeout_s must cover load_confirm_duration_s")
         if not np.isfinite(self.min_stance_force_n) or self.min_stance_force_n <= 0.0:
@@ -102,11 +118,16 @@ class SupportControlConfig:
             or self.min_touchdown_total_force_n <= 0.0
         ):
             raise ValueError("min_touchdown_total_force_n must be finite and positive")
+        if not 0.0 < self.early_touchdown_max_swing_progress < 1.0:
+            raise ValueError(
+                "early_touchdown_max_swing_progress must be within (0, 1)"
+            )
         stability_limits = (
             self.start_max_tilt_rad,
             self.active_max_tilt_rad,
             self.start_max_angular_speed_rad_s,
             self.active_max_angular_speed_rad_s,
+            self.max_swing_reference_delta_rad,
         )
         if not np.isfinite(stability_limits).all() or any(
             value <= 0.0 for value in stability_limits
@@ -124,6 +145,23 @@ class SupportControlConfig:
                 "start_max_angular_speed_rad_s must be below "
                 "active_max_angular_speed_rad_s"
             )
+        if (
+            not np.isfinite(self.swing_reference_blend)
+            or not 0.0 <= self.swing_reference_blend <= 1.0
+        ):
+            raise ValueError("swing_reference_blend must be within [0, 1]")
+        if (
+            not np.isfinite(self.single_support_upper_body_scale)
+            or not 0.0 <= self.single_support_upper_body_scale <= 1.0
+        ):
+            raise ValueError("single_support_upper_body_scale must be within [0, 1]")
+        if (
+            not np.isfinite(self.upper_body_rate_limit_rad_s)
+            or self.upper_body_rate_limit_rad_s <= 0.0
+            or not np.isfinite(self.lower_body_rate_limit_rad_s)
+            or self.lower_body_rate_limit_rad_s <= 0.0
+        ):
+            raise ValueError("support motor-target rate limits must be finite and positive")
         if not 0.5 < self.min_stance_load_fraction <= 1.0:
             raise ValueError("min_stance_load_fraction must be within (0.5, 1]")
         if not 0.0 <= self.max_swing_load_fraction < 0.5:
@@ -239,12 +277,29 @@ class SupportStateMachine:
         lower_limits_rad: Sequence[float],
         upper_limits_rad: Sequence[float],
         config: SupportControlConfig | None = None,
+        *,
+        home_positions_rad: Sequence[float] | None = None,
     ) -> None:
         self.config = config or SupportControlConfig()
         self._lower = self._vector(lower_limits_rad, "lower_limits_rad")
         self._upper = self._vector(upper_limits_rad, "upper_limits_rad")
         if np.any(self._lower >= self._upper):
             raise ValueError("every lower motor limit must be below its upper limit")
+        self._home = (
+            None
+            if home_positions_rad is None
+            else self._vector(home_positions_rad, "home_positions_rad")
+        )
+        if self._home is not None and (
+            np.any(self._home < self._lower) or np.any(self._home > self._upper)
+        ):
+            raise ValueError("home motor angles must lie inside configured limits")
+        self._rate_limits = np.full(
+            len(JOINT_NAMES), self.config.lower_body_rate_limit_rad_s
+        )
+        self._rate_limits[UPPER_BODY_INDICES] = (
+            self.config.upper_body_rate_limit_rad_s
+        )
         self.reset()
 
     @staticmethod
@@ -264,6 +319,7 @@ class SupportStateMachine:
             getattr(simulation, "lower_limits_rad"),
             getattr(simulation, "upper_limits_rad"),
             config,
+            home_positions_rad=getattr(simulation, "home_positions_rad"),
         )
 
     def reset(self) -> None:
@@ -276,9 +332,13 @@ class SupportStateMachine:
         self._support_unsafe_elapsed_s = 0.0
         self._shift_progress = 0.0
         self._swing_progress = 0.0
+        self._center_start_shift_progress = 1.0
         self._blocked_intent: SupportIntent | None = None
         self._abort_reason: str | None = None
         self._last_diagnostics: SupportDiagnostics | None = None
+        self._cycle_reference_rad: FloatArray | None = None
+        self._admitted_pose_rad: FloatArray | None = None
+        self._last_output_rad = None if self._home is None else self._home.copy()
 
     @property
     def intent(self) -> SupportIntent:
@@ -309,10 +369,17 @@ class SupportStateMachine:
     def _transition(self, phase: SupportPhase) -> None:
         self._phase = phase
         self._phase_elapsed_s = 0.0
-        if phase is SupportPhase.VERIFY_STANCE:
+        if phase is SupportPhase.DOUBLE_SUPPORT:
+            self._cycle_reference_rad = None
+            self._admitted_pose_rad = None
+        elif phase is SupportPhase.VERIFY_STANCE:
             self._load_confirm_elapsed_s = 0.0
         elif phase is SupportPhase.VERIFY_TOUCHDOWN:
             self._touchdown_confirm_elapsed_s = 0.0
+        elif phase is SupportPhase.LOWER_SWING:
+            self._touchdown_confirm_elapsed_s = 0.0
+        elif phase is SupportPhase.CENTER_WEIGHT:
+            self._center_start_shift_progress = max(self._shift_progress, 1e-9)
 
     @staticmethod
     def _validated_force(state: object, name: str) -> float:
@@ -403,6 +470,8 @@ class SupportStateMachine:
         touchdown_ready: bool,
         start_stability_reason: str | None,
         active_stability_reason: str | None,
+        *,
+        force_return: bool = False,
     ) -> None:
         self._phase_elapsed_s += dt_s
 
@@ -423,7 +492,13 @@ class SupportStateMachine:
             return
 
         requested_changed = self._requested_intent is not self._active_intent
-        if requested_changed and self._phase not in {
+        hold_dwell_pending = bool(
+            self._phase is SupportPhase.HOLD_SWING
+            and self._phase_elapsed_s < self.config.minimum_hold_duration_s
+            and not force_return
+            and active_stability_reason is None
+        )
+        if requested_changed and not hold_dwell_pending and self._phase not in {
             SupportPhase.LOWER_SWING,
             SupportPhase.VERIFY_TOUCHDOWN,
             SupportPhase.CENTER_WEIGHT,
@@ -477,6 +552,30 @@ class SupportStateMachine:
                 if self._swing_progress >= 1.0:
                     self._transition(SupportPhase.HOLD_SWING)
         elif self._phase is SupportPhase.LOWER_SWING:
+            # A real sole contact is stronger evidence than a nominal profile
+            # endpoint.  Confirm it while lowering and begin a simultaneous
+            # center-and-lower recovery instead of driving through the ground
+            # pose, losing contact, and only then entering VERIFY_TOUCHDOWN.
+            if (
+                self._swing_progress
+                <= self.config.early_touchdown_max_swing_progress
+                and touchdown_ready
+            ):
+                self._touchdown_confirm_elapsed_s += dt_s
+                if (
+                    self._touchdown_confirm_elapsed_s
+                    >= self.config.touchdown_confirm_duration_s
+                ):
+                    # This contact has already passed the same timed force
+                    # confirmation used by VERIFY_TOUCHDOWN.  Preserve it by
+                    # centering immediately while CENTER_WEIGHT continues to
+                    # lower the residual swing profile; demanding a second
+                    # confirmation after changing composition can unload the
+                    # sole again.
+                    self._transition(SupportPhase.CENTER_WEIGHT)
+                    return
+            else:
+                self._touchdown_confirm_elapsed_s = 0.0
             self._swing_progress = max(
                 0.0, self._swing_progress - dt_s / self.config.lower_duration_s
             )
@@ -506,7 +605,10 @@ class SupportStateMachine:
             self._shift_progress = max(
                 0.0, self._shift_progress - dt_s / self.config.center_duration_s
             )
-            if self._shift_progress <= 0.0:
+            self._swing_progress = max(
+                0.0, self._swing_progress - dt_s / self.config.lower_duration_s
+            )
+            if self._shift_progress <= 0.0 and self._swing_progress <= 0.0:
                 self._active_intent = SupportIntent.DOUBLE_SUPPORT
                 self._transition(SupportPhase.DOUBLE_SUPPORT)
 
@@ -526,6 +628,14 @@ class SupportStateMachine:
         if tuple(reference.joint_names) != JOINT_NAMES:
             raise ValueError("reference must use canonical motor order")
         positions = self._vector(reference.positions_rad, "reference.positions_rad")
+        pose_reference = self._vector(
+            getattr(reference, "pose_reference_positions_rad", positions),
+            "reference.pose_reference_positions_rad",
+        )
+        if self._home is None:
+            # Lightweight/controller-only callers need not provide a model;
+            # their first canonical balanced command becomes the neutral seed.
+            self._home = positions.copy()
         if intent is not None:
             self.set_intent(intent)
         if reference.stale and self.config.cancel_on_stale_reference:
@@ -555,7 +665,13 @@ class SupportStateMachine:
             touchdown_ready,
             start_stability_reason,
             active_stability_reason,
+            force_return=reference.stale,
         )
+        if self._phase is SupportPhase.SHIFT_WEIGHT and self._cycle_reference_rad is None:
+            # Capture the already safe, continuous double-support pose.  Never
+            # reset it to home at phase admission: the final slew limiter is a
+            # guard, not a substitute for a continuous desired trajectory.
+            self._cycle_reference_rad = positions.copy()
         # Re-evaluate side-specific diagnostics if DOUBLE_SUPPORT just accepted
         # a request during this update.
         stance_force, swing_force, stance_fraction, support_ready = self._loads(state)
@@ -566,12 +682,129 @@ class SupportStateMachine:
             >= self.config.min_touchdown_total_force_n
         )
 
+        composed_positions = positions.copy()
+        lift_profile_scale = 1.0
+        if (
+            self._cycle_reference_rad is not None
+            and self._active_intent is not SupportIntent.DOUBLE_SUPPORT
+        ):
+            support_upper = self._home[UPPER_BODY_INDICES] + (
+                self.config.single_support_upper_body_scale
+                * (positions[UPPER_BODY_INDICES] - self._home[UPPER_BODY_INDICES])
+            )
+            if self._phase in {SupportPhase.SHIFT_WEIGHT, SupportPhase.VERIFY_STANCE}:
+                upper_safety_weight = _smoothstep(self._shift_progress)
+            elif self._phase is SupportPhase.CENTER_WEIGHT:
+                upper_safety_weight = _smoothstep(
+                    self._shift_progress / self._center_start_shift_progress
+                )
+            else:
+                upper_safety_weight = 1.0
+            composed_positions[UPPER_BODY_INDICES] = (
+                (1.0 - upper_safety_weight) * positions[UPPER_BODY_INDICES]
+                + upper_safety_weight * support_upper
+            )
+            # Keep the standing layer's continuous, already projected lower
+            # pose captured at admission as the support-profile base.
+            # Resetting these joints to ``home`` at SHIFT creates a knee snap;
+            # following every later camera-frame perturbation would instead
+            # move the stance geometry during the one-foot support cycle.
+            cycle_lower = self._cycle_reference_rad[LOWER_BODY_INDICES]
+            if self._phase is SupportPhase.CENTER_WEIGHT:
+                cycle_weight = _smoothstep(
+                    self._shift_progress / self._center_start_shift_progress
+                )
+                composed_positions[LOWER_BODY_INDICES] = (
+                    cycle_weight * cycle_lower
+                    + (1.0 - cycle_weight) * positions[LOWER_BODY_INDICES]
+                )
+            else:
+                composed_positions[LOWER_BODY_INDICES] = cycle_lower
+            if self._active_intent is SupportIntent.RIGHT_SWING:
+                swing_indices = RIGHT_LEG_INDICES
+            else:
+                swing_indices = LEFT_LEG_INDICES
+            pose_admission_active = self._phase in {
+                SupportPhase.LIFT_SWING,
+                SupportPhase.HOLD_SWING,
+                SupportPhase.LOWER_SWING,
+            } or (
+                self._phase is SupportPhase.VERIFY_STANCE and support_ready
+            )
+            if pose_admission_active:
+                if self._admitted_pose_rad is None:
+                    # Continue from the standing layer's already rate-limited
+                    # pose.  Pre-admit while VERIFY_STANCE is physically
+                    # confirming the intentional unload, matching the
+                    # continuous servo path without exposing the candidate in
+                    # SHIFT or incidental DOUBLE_SUPPORT unloading.
+                    self._admitted_pose_rad = positions.copy()
+                maximum_pose_change = self._rate_limits[swing_indices] * dt_s
+                # Stop chasing a visual swing pose as soon as the returning
+                # sole carries touchdown-level load.  During LOWER this hands
+                # the leg back to the balanced standing projection before the
+                # support profile reaches zero, instead of fighting contact.
+                candidate_target = (
+                    pose_reference
+                    if support_ready
+                    and swing_force < self.config.min_touchdown_force_n
+                    else positions
+                )
+                self._admitted_pose_rad[swing_indices] += np.clip(
+                    candidate_target[swing_indices]
+                    - self._admitted_pose_rad[swing_indices],
+                    -maximum_pose_change,
+                    maximum_pose_change,
+                )
+                admitted_pose = self._admitted_pose_rad
+            else:
+                admitted_pose = composed_positions
+            reference_delta = np.clip(
+                admitted_pose[swing_indices] - composed_positions[swing_indices],
+                -self.config.max_swing_reference_delta_rad,
+                self.config.max_swing_reference_delta_rad,
+            )
+            if self._phase in {
+                SupportPhase.LIFT_SWING,
+                SupportPhase.HOLD_SWING,
+                SupportPhase.LOWER_SWING,
+            }:
+                pose_activity = float(
+                    np.clip(
+                        np.max(np.abs(reference_delta))
+                        / self.config.max_swing_reference_delta_rad,
+                        0.0,
+                        1.0,
+                    )
+                )
+                active_blend = self.config.swing_reference_blend * pose_activity
+                lift_profile_scale = 1.0 - active_blend
+                reference_blend = active_blend * _smoothstep(self._swing_progress)
+            else:
+                reference_blend = 0.0
+            composed_positions[swing_indices] = (
+                composed_positions[swing_indices] + reference_blend * reference_delta
+            )
+
         shift_offset, lift_offset = support_offsets(self._active_intent)
         applied_offset = (
             _smoothstep(self._shift_progress) * shift_offset
-            + _smoothstep(self._swing_progress) * lift_offset
+            + _smoothstep(self._swing_progress) * lift_profile_scale * lift_offset
         )
-        safe = np.clip(positions + applied_offset, self._lower, self._upper)
+        desired_safe = np.clip(
+            composed_positions + applied_offset, self._lower, self._upper
+        )
+        if self._last_output_rad is None:
+            safe = desired_safe
+        else:
+            maximum_change = self._rate_limits * dt_s
+            safe = self._last_output_rad + np.clip(
+                desired_safe - self._last_output_rad,
+                -maximum_change,
+                maximum_change,
+            )
+            safe = np.clip(safe, self._lower, self._upper)
+        self._last_output_rad = safe.copy()
         applied_offset = safe - positions
         self._last_diagnostics = SupportDiagnostics(
             requested_intent=self._requested_intent,

@@ -1,4 +1,4 @@
-Verification date: 2026-08-11 (Europe/Moscow)
+Verification date: 2026-08-12 (Europe/Moscow)
 
 Environment
 -----------
@@ -10,8 +10,8 @@ websocket-client 1.9.0
 
 Automated checks
 ----------------
-python -m compileall -q src tests tools/build_slow_demo.py: PASS
-python -m pytest -q: 116 passed in 41.70s
+python -m compileall -q src tests tools: PASS
+python -m pytest -q: 150 passed in 95.82s
 git diff --check: PASS
 
 Grounded physics and motor-control checks
@@ -35,6 +35,10 @@ Robot physical front is MuJoCo -X; robot left is +Y; robot up is +Z.
 Semantic FK tests verify that a human right-arm/right-leg forward motion moves
 only the matching robot limb toward physical robot front, rather than merely
 checking a motor-array sign. Angular deltas use shortest-path wrapping at +/-pi.
+The Unity FRONT camera/front_motor and converted long-toe geometry independently
+confirm the -X robot-front convention. Tasks hidden during explicit neutral
+calibration remain unavailable until recalibration; a moving pose cannot become
+a lazy per-task zero.
 
 Visual checks
 -------------
@@ -44,19 +48,32 @@ Both MJCF scenes compile with separate render groups:
   group 0 = environment
   group 1 = visual OBJ meshes
   group 2 = physical collision proxies
-Offscreen visual and joints views rendered successfully.
+Offscreen visual and joints views rendered successfully. A synchronized
+human/MediaPipe versus actual grounded-fixed MuJoCo contact sheet was generated
+as artifacts/ik-pose-comparison.png. Raw IK fidelity over the bundled clip and
+four external public-domain clips is stored in artifacts/pose-fidelity.json.
 
 End-to-end checks
 -----------------
 PowerShell wrapper, synthetic free base, 60 frames:
-teleop complete: source=synthetic frames=60 skeleton_frames=60 stale=0 base=free command_span_deg=16.270 safe_span_deg=16.270 base_z_m=0.9245 max_tilt_deg=2.205 sim_s=1.966 media_s=1.967 fell=0 robot_output=0 robot_sent=0/0 support_transitions=0 right_swing=0 left_swing=0 right_clearance_m=0.0007 left_clearance_m=0.0005
+teleop complete: source=synthetic frames=60 skeleton_frames=60 stale=0 base=free command_span_deg=18.631 safe_span_deg=18.631 base_z_m=0.9246 max_tilt_deg=2.217 sim_s=1.966 media_s=1.967 fell=0 robot_output=0 robot_sent=0/0 support_transitions=0 right_swing=0 left_swing=0 right_clearance_m=0.0007 left_clearance_m=0.0005
 
 Bundled slow-balance MP4, full file, free base:
-teleop complete: source=mp4 frames=1961 skeleton_frames=1960 stale=1 base=free command_span_deg=192.865 safe_span_deg=140.000 base_z_m=0.9067 max_tilt_deg=13.086 sim_s=65.398 media_s=65.399 fell=0 robot_output=0 robot_sent=0/0 support_transitions=17 right_swing=1 left_swing=1 right_clearance_m=0.0352 left_clearance_m=0.0408
+teleop complete: source=mp4 frames=1961 skeleton_frames=1960 stale=1 base=free safe_span_deg=136.857 base_z_m=0.8536 max_tilt_deg=16.157 sim_s=65.398 media_s=65.399 fell=0 support_transitions=20 right_swing=1 left_swing=1 right_clearance_m=0.0231 left_clearance_m=0.0301
 
-Unreachable localhost WebSocket, safe command path enabled:
-teleop complete: source=synthetic frames=10 skeleton_frames=10 stale=0 base=free command_span_deg=0.000 safe_span_deg=2.206 base_z_m=0.9266 max_tilt_deg=0.657 sim_s=0.312 media_s=0.312 fell=0 robot_output=1 robot_sent=0/2
-Result: process exit 0; network timeout reported without stopping camera/physics.
+External public-domain DVIDS clips, full files, free base:
+arm circles: fell=0, base_z_m=0.9223, max_tilt_deg=10.242, safe_span_deg=144.891
+frontal leg swing: fell=0, base_z_m=0.8507, max_tilt_deg=12.844, support_transitions=12, right_clearance_m=0.0342
+stationary squat: fell=0, base_z_m=0.9235, max_tilt_deg=9.959
+trunk circles: fell=0, base_z_m=0.9240, max_tilt_deg=2.785
+
+Across all five replay runs, every adjacent 2 ms motor target stayed within the
+configured slew bound: at most 0.286479 deg for upper-body drives and 0.137510
+deg for lower-body drives. The former 14.691 deg phase-transition jump is gone.
+
+The automated WebSocket regression confirms that an unreachable endpoint is
+isolated from camera/physics completion and receives the same post-controller
+safe command rather than the raw human target.
 
 Hardware limitation
 -------------------

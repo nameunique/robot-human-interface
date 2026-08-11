@@ -59,3 +59,9 @@ right-handed MuJoCo convention. Positions and axes must therefore pass through
 the same explicit coordinate transform, followed by positive-direction tests
 for every actuator. Raw numeric axes must not be copied across conventions
 without that verification.
+
+Front-direction verification uses semantic source evidence, not panel
+appearance: Unity's `FRONT` view is at +Z, the prefab's `front_motor` lies on
+the +Z side, and the foot mesh has its longer toe extent toward +Z.  Under the
+checked converter transform this is MuJoCo -X front; -Y/+Y are anatomical
+right/left and +Z is up.

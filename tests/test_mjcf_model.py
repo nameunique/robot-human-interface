@@ -108,6 +108,28 @@ def test_fixed_scene_uses_vertical_carriage_while_free_scene_has_no_constraint()
 
 
 @pytest.mark.parametrize("scene", ["fixed", "free"])
+def test_anatomical_sites_point_toward_imported_mesh_front(scene: str) -> None:
+    model = _load_model(scene)
+
+    head_nose = mujoco.mj_name2id(
+        model, mujoco.mjtObj.mjOBJ_SITE, "head_nose_ik"
+    )
+    assert model.site_pos[head_nose, 0] == pytest.approx(-0.15)
+
+    for side in ("right", "left"):
+        toe = mujoco.mj_name2id(
+            model, mujoco.mjtObj.mjOBJ_SITE, f"{side}_toe_ik"
+        )
+        sole = mujoco.mj_name2id(
+            model, mujoco.mjtObj.mjOBJ_SITE, f"{side}_foot_contact"
+        )
+        # Unity's named front is +Z and the converter maps it to MuJoCo -X.
+        # The -0.045 edge is therefore the toe of the 0.21 m-long sole proxy.
+        assert model.site_pos[toe, 0] == pytest.approx(-0.045)
+        assert model.site_pos[toe, 0] < model.site_pos[sole, 0]
+
+
+@pytest.mark.parametrize("scene", ["fixed", "free"])
 def test_visual_meshes_and_collision_proxies_are_separate_layers(scene: str) -> None:
     model = _load_model(scene)
     assert model.nmesh == 21

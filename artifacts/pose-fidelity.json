@@ -1,0 +1,700 @@
+{
+  "schema_version": 1,
+  "description": "Raw retargeter FK direction error before standing-balance and support projection; angles use anatomical forward/right/up coordinates.",
+  "command": "python tools/evaluate_pose_fidelity.py --stride 5",
+  "configuration": {
+    "stride": 5,
+    "dense_calibration_frames": 30,
+    "retargeting": {
+      "mode": "whole_body",
+      "auto_calibration_frames": 30,
+      "confidence_threshold": 0.55,
+      "minimum_coverage": 0.75,
+      "smoothing_time_constant_s": 0.1,
+      "hold_seconds": 0.35,
+      "return_seconds": 1.0,
+      "mirrored_input": false,
+      "joint_scales": {},
+      "joint_signs": {}
+    },
+    "skeleton_filter": {
+      "time_constant_s": 0.08,
+      "confidence_threshold": 0.5,
+      "max_gap_s": 0.25
+    },
+    "pose_model": "assets/models/pose_landmarker_full.task",
+    "mujoco_model": "models/humanoid/scene_fixed.xml",
+    "versions": {
+      "mediapipe": "0.10.35",
+      "mujoco": "3.11.0",
+      "numpy": "2.5.2"
+    }
+  },
+  "videos": [
+    {
+      "video": "assets/videos/slow_balance_demo.mp4",
+      "source_frames": 1961,
+      "sampled_frames": 417,
+      "detected_frames": 416,
+      "evaluated_frames": 388,
+      "stale_commands": {
+        "geometric": 1,
+        "ik": 1
+      },
+      "metrics": {
+        "arms": {
+          "geometric": {
+            "count": 387,
+            "mean_deg": 59.579939585109884,
+            "p50_deg": 60.87425865300007,
+            "p90_deg": 76.96941199509668
+          },
+          "ik": {
+            "count": 387,
+            "mean_deg": 33.89363929777043,
+            "p50_deg": 33.338570287193726,
+            "p90_deg": 39.03266956021605
+          },
+          "ik_mean_improvement_percent": 43.112330200749206
+        },
+        "legs": {
+          "geometric": {
+            "count": 387,
+            "mean_deg": 15.524554498487797,
+            "p50_deg": 13.999363903046735,
+            "p90_deg": 22.049496789947813
+          },
+          "ik": {
+            "count": 387,
+            "mean_deg": 16.446668504223,
+            "p50_deg": 14.09175390372939,
+            "p90_deg": 25.882349079719763
+          },
+          "ik_mean_improvement_percent": -5.939713154570847
+        },
+        "end_effectors": {
+          "geometric": {
+            "count": 387,
+            "mean_deg": 28.421670159307542,
+            "p50_deg": 28.009344961778236,
+            "p90_deg": 36.51790809651214
+          },
+          "ik": {
+            "count": 387,
+            "mean_deg": 18.911548400988703,
+            "p50_deg": 18.315384948971904,
+            "p90_deg": 22.987217011161466
+          },
+          "ik_mean_improvement_percent": 33.46081248924937
+        },
+        "head": {
+          "geometric": {
+            "count": 387,
+            "mean_deg": 3.3215788513255444,
+            "p50_deg": 3.3252835257581554,
+            "p90_deg": 4.023508299437481
+          },
+          "ik": {
+            "count": 387,
+            "mean_deg": 3.2821932088288666,
+            "p50_deg": 3.2914579601847946,
+            "p90_deg": 3.9608061402906776
+          },
+          "ik_mean_improvement_percent": 1.1857506402703666
+        },
+        "right_arm": {
+          "geometric": {
+            "count": 387,
+            "mean_deg": 53.13555169062863,
+            "p50_deg": 55.765737686892216,
+            "p90_deg": 75.90078448753557
+          },
+          "ik": {
+            "count": 387,
+            "mean_deg": 27.900259443140637,
+            "p50_deg": 28.469562889571627,
+            "p90_deg": 32.52455388140039
+          },
+          "ik_mean_improvement_percent": 47.492293661342885
+        },
+        "left_arm": {
+          "geometric": {
+            "count": 387,
+            "mean_deg": 58.68170937033544,
+            "p50_deg": 57.54881602138505,
+            "p90_deg": 80.67306439540019
+          },
+          "ik": {
+            "count": 387,
+            "mean_deg": 35.65908782552774,
+            "p50_deg": 36.19374243874175,
+            "p90_deg": 39.23401724952486
+          },
+          "ik_mean_improvement_percent": 39.23304517173116
+        },
+        "right_leg": {
+          "geometric": {
+            "count": 387,
+            "mean_deg": 10.121256765926972,
+            "p50_deg": 9.047270517616715,
+            "p90_deg": 14.35535182085196
+          },
+          "ik": {
+            "count": 387,
+            "mean_deg": 11.485594659551122,
+            "p50_deg": 9.625439423072695,
+            "p90_deg": 18.138130272472733
+          },
+          "ik_mean_improvement_percent": -13.479925716509511
+        },
+        "left_leg": {
+          "geometric": {
+            "count": 387,
+            "mean_deg": 16.848254118321112,
+            "p50_deg": 16.946778491461416,
+            "p90_deg": 19.242307532682787
+          },
+          "ik": {
+            "count": 387,
+            "mean_deg": 16.230606867895155,
+            "p50_deg": 14.787871667799559,
+            "p90_deg": 23.811957859036834
+          },
+          "ik_mean_improvement_percent": 3.6659421569046446
+        }
+      }
+    },
+    {
+      "video": "assets/videos/external/dvids_arm_circles.mp4",
+      "source_frames": 796,
+      "sampled_frames": 184,
+      "detected_frames": 175,
+      "evaluated_frames": 149,
+      "stale_commands": {
+        "geometric": 3,
+        "ik": 3
+      },
+      "metrics": {
+        "arms": {
+          "geometric": {
+            "count": 146,
+            "mean_deg": 51.53702400691688,
+            "p50_deg": 46.23117129335073,
+            "p90_deg": 75.13011532250047
+          },
+          "ik": {
+            "count": 146,
+            "mean_deg": 34.212515640244526,
+            "p50_deg": 34.71464485490489,
+            "p90_deg": 38.80194656924517
+          },
+          "ik_mean_improvement_percent": 33.61565534778881
+        },
+        "legs": {
+          "geometric": {
+            "count": 146,
+            "mean_deg": 13.798884268601416,
+            "p50_deg": 13.811445516045215,
+            "p90_deg": 14.43753121528966
+          },
+          "ik": {
+            "count": 146,
+            "mean_deg": 13.666096333339212,
+            "p50_deg": 13.66577893396995,
+            "p90_deg": 13.795799033271617
+          },
+          "ik_mean_improvement_percent": 0.9623092177412862
+        },
+        "end_effectors": {
+          "geometric": {
+            "count": 146,
+            "mean_deg": 24.92856270491859,
+            "p50_deg": 22.605663803363992,
+            "p90_deg": 34.92580079579109
+          },
+          "ik": {
+            "count": 146,
+            "mean_deg": 18.126999356866953,
+            "p50_deg": 18.689706653765185,
+            "p90_deg": 19.653040310731036
+          },
+          "ik_mean_improvement_percent": 27.28421782098829
+        },
+        "head": {
+          "geometric": {
+            "count": 146,
+            "mean_deg": 3.2161091689728756,
+            "p50_deg": 3.1896187134008875,
+            "p90_deg": 3.694857605886293
+          },
+          "ik": {
+            "count": 146,
+            "mean_deg": 3.200502623574348,
+            "p50_deg": 3.1793165873484956,
+            "p90_deg": 3.6599461777212094
+          },
+          "ik_mean_improvement_percent": 0.48526168045197604
+        },
+        "right_arm": {
+          "geometric": {
+            "count": 146,
+            "mean_deg": 46.817835206499126,
+            "p50_deg": 47.41529793096862,
+            "p90_deg": 71.13127219643212
+          },
+          "ik": {
+            "count": 146,
+            "mean_deg": 28.360152321113002,
+            "p50_deg": 29.954695055018846,
+            "p90_deg": 33.824076402584026
+          },
+          "ik_mean_improvement_percent": 39.4244689101385
+        },
+        "left_arm": {
+          "geometric": {
+            "count": 146,
+            "mean_deg": 49.354573193639254,
+            "p50_deg": 40.17229487051404,
+            "p90_deg": 75.51040345842739
+          },
+          "ik": {
+            "count": 146,
+            "mean_deg": 35.585159781061535,
+            "p50_deg": 36.59310544435999,
+            "p90_deg": 37.73299878920676
+          },
+          "ik_mean_improvement_percent": 27.89896157860464
+        },
+        "right_leg": {
+          "geometric": {
+            "count": 146,
+            "mean_deg": 8.563101744163857,
+            "p50_deg": 8.594815726477384,
+            "p90_deg": 9.077621835214742
+          },
+          "ik": {
+            "count": 146,
+            "mean_deg": 9.086532090981507,
+            "p50_deg": 9.087534008751057,
+            "p90_deg": 9.537426545008342
+          },
+          "ik_mean_improvement_percent": -6.112625570219232
+        },
+        "left_leg": {
+          "geometric": {
+            "count": 146,
+            "mean_deg": 16.691194211317825,
+            "p50_deg": 16.93270407433761,
+            "p90_deg": 17.919766887802034
+          },
+          "ik": {
+            "count": 146,
+            "mean_deg": 14.402649967604379,
+            "p50_deg": 14.470933139883282,
+            "p90_deg": 14.580003872081242
+          },
+          "ik_mean_improvement_percent": 13.711087503623009
+        }
+      }
+    },
+    {
+      "video": "assets/videos/external/dvids_frontal_leg_swing.mp4",
+      "source_frames": 836,
+      "sampled_frames": 192,
+      "detected_frames": 184,
+      "evaluated_frames": 159,
+      "stale_commands": {
+        "geometric": 4,
+        "ik": 4
+      },
+      "metrics": {
+        "arms": {
+          "geometric": {
+            "count": 155,
+            "mean_deg": 75.07907997338292,
+            "p50_deg": 70.6833266846811,
+            "p90_deg": 87.80624749154805
+          },
+          "ik": {
+            "count": 155,
+            "mean_deg": 68.42534393914487,
+            "p50_deg": 68.0580447065778,
+            "p90_deg": 71.6445390904481
+          },
+          "ik_mean_improvement_percent": 8.862303635842284
+        },
+        "legs": {
+          "geometric": {
+            "count": 155,
+            "mean_deg": 15.95749529314409,
+            "p50_deg": 14.070079752431749,
+            "p90_deg": 21.129826902328585
+          },
+          "ik": {
+            "count": 155,
+            "mean_deg": 13.73028638891215,
+            "p50_deg": 13.402404984114352,
+            "p90_deg": 17.560399782905563
+          },
+          "ik_mean_improvement_percent": 13.957133392913034
+        },
+        "end_effectors": {
+          "geometric": {
+            "count": 155,
+            "mean_deg": 28.76925063547366,
+            "p50_deg": 26.90514923254782,
+            "p90_deg": 34.548369284213365
+          },
+          "ik": {
+            "count": 155,
+            "mean_deg": 24.60563617261496,
+            "p50_deg": 25.352813005724133,
+            "p90_deg": 25.91766381272719
+          },
+          "ik_mean_improvement_percent": 14.472446695308749
+        },
+        "head": {
+          "geometric": {
+            "count": 155,
+            "mean_deg": 17.429708715794867,
+            "p50_deg": 17.406859784387294,
+            "p90_deg": 18.77818490875744
+          },
+          "ik": {
+            "count": 155,
+            "mean_deg": 17.410840668095403,
+            "p50_deg": 17.400791882670898,
+            "p90_deg": 18.760766216764885
+          },
+          "ik_mean_improvement_percent": 0.10825222616810404
+        },
+        "right_arm": {
+          "geometric": {
+            "count": 155,
+            "mean_deg": 71.15328841554677,
+            "p50_deg": 68.4475976937228,
+            "p90_deg": 84.34978020611508
+          },
+          "ik": {
+            "count": 155,
+            "mean_deg": 61.65117879355089,
+            "p50_deg": 63.45171964680455,
+            "p90_deg": 64.80490610599006
+          },
+          "ik_mean_improvement_percent": 13.35442090392508
+        },
+        "left_arm": {
+          "geometric": {
+            "count": 155,
+            "mean_deg": 36.23451913343469,
+            "p50_deg": 29.86694693500667,
+            "p90_deg": 50.70385769666071
+          },
+          "ik": {
+            "count": 155,
+            "mean_deg": 25.2806382428996,
+            "p50_deg": 26.932818933801606,
+            "p90_deg": 28.449560567436265
+          },
+          "ik_mean_improvement_percent": 30.23051265064978
+        },
+        "right_leg": {
+          "geometric": {
+            "count": 155,
+            "mean_deg": 6.845760508647046,
+            "p50_deg": 3.945245562221698,
+            "p90_deg": 12.057490674102278
+          },
+          "ik": {
+            "count": 155,
+            "mean_deg": 6.002137430402314,
+            "p50_deg": 3.752266058092614,
+            "p90_deg": 14.276678383021968
+          },
+          "ik_mean_improvement_percent": 12.32329230885496
+        },
+        "left_leg": {
+          "geometric": {
+            "count": 155,
+            "mean_deg": 12.182976403944926,
+            "p50_deg": 13.601254197737163,
+            "p90_deg": 15.095096339407027
+          },
+          "ik": {
+            "count": 155,
+            "mean_deg": 12.6833857281266,
+            "p50_deg": 14.505768292207259,
+            "p90_deg": 15.504271563464911
+          },
+          "ik_mean_improvement_percent": -4.1074472082178515
+        }
+      }
+    },
+    {
+      "video": "assets/videos/external/dvids_stationary_squat.mp4",
+      "source_frames": 817,
+      "sampled_frames": 188,
+      "detected_frames": 179,
+      "evaluated_frames": 153,
+      "stale_commands": {
+        "geometric": 3,
+        "ik": 3
+      },
+      "metrics": {
+        "arms": {
+          "geometric": {
+            "count": 150,
+            "mean_deg": 40.86181376800476,
+            "p50_deg": 36.75731733685832,
+            "p90_deg": 51.62109133339023
+          },
+          "ik": {
+            "count": 150,
+            "mean_deg": 34.82720844524836,
+            "p50_deg": 36.67663893447801,
+            "p90_deg": 39.08252327634638
+          },
+          "ik_mean_improvement_percent": 14.768324668645915
+        },
+        "legs": {
+          "geometric": {
+            "count": 150,
+            "mean_deg": 20.915317289932624,
+            "p50_deg": 15.26890252564958,
+            "p90_deg": 41.38872692798328
+          },
+          "ik": {
+            "count": 150,
+            "mean_deg": 18.716671499684395,
+            "p50_deg": 13.743851647137792,
+            "p90_deg": 35.825777899056675
+          },
+          "ik_mean_improvement_percent": 10.512132136319652
+        },
+        "end_effectors": {
+          "geometric": {
+            "count": 150,
+            "mean_deg": 22.667960855122303,
+            "p50_deg": 19.542396823905527,
+            "p90_deg": 36.73640885224027
+          },
+          "ik": {
+            "count": 150,
+            "mean_deg": 19.39973197630002,
+            "p50_deg": 18.44949064302345,
+            "p90_deg": 24.57441637969262
+          },
+          "ik_mean_improvement_percent": 14.417833609783015
+        },
+        "head": {
+          "geometric": {
+            "count": 150,
+            "mean_deg": 6.123560161004037,
+            "p50_deg": 6.037202874739998,
+            "p90_deg": 7.615356231509493
+          },
+          "ik": {
+            "count": 150,
+            "mean_deg": 5.990319102373615,
+            "p50_deg": 5.931462221137894,
+            "p90_deg": 7.531392312514618
+          },
+          "ik_mean_improvement_percent": 2.1758757181635224
+        },
+        "right_arm": {
+          "geometric": {
+            "count": 150,
+            "mean_deg": 37.51327410451983,
+            "p50_deg": 32.66424696825564,
+            "p90_deg": 57.43300804363719
+          },
+          "ik": {
+            "count": 150,
+            "mean_deg": 24.873198194801173,
+            "p50_deg": 28.911408391368013,
+            "p90_deg": 29.456259477245727
+          },
+          "ik_mean_improvement_percent": 33.69494188777221
+        },
+        "left_arm": {
+          "geometric": {
+            "count": 148,
+            "mean_deg": 36.97354695130493,
+            "p50_deg": 37.45837925756912,
+            "p90_deg": 48.21610935806329
+          },
+          "ik": {
+            "count": 148,
+            "mean_deg": 36.13820038679967,
+            "p50_deg": 38.30594663628284,
+            "p90_deg": 42.60478262250007
+          },
+          "ik_mean_improvement_percent": 2.259308704153906
+        },
+        "right_leg": {
+          "geometric": {
+            "count": 150,
+            "mean_deg": 16.573119982315585,
+            "p50_deg": 7.350383261471585,
+            "p90_deg": 48.05835986903781
+          },
+          "ik": {
+            "count": 150,
+            "mean_deg": 14.494928753738035,
+            "p50_deg": 7.425980755775058,
+            "p90_deg": 37.47696497678196
+          },
+          "ik_mean_improvement_percent": 12.539529254570613
+        },
+        "left_leg": {
+          "geometric": {
+            "count": 150,
+            "mean_deg": 16.464681372200374,
+            "p50_deg": 10.459151420222707,
+            "p90_deg": 36.58313165414623
+          },
+          "ik": {
+            "count": 150,
+            "mean_deg": 15.815773336935251,
+            "p50_deg": 10.17529577303003,
+            "p90_deg": 36.77695080336619
+          },
+          "ik_mean_improvement_percent": 3.9412122263159266
+        }
+      }
+    },
+    {
+      "video": "assets/videos/external/dvids_trunk_circles.mp4",
+      "source_frames": 867,
+      "sampled_frames": 198,
+      "detected_frames": 190,
+      "evaluated_frames": 164,
+      "stale_commands": {
+        "geometric": 3,
+        "ik": 3
+      },
+      "metrics": {
+        "arms": {
+          "geometric": {
+            "count": 161,
+            "mean_deg": 53.447730375048636,
+            "p50_deg": 48.42389382317445,
+            "p90_deg": 74.04539625381429
+          },
+          "ik": {
+            "count": 161,
+            "mean_deg": 45.125420302568074,
+            "p50_deg": 45.23059643892101,
+            "p90_deg": 48.914962754239404
+          },
+          "ik_mean_improvement_percent": 15.570932599161825
+        },
+        "legs": {
+          "geometric": {
+            "count": 161,
+            "mean_deg": 20.60229923058527,
+            "p50_deg": 18.307970015022928,
+            "p90_deg": 29.184674341628472
+          },
+          "ik": {
+            "count": 161,
+            "mean_deg": 15.393443878187401,
+            "p50_deg": 15.450050225516529,
+            "p90_deg": 16.367123969403195
+          },
+          "ik_mean_improvement_percent": 25.282883692248436
+        },
+        "end_effectors": {
+          "geometric": {
+            "count": 161,
+            "mean_deg": 22.468075766368937,
+            "p50_deg": 18.240247262470405,
+            "p90_deg": 33.6869271222711
+          },
+          "ik": {
+            "count": 161,
+            "mean_deg": 17.349276778035655,
+            "p50_deg": 16.753384615048063,
+            "p90_deg": 20.92377222294852
+          },
+          "ik_mean_improvement_percent": 22.782542846839128
+        },
+        "head": {
+          "geometric": {
+            "count": 161,
+            "mean_deg": 9.429926154155899,
+            "p50_deg": 9.333658043629914,
+            "p90_deg": 10.496360792106941
+          },
+          "ik": {
+            "count": 161,
+            "mean_deg": 9.49867094749523,
+            "p50_deg": 9.39494341762478,
+            "p90_deg": 10.564661050409677
+          },
+          "ik_mean_improvement_percent": -0.729006698626522
+        },
+        "right_arm": {
+          "geometric": {
+            "count": 161,
+            "mean_deg": 47.60464497722156,
+            "p50_deg": 37.00917956909196,
+            "p90_deg": 86.93734381502279
+          },
+          "ik": {
+            "count": 161,
+            "mean_deg": 36.2076704353867,
+            "p50_deg": 36.6328179521494,
+            "p90_deg": 38.55812827015987
+          },
+          "ik_mean_improvement_percent": 23.940887590461436
+        },
+        "left_arm": {
+          "geometric": {
+            "count": 29,
+            "mean_deg": 74.25660590877504,
+            "p50_deg": 72.22667844180053,
+            "p90_deg": 88.65535953665261
+          },
+          "ik": {
+            "count": 29,
+            "mean_deg": 37.95260319303724,
+            "p50_deg": 36.806161352522594,
+            "p90_deg": 48.36153347619206
+          },
+          "ik_mean_improvement_percent": 48.88993008963758
+        },
+        "right_leg": {
+          "geometric": {
+            "count": 161,
+            "mean_deg": 9.39746741824134,
+            "p50_deg": 7.990582151055638,
+            "p90_deg": 15.129626178845049
+          },
+          "ik": {
+            "count": 161,
+            "mean_deg": 7.199123107962163,
+            "p50_deg": 7.08815589968468,
+            "p90_deg": 8.610505106351878
+          },
+          "ik_mean_improvement_percent": 23.392944209755807
+        },
+        "left_leg": {
+          "geometric": {
+            "count": 161,
+            "mean_deg": 16.074706603178406,
+            "p50_deg": 14.599827653889138,
+            "p90_deg": 20.565339115394934
+          },
+          "ik": {
+            "count": 161,
+            "mean_deg": 13.411039427092303,
+            "p50_deg": 13.633540384991498,
+            "p90_deg": 15.231856217139418
+          },
+          "ik_mean_improvement_percent": 16.570549260037026
+        }
+      }
+    }
+  ]
+}

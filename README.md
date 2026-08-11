@@ -2,7 +2,7 @@
 
 Первый воспроизводимый прототип цепочки
 
-`камера/MP4 → MediaPipe → SkeletonFrame → retargeting → motor-angle safety → 20-DOF MuJoCo / legacy WebSocket`.
+`камера/MP4 → MediaPipe → SkeletonFrame → constrained MuJoCo IK → motor-angle safety → 20-DOF MuJoCo / legacy WebSocket`.
 
 Проект работает нативно на Windows без виртуальной машины. Все зависимости,
 модель MediaPipe и копии исходных FBX находятся внутри этого репозитория. Unity
@@ -125,6 +125,10 @@ Get-PnpDevice -Class Camera
 В том же окне `camera skeleton` нажмите `V`, чтобы переключать MuJoCo между
 полноценной 3D-моделью и кинематическим видом суставов.
 
+Для управления ракурсом выберите именно окно MuJoCo: левая кнопка мыши
+вращает свободную камеру, правая перемещает её, колесо приближает и отдаляет.
+Приложение меняет только видимые слои и не сбрасывает выбранный мышью ракурс.
+
 ### 7. Запуск на встроенном MP4
 
 В репозитории есть два лицензированных видео с человеком в полный рост. По
@@ -142,14 +146,24 @@ MediaPipe → retargeting → MuJoCo pipeline, что и камера:
 .\scripts\run_camera_teleop.ps1 -Source mp4 -DemoVideo slow-balance -LoopReplay
 ```
 
+По умолчанию используется ограниченная joint limits обратная кинематика по
+фактической модели MuJoCo. Она ищет ближайшую достижимую позу по направлениям
+рук, ног, стоп и головы. Старый скалярный geometric mapper сохранён только как
+воспроизводимый baseline для сравнения:
+
+```powershell
+.\scripts\run_camera_teleop.ps1 -Source mp4 -DemoVideo slow-balance -Retargeting geometric
+```
+
 Проверка именно свободной физики и motor-angle balance layer (без weld/каретки):
 
 ```powershell
 .\scripts\run_camera_teleop.ps1 -Source mp4 -DemoVideo slow-balance -FreeBase
 ```
 
-На эталонном полном прогоне обе swing-стопы отрываются на `3.5–4.1 cm`,
-максимальный наклон корпуса остаётся около `13.1°`, падение не регистрируется,
+На эталонном полном прогоне обе swing-стопы отрываются на `2.31/3.01 cm`
+(правая/левая), максимальный наклон корпуса остаётся около `16.16°`, падение
+не регистрируется,
 а время MuJoCo расходится с временем MP4 не более чем на один шаг `2 ms`.
 
 Старый быстрый ролик с jumping jacks сохранён как отдельный вариант:
@@ -177,6 +191,12 @@ viewer с роботом. Источник, авторы, лицензии, пр
 ```powershell
 .\scripts\run_camera_teleop.ps1
 ```
+
+Первые 30 уверенных кадров являются нейтральной калибровкой. Перед запуском
+встаньте прямо, держите обе стопы на полу и руки в обычном нижнем положении.
+Если запуск начался в движении или с уже поднятой рукой, нажмите `C` и повторите
+эту нейтральную позу: любая поза, принятая за calibration home, намеренно даёт
+нулевое относительное движение.
 
 Если нужна другая камера или backend Windows:
 
@@ -297,6 +317,18 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\scripts\run_camera_teleop.ps1 -Source replay -VideoPath "C:\data\motion.mp4"
 ```
 
+В проект также входят четыре независимых public-domain ролика DVIDS для
+проверки кругов руками, маха ногой, приседания и наклонов корпуса. Например:
+
+```powershell
+.\scripts\run_camera_teleop.ps1 `
+  -Source replay `
+  -VideoPath ".\assets\videos\external\dvids_frontal_leg_swing.mp4" `
+  -LoopReplay
+```
+
+Источники, лицензии и SHA-256 всех роликов записаны в `assets/README.md`.
+
 Чтобы зациклить пользовательский файл:
 
 ```powershell
@@ -395,7 +427,7 @@ flowchart LR
     Camera["OpenCV camera / replay"] --> Pose["MediaPipe Tasks\nPose Landmarker"]
     Synthetic["Deterministic synthetic pose"] --> Skeleton["Canonical SkeletonFrame\n33 landmarks + confidence + timestamp"]
     Pose --> Skeleton
-    Skeleton --> Retarget["Calibration + geometric retargeting\nhuman reference, 20 rad"]
+    Skeleton --> Retarget["Calibration + constrained MuJoCo IK\n20 bounded motor targets, rad"]
     Skeleton --> Intent["Calibrated foot-height intent\nleft / double / right"]
     Retarget --> Balance["Motor-angle balance + support FSM\nlimits, slew, contact gates"]
     Intent --> Balance
@@ -475,21 +507,31 @@ FBX и MediaPipe bundle — в [`assets/README.md`](assets/README.md).
 
 ## Retargeting, перед робота и устойчивость
 
-Текущая реализация — понятный geometric + classical-control baseline, на фоне
-которого затем можно честно сравнивать нейросеть:
+Текущая реализация разделяет кинематическое копирование и физическую
+устойчивость. Ограниченный IK является основным retargeter, а прежний
+geometric mapper оставлен как baseline, на фоне которого затем можно честно
+сравнивать нейросеть:
 
 1. MediaPipe Tasks выдаёт 33 точки, confidence и hip-relative learned 3D.
 2. Скелет канонизируется и сглаживается с учётом confidence.
-3. Из сегментов вычисляются shoulder/elbow/wrist, hip/knee/ankle и head angles.
-4. Калибровка определяет нейтральную позу конкретного пользователя.
-5. Значения ограничиваются точными Unity joint limits и сглаживаются.
+3. Калибровка фиксирует нейтральные направления видимых сегментов и систему
+   тела пользователя. Длины кинематических звеньев берутся из робота; отдельный
+   масштаб в плоскости изображения используется только для уверенного
+   распознавания относительного подъёма ног.
+4. IK минимизирует ошибки до 12 позиционных site-targets вместе с остатками
+   направлений конечностей и головы по фактической FK модели MuJoCo, учитывает
+   все 20 joint limits и непрерывность решения между кадрами.
+5. Для полных оборотных суставов выбирается ближайшая эквивалентная ветвь угла,
+   поэтому переход через `±π` не создаёт скачок почти на `360°`.
 6. При кратком dropout удерживается последняя команда; затем робот плавно
    возвращается в neutral pose.
 7. Перед человека определяется в реальных MediaPipe camera axes; semantic FK
    tests проверяют, что рука/нога вперёд движутся вдоль физического переда
    робота `-X`, а не просто дают ожидаемый знак в массиве.
-8. В double support копируется верх тела, а ограниченный ankle residual зависит
-   от IMU-подобных pitch/pitch-rate и фактической траектории рук.
+8. В grounded-fixed режиме вся достижимая IK-поза передаётся в приводы. В
+   free-base режиме balance compositor сохраняет безопасную долю непрерывной
+   позы ног, ограничивает верх тела в одноопорной фазе и добавляет ankle
+   residual по IMU-подобным pitch/pitch-rate.
 9. Подъём стопы превращается в последовательность `shift → verify load → lift →
    hold → lower → verify touchdown → center`: отрыв разрешается только после
    подтверждённой нагрузки противоположной стопы, а перенос веса обратно —
@@ -509,10 +551,18 @@ FBX и MediaPipe bundle — в [`assets/README.md`](assets/README.md).
 Landmarks с низкой уверенностью не используются для соответствующего сустава.
 Например, плохие `INDEX/PINKY` не могут создать случайную команду wrist, а
 плохие `NOSE/EARS` — команду головы.
+Задача, которой не было видно в нейтральном калибровочном окне, остаётся
+недоступной до явной повторной калибровки: первая уже движущаяся поза не может
+незаметно стать новым нулём только для кисти или головы.
 
 MediaPipe monocular world landmarks нельзя считать точным измерением глубины или
 анатомических центров суставов. Для научной ветки имеет смысл добавить RGB-D,
 кинематический fit и сравнить MediaPipe с обучаемым RTMPose/RTMW3D baseline.
+
+Механические ограничения остаются реальными ограничениями: у плеча этой модели
+только одна вращательная степень свободы, поэтому боковой подъём руки невозможно
+совместить точно во всех трёх координатах. IK минимизирует FK-ошибку всей цепи и
+выбирает ближайшую достижимую позу, но не создаёт отсутствующий привод.
 
 ## Структура
 
@@ -527,7 +577,7 @@ src/robot_human_interface/
   camera/                       camera, replay, synthetic frame sources
   pose/                         MediaPipe Tasks и synthetic skeleton
   skeleton/                     типы, фильтрация, transforms
-  retargeting/                  geometry, calibration, safety fallback
+  retargeting/                  geometric baseline, constrained IK, FK fidelity
   control/                      standing balance, foot intent, support FSM
   protocol/                     legacy Unity/WebSocket encoder + 10 Hz publisher
   simulation/                   MuJoCo API и state/command boundary
@@ -596,6 +646,39 @@ safety shield. Оценивать следует не только pose error, �
 time-to-fall, foot slip, contact errors, latency p50/p95/p99, torque saturation,
 jerk, recovery from pushes и sim-to-sim/sim-to-real gap.
 
+Воспроизводимая оценка позы на встроенном и четырёх внешних роликах:
+
+```powershell
+.\.venv\Scripts\python.exe tools\evaluate_pose_fidelity.py --stride 5
+```
+
+Она сравнивает geometric baseline и raw IK по угловой ошибке направлений
+конечностей в FK, а не только по значениям motor targets. Для grounded-fixed
+запуска этот IK target является итоговой командой. В free-base режиме после него
+намеренно работает balance/support projection, поэтому JSON не выдаётся за
+оценку финальной одноопорной safe-команды. Результат сохраняется в
+`artifacts/pose-fidelity.json`.
+
+Визуальный контроль четырёх характерных поз из медленного ролика строится
+отдельной воспроизводимой командой:
+
+```powershell
+.\.venv\Scripts\python.exe tools\render_pose_comparison.py
+```
+
+Она сохраняет сопоставление `human + MediaPipe` / `robot true front` /
+`robot rear` в `artifacts/ik-pose-comparison.png`. На изображении правая
+сторона робота помечена оранжевым, левая — зелёным; вид сзади добавлен, чтобы
+экранные стороны человека и робота можно было сравнить без фронтального
+зеркального эффекта.
+
+У монокулярного MediaPipe глубина ног иногда меняет знак на согнутых позах.
+Поэтому сторона явно поднятой ноги уточняется согласованным 2D-признаком
+«высота голеностопа + сгиб колена»; он включается только для уверенного
+одностороннего подъёма. В остальных позах IK использует исходную 3D-геометрию.
+Это ограничение и отдельные 2D/FK-регрессии важны для честной интерпретации
+метрик из `pose-fidelity.json`.
+
 ## Проверенный статус этой сборки
 
 - Windows native Python `3.12.13`;
@@ -611,18 +694,25 @@ jerk, recovery from pushes и sim-to-sim/sim-to-real gap.
 - semantic FK-регрессии подтверждают: движение человеческой руки/ноги вперёд
   перемещает соответствующую конечность вдоль физического переда робота `-X`;
 - synthetic free-base end-to-end: 60/60 skeleton frames, 0 stale commands,
-  `max_tilt=2.205°`, `fell=0`;
-- полный slow-balance MP4: 1961 frame, обе ноги подняты (`3.52/4.08 cm`),
-  `base_z=0.9067 m`, `max_tilt=13.086°`, `fell=0`, рассинхронизация
-  media/simulation меньше одного шага `2 ms`;
+  `max_tilt=2.217°`, `fell=0`;
+- полный slow-balance MP4: 1961 frame, обе ноги отработали безопасный цикл,
+  clearance правой/левой стопы `2.31/3.01 cm`, `base_z=0.8536 m`,
+  `max_tilt=16.157°`, `fell=0`, рассинхронизация media/simulation меньше
+  одного шага `2 ms`;
+- четыре независимых public-domain DVIDS replay также завершились с `fell=0`:
+  arm circles `10.242°`, frontal leg swing `12.844°`, stationary squat
+  `9.959°`, trunk circles `2.785°` максимального наклона;
+- итоговая команда ограничена на каждом physics tick: не более `0.2865°`
+  для верхних приводов и `0.1375°` для ног за `2 ms`;
 - отказ локального WebSocket endpoint изолирован: camera/physics run завершается
   штатно и отражает ошибку в итоговой статистике;
-- `116 passed` в полном pytest-наборе;
+- `150 passed` в полном pytest-наборе;
 - 21 FBX-копия сохранена, а 21 OBJ-меш компилируется в обеих MJCF-сценах;
 - Unity git status остался чистым.
 
 Лог: `artifacts/verification.log`. Проверенные offscreen-кадры обоих режимов:
-`artifacts/mujoco_fixed_home.png` и `artifacts/mujoco_joints_home.png`.
+`artifacts/mujoco_fixed_home.png`, `artifacts/mujoco_joints_home.png` и
+`artifacts/ik-pose-comparison.png`.
 
 На машине, где собирался проект, Windows не обнаружила ни одного устройства
 класса Camera, поэтому физический webcam frame проверить было невозможно.

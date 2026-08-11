@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from types import SimpleNamespace
 
 import numpy as np
@@ -16,6 +17,7 @@ from robot_human_interface.control import (
     load_support_control_config,
     support_offsets,
 )
+from robot_human_interface.control.standing import BalancedJointCommand
 from robot_human_interface.retargeting import DEFAULT_JOINT_SPECS
 from robot_human_interface.simulation import HumanoidSimulation
 from robot_human_interface.skeleton import RobotJointCommand
@@ -55,6 +57,7 @@ def _fast_config() -> SupportControlConfig:
         load_confirm_duration_s=0.05,
         stance_load_timeout_s=0.20,
         lift_duration_s=0.15,
+        minimum_hold_duration_s=0.0,
         lower_duration_s=0.15,
         touchdown_confirm_duration_s=0.05,
         touchdown_preload_duration_s=0.20,
@@ -66,6 +69,8 @@ def _fast_config() -> SupportControlConfig:
         max_swing_load_fraction=0.35,
         min_touchdown_force_n=2.0,
         min_touchdown_total_force_n=10.0,
+        upper_body_rate_limit_rad_s=1000.0,
+        lower_body_rate_limit_rad_s=1000.0,
     )
 
 
@@ -118,6 +123,25 @@ def test_verified_offsets_are_force_gated_and_ramped_in_phase_order(
         assert np.degrees(expected_shift[index]) == pytest.approx(value)
     for index, value in lift_values_deg.items():
         assert np.degrees(expected_lift[index]) == pytest.approx(value)
+
+
+def test_minimum_hold_dwell_precedes_normal_camera_release() -> None:
+    config = replace(_fast_config(), minimum_hold_duration_s=0.05)
+    machine = SupportStateMachine(LOWER, UPPER, config)
+    loaded = _loads(right_n=1.0, left_n=27.0)
+    machine.set_intent(SupportIntent.RIGHT_SWING)
+    for _ in range(100):
+        machine.update(_reference(), loaded, dt_s=0.01)
+        if machine.phase is SupportPhase.HOLD_SWING:
+            break
+    assert machine.phase is SupportPhase.HOLD_SWING
+
+    machine.set_intent(SupportIntent.DOUBLE_SUPPORT)
+    for _ in range(4):
+        machine.update(_reference(), loaded, dt_s=0.01)
+        assert machine.phase is SupportPhase.HOLD_SWING
+    machine.update(_reference(), loaded, dt_s=0.01)
+    assert machine.phase is SupportPhase.LOWER_SWING
 
 
 def test_leg_never_lifts_without_confirmed_stance_load_and_failure_latches() -> None:
@@ -183,10 +207,45 @@ def test_stance_load_loss_lowers_swing_before_recentering() -> None:
             phases.append(machine.phase)
         if machine.phase is SupportPhase.DOUBLE_SUPPORT:
             break
-    assert SupportPhase.VERIFY_TOUCHDOWN in phases
     assert SupportPhase.CENTER_WEIGHT in phases
     assert machine.phase is SupportPhase.DOUBLE_SUPPORT
     np.testing.assert_allclose(returned.positions_rad, HOME, atol=1e-12)
+
+
+def test_late_lowering_contact_centers_without_driving_profile_to_zero() -> None:
+    config = replace(_fast_config(), lower_duration_s=0.50)
+    machine = SupportStateMachine(LOWER, UPPER, config)
+    loaded = _loads(right_n=1.0, left_n=27.0)
+    machine.set_intent(SupportIntent.RIGHT_SWING)
+    for _ in range(100):
+        machine.update(_reference(), loaded, dt_s=0.01)
+        if machine.phase is SupportPhase.HOLD_SWING:
+            break
+    assert machine.phase is SupportPhase.HOLD_SWING
+
+    machine.set_intent(SupportIntent.DOUBLE_SUPPORT)
+    machine.update(_reference(), loaded, dt_s=0.01)
+    assert machine.phase is SupportPhase.LOWER_SWING
+    while (
+        machine.phase is SupportPhase.LOWER_SWING
+        and machine.last_diagnostics is not None
+        and machine.last_diagnostics.swing_progress
+        > config.early_touchdown_max_swing_progress
+    ):
+        machine.update(_reference(), loaded, dt_s=0.01)
+    assert machine.phase is SupportPhase.LOWER_SWING
+
+    two_feet = _loads(right_n=14.0, left_n=14.0)
+    for _ in range(20):
+        machine.update(_reference(), two_feet, dt_s=0.01)
+        if machine.phase is SupportPhase.CENTER_WEIGHT:
+            break
+
+    assert machine.phase is SupportPhase.CENTER_WEIGHT
+    assert machine.last_diagnostics is not None
+    assert 0.0 < machine.last_diagnostics.swing_progress <= (
+        config.early_touchdown_max_swing_progress
+    )
 
 
 def test_stale_reference_requests_safe_two_foot_return() -> None:
@@ -308,7 +367,6 @@ def test_active_angular_speed_limit_aborts_and_recovery_is_not_restarted() -> No
         phases.add(machine.phase)
         if machine.phase is SupportPhase.DOUBLE_SUPPORT:
             break
-    assert SupportPhase.VERIFY_TOUCHDOWN in phases
     assert SupportPhase.CENTER_WEIGHT in phases
     assert machine.phase is SupportPhase.DOUBLE_SUPPORT
     assert machine.last_diagnostics is not None
@@ -457,6 +515,203 @@ def test_support_yaml_is_runtime_source_for_phase_timing_and_force_gates() -> No
     assert np.degrees(config.active_max_tilt_rad) == pytest.approx(18.0)
     assert config.start_max_angular_speed_rad_s == 1.0
     assert config.active_max_angular_speed_rad_s == 3.0
+    assert config.swing_reference_blend == 0.25
+    assert np.degrees(config.max_swing_reference_delta_rad) == pytest.approx(12.0)
+    assert config.single_support_upper_body_scale == 0.15
+    assert config.upper_body_rate_limit_rad_s == 2.5
+    assert config.lower_body_rate_limit_rad_s == 1.2
+    assert config.early_touchdown_max_swing_progress == 0.45
+    assert config.minimum_hold_duration_s == 0.25
+
+
+def test_swing_pose_reference_waits_for_load_gate_then_remains_correlated() -> None:
+    config = _fast_config()
+    machine = SupportStateMachine(LOWER, UPPER, config)
+    baseline = _reference()
+    loaded = _loads(right_n=1.0, left_n=27.0)
+    machine.set_intent(SupportIntent.RIGHT_SWING)
+    machine.update(baseline, loaded, dt_s=0.01)
+
+    pose = HOME.copy()
+    pose_delta = np.asarray((0.18, -0.24, 0.30, -0.16, 0.0, -0.10))
+    right_leg = np.asarray((6, 8, 10, 12, 14, 16))
+    left_leg = np.asarray((7, 9, 11, 13, 15, 17))
+    pose[right_leg] += pose_delta
+    changing = BalancedJointCommand(
+        0.1,
+        baseline.joint_names,
+        baseline.positions_rad,
+        1.0,
+        False,
+        pose_reference_positions_rad=pose,
+    )
+
+    # Weight transfer is based on the quiet admitted command, not an early
+    # visually inferred leg lift.
+    during_shift = machine.update(changing, loaded, dt_s=0.01)
+    shift, _ = support_offsets(SupportIntent.RIGHT_SWING)
+    progress = machine.last_diagnostics.shift_progress
+    ramp = progress * progress * (3.0 - 2.0 * progress)
+    expected_shift = np.clip(HOME + ramp * shift, LOWER, UPPER)
+    protected = np.asarray((6, 8, 10, 12, 16))
+    np.testing.assert_allclose(
+        during_shift.positions_rad[protected],
+        expected_shift[protected],
+        atol=1e-12,
+    )
+
+    for _ in range(100):
+        held = machine.update(changing, loaded, dt_s=0.01)
+        if machine.phase is SupportPhase.HOLD_SWING:
+            break
+    assert machine.phase is SupportPhase.HOLD_SWING
+    shift, lift = support_offsets(SupportIntent.RIGHT_SWING)
+    capped_pose_delta = np.clip(
+        pose_delta,
+        -config.max_swing_reference_delta_rad,
+        config.max_swing_reference_delta_rad,
+    )
+    expected = np.clip(
+        HOME + shift + (1.0 - config.swing_reference_blend) * lift,
+        LOWER,
+        UPPER,
+    )
+    expected[right_leg] += config.swing_reference_blend * capped_pose_delta
+    expected = np.clip(expected, LOWER, UPPER)
+    np.testing.assert_allclose(held.positions_rad, expected, atol=1e-12)
+    profile_without_pose = np.clip(
+        HOME + shift + (1.0 - config.swing_reference_blend) * lift,
+        LOWER,
+        UPPER,
+    )
+    admitted_delta = held.positions_rad[right_leg] - profile_without_pose[right_leg]
+    # Every unclipped swing component keeps the sign and ordering of the
+    # continuous reference; the stance leg remains on the verified profile.
+    assert np.dot(admitted_delta, pose_delta) > 0.0
+    assert np.ptp(admitted_delta) > np.radians(5.0)
+    np.testing.assert_allclose(
+        held.positions_rad[left_leg], profile_without_pose[left_leg], atol=1e-12
+    )
+
+
+def test_shift_admission_preserves_projected_lower_pose_without_a_home_reset() -> None:
+    config = replace(
+        _fast_config(),
+        upper_body_rate_limit_rad_s=2.5,
+        lower_body_rate_limit_rad_s=1.2,
+    )
+    machine = SupportStateMachine(
+        LOWER,
+        UPPER,
+        config,
+        home_positions_rad=HOME,
+    )
+    crouched = HOME.copy()
+    crouched[10:12] += np.radians(7.0)
+    crouched[12:14] += np.radians(10.0)
+    crouched[14:16] += np.radians(3.0)
+    reference = RobotJointCommand.humanoid(0.0, crouched, 1.0)
+    two_feet = _loads(right_n=14.0, left_n=14.0)
+    loaded = _loads(right_n=1.0, left_n=27.0)
+    for _ in range(100):
+        previous = machine.update(reference, two_feet, dt_s=0.01)
+
+    shifted = machine.update(
+        reference,
+        loaded,
+        dt_s=0.01,
+        intent=SupportIntent.RIGHT_SWING,
+    )
+
+    assert machine.phase is SupportPhase.SHIFT_WEIGHT
+    step = np.abs(shifted.positions_rad - previous.positions_rad)
+    rate_limits = np.full(20, config.lower_body_rate_limit_rad_s)
+    rate_limits[np.asarray((0, 1, 2, 3, 4, 5, 18, 19))] = (
+        config.upper_body_rate_limit_rad_s
+    )
+    assert np.max(step - rate_limits * 0.01) <= 1e-12
+    # SHIFT changes only the verified roll profile.  The already safe
+    # sagittal crouch must not be overwritten with home at admission.
+    sagittal = np.asarray((10, 11, 12, 13, 14, 15))
+    np.testing.assert_allclose(
+        shifted.positions_rad[sagittal], previous.positions_rad[sagittal], atol=1e-12
+    )
+
+
+def test_single_support_smoothly_reduces_moving_upper_body_envelope() -> None:
+    config = _fast_config()
+    machine = SupportStateMachine(LOWER, UPPER, config)
+    loaded = _loads(right_n=1.0, left_n=27.0)
+    machine.update(_reference(), loaded, dt_s=0.01)
+    machine.set_intent(SupportIntent.RIGHT_SWING)
+    upper = HOME.copy()
+    upper_indices = np.asarray((0, 1, 2, 3, 4, 5, 18, 19))
+    upper_delta = np.asarray((0.8, -0.7, 0.5, -0.4, 0.3, -0.2, 1.0, 0.4))
+    upper[upper_indices] += upper_delta
+    moving = RobotJointCommand.humanoid(0.1, upper, 1.0)
+
+    first = machine.update(moving, loaded, dt_s=0.01)
+    # Admission is continuous: the first transfer tick is still nearly the
+    # current IK pose, rather than snapping to the smaller envelope.
+    assert np.max(np.abs(first.positions_rad[upper_indices] - upper[upper_indices])) < 0.02
+
+    for _ in range(100):
+        held = machine.update(moving, loaded, dt_s=0.01)
+        if machine.phase is SupportPhase.HOLD_SWING:
+            break
+    assert machine.phase is SupportPhase.HOLD_SWING
+    expected_upper = (
+        HOME[upper_indices]
+        + config.single_support_upper_body_scale * upper_delta
+    )
+    np.testing.assert_allclose(
+        held.positions_rad[upper_indices], expected_upper, atol=1e-12
+    )
+
+
+def test_final_slew_limit_covers_touchdown_to_center_transition() -> None:
+    config = replace(
+        _fast_config(),
+        upper_body_rate_limit_rad_s=2.5,
+        lower_body_rate_limit_rad_s=1.2,
+    )
+    machine = SupportStateMachine(LOWER, UPPER, config)
+    loaded = _loads(right_n=1.0, left_n=27.0)
+    two_feet = _loads(right_n=14.0, left_n=14.0)
+    baseline = machine.update(_reference(), two_feet, dt_s=0.01)
+    machine.set_intent(SupportIntent.RIGHT_SWING)
+    upper = HOME.copy()
+    upper_indices = np.asarray((0, 1, 2, 3, 4, 5, 18, 19))
+    upper[upper_indices] += np.asarray((0.8, -0.7, 0.5, -0.4, 0.3, -0.2, 1.0, 0.4))
+    moving = RobotJointCommand.humanoid(0.1, upper, 1.0)
+    previous = baseline.positions_rad.copy()
+    maximum_ratio = 0.0
+
+    def update_and_check(state: SimpleNamespace) -> None:
+        nonlocal maximum_ratio, previous
+        command = machine.update(moving, state, dt_s=0.01)
+        rate_limits = np.full(20, config.lower_body_rate_limit_rad_s)
+        rate_limits[upper_indices] = config.upper_body_rate_limit_rad_s
+        ratio = np.max(np.abs(command.positions_rad - previous) / (rate_limits * 0.01))
+        maximum_ratio = max(maximum_ratio, float(ratio))
+        previous = command.positions_rad.copy()
+
+    for _ in range(100):
+        update_and_check(loaded)
+        if machine.phase is SupportPhase.HOLD_SWING:
+            break
+    assert machine.phase is SupportPhase.HOLD_SWING
+    machine.set_intent(SupportIntent.DOUBLE_SUPPORT)
+    observed: set[SupportPhase] = set()
+    for _ in range(200):
+        update_and_check(two_feet)
+        observed.add(machine.phase)
+        if machine.phase is SupportPhase.DOUBLE_SUPPORT:
+            break
+
+    assert SupportPhase.CENTER_WEIGHT in observed
+    assert machine.phase is SupportPhase.DOUBLE_SUPPORT
+    assert maximum_ratio <= 1.0 + 1e-12
 
 
 def test_camera_intent_is_latched_until_the_safe_lift_reaches_hold() -> None:

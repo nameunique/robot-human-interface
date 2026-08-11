@@ -62,6 +62,64 @@ The result contains slow arm elevation/circles followed by balance on each leg.
 The appearance of U.S. Department of War (DoW) visual information does not
 imply or constitute DoW endorsement.
 
+## External full-body retargeting audit clips
+
+`videos/external/` contains four unmodified DVIDS exercise demonstrations for
+checking retargeting against independent internet videos. They use a stationary
+camera, one unobstructed subject, and a full-body view. Each source page marks
+the work **PUBLIC DOMAIN** and identifies Capt. Matthew Holfinger and the U.S.
+Marine Corps Training and Education Command. The applicable public-use and
+non-endorsement notice is:
+
+`https://www.dvidshub.net/about/copyright`
+
+All files were downloaded from the 1024 x 576 MP4 stream exposed by the
+corresponding official DVIDS embed page on 2026-08-11. The files have not been
+trimmed, slowed, recompressed, or otherwise modified.
+
+### Arms: `dvids_arm_circles.mp4`
+
+- Source page: `https://www.dvidshub.net/video/551356/arm-circles`
+- Direct media: `https://d34w7g4gy10iej.cloudfront.net/video/1709/DOD_104840680/DOD_104840680-1024x576-1769k.mp4`
+- Test coverage: bilateral shoulder elevation and circular arm motion while the
+  feet and torso remain nearly stationary
+- Media: MP4, 1024 x 576, 29.97 FPS, 796 frames, about 26.56 seconds
+- Size: 6,318,191 bytes
+- SHA-256: `b44f9ea5707c091863755a9c65231e06a3a790219bbaa41eb0be04c1b622a3e2`
+
+### Single leg: `dvids_frontal_leg_swing.mp4`
+
+- Source page: `https://www.dvidshub.net/video/551381/frontal-leg-swing`
+- Direct media: `https://d34w7g4gy10iej.cloudfront.net/video/1709/DOD_104840801/DOD_104840801-1024x576-1769k.mp4`
+- Test coverage: one-leg support and repeated hip abduction/adduction; the
+  subject uses the fixed rack for balance
+- Media: MP4, 1024 x 576, 29.97 FPS, 836 frames, about 27.89 seconds
+- Size: 6,634,218 bytes
+- SHA-256: `a936684973411c674f86fb7cc1f8003137593c6aafa223df6b1b8ad46f60a967`
+
+### Both legs: `dvids_stationary_squat.mp4`
+
+- Source page: `https://www.dvidshub.net/video/551837/stationary-squat`
+- Direct media: `https://d34w7g4gy10iej.cloudfront.net/video/1709/DOD_104849840/DOD_104849840-1024x576-1769k.mp4`
+- Test coverage: symmetric hip and knee flexion with arms moving forward for
+  balance
+- Media: MP4, 1024 x 576, 29.97 FPS, 817 frames, about 27.26 seconds
+- Size: 6,471,387 bytes
+- SHA-256: `3b82ead850f106e0691385008fa8af0fe48b1f973a68ac098b7f3acf49e6f340`
+
+### Head and trunk: `dvids_trunk_circles.mp4`
+
+- Source page: `https://www.dvidshub.net/video/551844/trunk-circles`
+- Direct media: `https://d34w7g4gy10iej.cloudfront.net/video/1709/DOD_104849856/DOD_104849856-1024x576-1769k.mp4`
+- Test coverage: head pitch and translation coupled to a large circular trunk
+  motion. This is not an isolated neck-yaw test and must not be treated as one.
+- Media: MP4, 1024 x 576, 29.97 FPS, 867 frames, about 28.93 seconds
+- Size: 6,871,249 bytes
+- SHA-256: `5095be71e318228c0cc5686d1fc52696368ac71577bea5f032872635a39ceff6`
+
+The appearance of U.S. Department of War (DoW) visual information does not
+imply or constitute DoW endorsement.
+
 ## Unity visual sources
 
 `unity_fbx/` contains byte-for-byte copies of the 21 FBX geometry files used by
@@ -77,6 +135,12 @@ they are platform-independent and load unchanged on Windows and Ubuntu.
 The Unity-to-MuJoCo conversion applied to every imported Unity-space vertex is:
 
 `p_mj = 0.35 * (-p_unity.z, -p_unity.x, p_unity.y) + (-0.035, 0, 0)`
+
+The source prefab's named `FRONT` view places its camera on Unity +Z, and its
+named `front_motor` plus the longer toe edge are also on the +Z side.  Thus the
+asset front maps to MuJoCo -X; right/left/up map to -Y/+Y/+Z.  This named Unity
+evidence is authoritative when the untextured front and rear panels look
+ambiguous in a MuJoCo render.
 
 OBJ geoms are visual-only (`contype=0`, `conaffinity=0`, `mass=0`). Dynamics,
 inertia and contacts continue to use separately marked provisional primitive

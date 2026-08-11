@@ -2,9 +2,32 @@
 # position targets used by MuJoCo, Unity and the legacy real-robot protocol.
 standing_balance:
   enabled: true
-  # Direct lower-body copying remains disabled.  The support-state controller
-  # below reconstructs a feasible weight-shift/lift sequence instead.
-  lower_body_imitation_scale: 0.0
+  # Preserve a bounded continuous component of the IK leg pose.  Family-wise
+  # caps keep a camera outlier inside the experimentally stable free-base
+  # envelope; the support-state controller below gates unilateral motion by
+  # measured sole loads before it admits the swing-leg component.
+  lower_body_imitation_scale: 0.3
+  # Independent yaw/roll with both soles planted shears the contacts.  Copy
+  # these axes only after the corresponding leg is physically unloaded.
+  transverse_lower_body_imitation_scale: 0.0
+  # Produce a bounded swing-pose candidate, but do not apply it here.  The
+  # support FSM admits only its explicitly selected leg in LIFT/HOLD after its
+  # intent, stability and contact gates have all passed.
+  swing_leg_imitation_scale: 0.65
+  max_hip_yaw_deviation_rad: 0.13962634015954636     # 8 deg
+  max_hip_roll_deviation_rad: 0.06981317007977318    # 4 deg
+  max_hip_pitch_deviation_rad: 0.20943951023931953   # 12 deg
+  max_knee_deviation_rad: 0.3141592653589793         # 18 deg
+  max_ankle_pitch_deviation_rad: 0.10471975511965977 # 6 deg
+  max_ankle_roll_deviation_rad: 0.06981317007977318  # 4 deg
+  # Bilateral deep squat is outside the validated free-base envelope.  Fade
+  # the entire pose toward home only when both legs simultaneously exceed both
+  # thresholds; unilateral swing remains available to the support FSM.
+  unsupported_hip_fade_start_rad: 0.2617993877991494  # 15 deg
+  unsupported_hip_fade_full_rad: 0.5235987755982988   # 30 deg
+  unsupported_knee_fade_start_rad: 0.20943951023931953 # 12 deg
+  unsupported_knee_fade_full_rad: 0.4363323129985824   # 25 deg
+  unsupported_pose_tracking_scale: 0.0
   # The extracted Unity home command is not a free-base equilibrium in the
   # provisional MuJoCo dynamics.  This bounded ankle target offset is the
   # verified double-support seed; it must be reidentified on real hardware.
@@ -43,6 +66,9 @@ support_control:
   load_confirm_duration_s: 0.15
   stance_load_timeout_s: 1.5
   lift_duration_s: 1.5
+  # Give physical servos time to reach the verified apex when a short camera
+  # gesture ends on the exact tick HOLD begins. Stale/unstable returns bypass it.
+  minimum_hold_duration_s: 0.25
   # Returning too quickly injects enough sagittal velocity to exceed the
   # current ankle controller's capture region.  Three-second ramps recovered
   # to stable double support in both verified swing directions.
@@ -60,6 +86,9 @@ support_control:
   max_swing_load_fraction: 0.35
   min_touchdown_force_n: 4.0
   min_touchdown_total_force_n: 20.0
+  # Once the verified lift is nearly lowered, accept sustained physical sole
+  # contact without driving the nominal profile through that contact first.
+  early_touchdown_max_swing_progress: 0.45
   # Admit a new one-leg cycle only from a quiet, nearly upright base.  Once a
   # cycle is active, the wider envelope triggers a controlled lower/center
   # recovery rather than allowing the requested lift to continue.
@@ -67,4 +96,19 @@ support_control:
   active_max_tilt_rad: 0.3141592653589793       # 18 deg
   start_max_angular_speed_rad_s: 1.0
   active_max_angular_speed_rad_s: 3.0
+  # Once force gates confirm single support, blend the moving leg's bounded IK
+  # reference with the verified lift profile.  The stance leg remains frozen
+  # except for live ankle-pitch balance feedback.
+  # Convexly blend at most 25% pose reference against the verified lift.  The
+  # lift is not weakened at all when the IK reference is neutral.
+  swing_reference_blend: 0.25
+  max_swing_reference_delta_rad: 0.20943951023931953 # 12 deg
+  # A one-foot support polygon cannot tolerate the same moving upper-body mass
+  # as double support.  Fade to a small, still-correlated IK component during
+  # the shift and restore the full pose while centering after touchdown.
+  single_support_upper_body_scale: 0.15
+  # Final defense after every phase overlay.  These match the standing layer,
+  # so no support transition can bypass the deployable motor-target slew rate.
+  upper_body_rate_limit_rad_s: 2.5
+  lower_body_rate_limit_rad_s: 1.2
   cancel_on_stale_reference: true
