@@ -1,5 +1,8 @@
 retargeting:
   mode: whole_body
+  # Learn the operator's neutral pose first and hold every motor at home while
+  # the reference window is collected. Set to 0 only for controlled tests.
+  auto_calibration_frames: 30
   confidence_threshold: 0.55
   minimum_coverage: 0.75
   smoothing_time_constant_s: 0.10

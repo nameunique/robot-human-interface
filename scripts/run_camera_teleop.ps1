@@ -17,6 +17,8 @@ param(
     [switch]$FreeBase,
     [ValidateSet("visual", "joints")]
     [string]$ViewerMode = "visual",
+    [string]$RobotWebSocketUrl = "",
+    [double]$RobotWebSocketTimeoutSeconds = 0.5,
     [switch]$Headless,
     [int]$MaxFrames = 0,
     [string]$PythonExe = "",
@@ -37,7 +39,7 @@ New-Item -ItemType Directory -Force -Path $env:MPLCONFIGDIR, $env:PIP_CACHE_DIR 
 
 $needsSetup = -not (Test-Path -LiteralPath $venvPython -PathType Leaf)
 if (-not $needsSetup) {
-    & $venvPython -c "import cv2, mediapipe, mujoco, robot_human_interface" 2>$null
+    & $venvPython -c "import cv2, mediapipe, mujoco, websocket, robot_human_interface; assert callable(websocket.create_connection)" 2>$null
     $needsSetup = $LASTEXITCODE -ne 0
 }
 
@@ -59,6 +61,12 @@ if ($CameraIndex -lt 0) {
 }
 if ($MaxFrames -lt 0) {
     throw "-MaxFrames must be non-negative."
+}
+if ($RobotWebSocketTimeoutSeconds -le 0.0) {
+    throw "-RobotWebSocketTimeoutSeconds must be positive."
+}
+if ($RobotWebSocketUrl -and -not $FreeBase) {
+    throw "-RobotWebSocketUrl requires -FreeBase so the motor-angle safety layer is active."
 }
 
 $teleopArguments = @(
@@ -91,6 +99,12 @@ if ($MirrorInput) {
 }
 if ($FreeBase) {
     $teleopArguments += "--free-base"
+}
+if ($RobotWebSocketUrl) {
+    $teleopArguments += @(
+        "--robot-websocket-url", $RobotWebSocketUrl,
+        "--robot-websocket-timeout-s", "$RobotWebSocketTimeoutSeconds"
+    )
 }
 if ($Headless) {
     $teleopArguments += "--headless"

@@ -20,10 +20,14 @@ units:
   mass: kg
 coordinates:
   source: Unity left-handed, x right / y up / z forward
-  target: MuJoCo right-handed, x forward / y left / z up
+  target: MuJoCo right-handed world axes
   # v_mj = (-z_unity, -x_unity, y_unity) * scale.  The mapping preserves
-  # right/left placement and must be checked against the real robot before HIL.
+  # right/left placement. Therefore the robot's physical front is MuJoCo -X,
+  # its left is +Y and its up is +Z; MuJoCo +X is the robot's back.
   unity_to_mujoco_vector: [-z, -x, y]
+  robot_front_mujoco: [-1.0, 0.0, 0.0]
+  robot_left_mujoco: [0.0, 1.0, 0.0]
+  robot_up_mujoco: [0.0, 0.0, 1.0]
   model_space_to_metre_scale: 0.35
   verification_status: provisional_visual_check_required
 physical_parameters:

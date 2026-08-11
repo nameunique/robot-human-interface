@@ -15,7 +15,7 @@ if (-not (Test-Path -LiteralPath $venvPython -PathType Leaf)) {
 }
 
 Write-Host "Checking native Python dependencies..."
-& $venvPython -c "import cv2, mediapipe, mujoco, numpy, robot_human_interface; print(f'Python imports OK; MuJoCo {mujoco.__version__}, MediaPipe {mediapipe.__version__}')"
+& $venvPython -c "import cv2, mediapipe, mujoco, numpy, websocket, robot_human_interface; assert callable(websocket.create_connection); print(f'Python imports OK; MuJoCo {mujoco.__version__}, MediaPipe {mediapipe.__version__}')"
 if ($LASTEXITCODE -ne 0) {
     throw "Dependency import/version smoke test failed."
 }

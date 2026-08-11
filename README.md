@@ -2,18 +2,20 @@
 
 Первый воспроизводимый прототип цепочки
 
-`камера → MediaPipe Pose Landmarker → SkeletonFrame → геометрический retargeting → 20-DOF робот MuJoCo`.
+`камера/MP4 → MediaPipe → SkeletonFrame → retargeting → motor-angle safety → 20-DOF MuJoCo / legacy WebSocket`.
 
 Проект работает нативно на Windows без виртуальной машины. Все зависимости,
 модель MediaPipe и копии исходных FBX находятся внутри этого репозитория. Unity
 использовался только как read-only источник параметров и визуальной геометрии.
 
-> Это исследовательский прототип, а не готовый контур управления реальным
-> роботом. Текущий retargeter не удерживает равновесие. Визуальная оболочка уже
-> собрана из 21 исходного Unity-меша, но collision shapes, inertia/CoM и gains
-> пока остаются явно помеченными provisional. По умолчанию запускается
-> grounded-fixed сцена: стопы несут вес, а вертикальная направляющая не даёт
-> корпусу завалиться до появления balance-controller.
+> Это исследовательский прототип, а не готовый контур безопасности реального
+> робота. В free-base MuJoCo уже работает классический motor-angle controller:
+> он копирует руки, переносит вес перед подъёмом ноги, проверяет нагрузку стоп и
+> не фиксирует корпус в физике. На реальном роботе ему всё ещё нужны настоящие
+> encoder/IMU/foot-sensor observations, локальный watchdog и E-stop. Collision
+> shapes, inertia/CoM и gains текущей модели явно помечены provisional. Поэтому
+> по умолчанию сохранена grounded-fixed сцена, а свободная база включается
+> осознанно параметром `-FreeBase`.
 
 ## Windows: пошаговый запуск
 
@@ -120,8 +122,8 @@ Get-PnpDevice -Class Camera
 2. `Robot human interface - camera skeleton` — синтетический кадр и скелет.
 
 Чтобы остановить программу, выберите окно `camera skeleton` и нажмите `Esc`.
-В окне MuJoCo нажмите `V`, чтобы переключаться между полноценной 3D-моделью и
-кинематическим видом суставов.
+В том же окне `camera skeleton` нажмите `V`, чтобы переключать MuJoCo между
+полноценной 3D-моделью и кинематическим видом суставов.
 
 ### 7. Запуск на встроенном MP4
 
@@ -139,6 +141,16 @@ MediaPipe → retargeting → MuJoCo pipeline, что и камера:
 ```powershell
 .\scripts\run_camera_teleop.ps1 -Source mp4 -DemoVideo slow-balance -LoopReplay
 ```
+
+Проверка именно свободной физики и motor-angle balance layer (без weld/каретки):
+
+```powershell
+.\scripts\run_camera_teleop.ps1 -Source mp4 -DemoVideo slow-balance -FreeBase
+```
+
+На эталонном полном прогоне обе swing-стопы отрываются на `3.5–4.1 cm`,
+максимальный наклон корпуса остаётся около `13.1°`, падение не регистрируется,
+а время MuJoCo расходится с временем MP4 не более чем на один шаг `2 ms`.
 
 Старый быстрый ролик с jumping jacks сохранён как отдельный вариант:
 
@@ -174,18 +186,60 @@ viewer с роботом. Источник, авторы, лицензии, пр
 .\scripts\run_camera_teleop.ps1 -Source camera -CameraBackend msmf
 ```
 
-### 9. Клавиши управления во время работы
+### 9. Опциональный вывод в Unity/на робота по WebSocket
+
+Сетевой выход и подключение по умолчанию полностью выключены; библиотека
+транспорта устанавливается обычным `setup_windows.ps1`. После проверки E-stop,
+знаков/нулей моторов, локального watchdog и ограничения
+скорости включите экспериментальный выход явным URL. `-FreeBase` обязателен,
+чтобы наружу не могла уйти необработанная fixed-base команда:
+
+```powershell
+.\scripts\run_camera_teleop.ps1 `
+  -Source camera `
+  -FreeBase `
+  -RobotWebSocketUrl "ws://127.0.0.1:1233"
+```
+
+Наружу отправляется именно итоговая `safe_command`, уже после balance/support
+controllers, с частотой 10 Hz и latest-only семантикой. Формат байт-в-байт
+совпадает с активным Unity-кодом; радианы переводятся в градусы только здесь:
+
+```json
+{"id":0,"method":"setPositions","params":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]}
+```
+
+Обрыв сети не останавливает камеру и MuJoCo. Это пока shadow/experimental
+boundary: controller получает q/dq/IMU/foot loads из MuJoCo, а не с настоящего
+робота. До подачи мощности нужны реальная обратная связь, проверка ответа
+сервера/`setVelocities` handshake, robot-side slew limit, watchdog на потерю
+команд и безопасное повторное подключение от измеренных углов.
+
+При EOF, `Esc` или ошибке источника текущий shadow-клиент закрывает транспорт,
+но не может подтвердить по датчикам физического робота возврат в double support;
+сервер может удержать последнюю команду. Поэтому до реализации real-feedback
+shutdown этот путь нельзя использовать с включённой мощностью без независимого
+watchdog, который сам переводит робота в заранее проверенное безопасное состояние.
+
+При активном `-RobotWebSocketUrl` клавиша `Space` намеренно отключена: заморозка
+приложения оставила бы физический робот на последней, возможно одноопорной,
+команде. Это не замена аварийной остановке — для реального стенда обязательны
+аппаратный E-stop и независимый robot-side watchdog.
+
+### 10. Клавиши управления во время работы
 
 Клавиши обрабатываются, когда активно окно `Robot human interface - camera
 skeleton`:
 
-- `C` — начать калибровку нейтральной позы; встаньте ровно и не двигайтесь;
-- `R` — сбросить MuJoCo и состояние retargeter;
+- `C` — заново откалибровать нейтральную позу и вертикаль камеры; встаньте
+  ровно, поставьте обе стопы на пол и не двигайтесь;
+- `R` — сбросить MuJoCo, retargeter, balance/support controllers и калибровку;
 - `V` — переключить MuJoCo между 3D-моделью и видом суставов;
-- `Space` — заморозить/продолжить видео и симуляцию;
+- `Space` — заморозить/продолжить видео и симуляцию; при активном выводе на
+  физический робот эта клавиша заблокирована;
 - `Esc` — закрыть приложение.
 
-### 10. Полная автоматическая проверка
+### 11. Полная автоматическая проверка
 
 ```powershell
 .\scripts\run_checks.ps1
@@ -194,7 +248,7 @@ skeleton`:
 Команда проверяет импорты, запускает весь `pytest` и выполняет конечный
 camera-free end-to-end smoke test.
 
-### 11. Повторный запуск после перезагрузки Windows
+### 12. Повторный запуск после перезагрузки Windows
 
 Повторно устанавливать зависимости не нужно. Откройте PowerShell и выполните:
 
@@ -263,16 +317,24 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 Свободная база включается только явно:
 
 ```powershell
-.\scripts\run_camera_teleop.ps1 -Source synthetic -FreeBase
+.\scripts\run_camera_teleop.ps1 -Source mp4 -DemoVideo slow-balance -FreeBase
 ```
 
-В этом режиме нет balance-controller, поэтому робот закономерно может упасть.
+В этом режиме на каждом физическом шаге `2 ms` выполняется motor-angle balance
+layer. Камера задаёт медленную целевую позу, а q/dq, ориентация/угловая скорость
+корпуса и нагрузки стоп определяют безопасную итоговую команду. Перед подъёмом
+ноги робот сначала переносит вес на противоположную стопу и подтверждает её
+нагрузку. Новый одноопорный цикл не начинается при наклоне больше `12°` или
+угловой скорости больше `1 rad/s`; во время цикла выход за `18°`/`3 rad/s`
+запускает контролируемое опускание и центрирование. При dropout действует тот
+же безопасный возврат.
 
-MVP выполняет по 16 шагов MuJoCo (`2 ms`) на один входной кадр; это соответствует
-примерно 30 Hz. Оконный MP4/replay синхронизируется с FPS файла, а headless может
-идти быстрее wall clock. Нестандартный FPS требует
-`--physics-steps-per-frame` через `-AdditionalArguments`. Для реального робота
-perception и servo/balance loops должны быть разделены.
+По умолчанию число физических шагов вычисляется по timestamps источника через
+fixed-timestep accumulator. Поэтому MP4/camera FPS и MuJoCo time не расходятся;
+ручной `--physics-steps-per-frame` нужен только для специальных экспериментов.
+Headless MP4 может вычисляться быстрее реального времени, но при включённом
+WebSocket автоматически воспроизводится в реальном времени. На железе
+perception и локальный servo/balance loop всё равно должны быть разделены.
 
 Запуск только стандартного MuJoCo viewer:
 
@@ -333,11 +395,16 @@ flowchart LR
     Camera["OpenCV camera / replay"] --> Pose["MediaPipe Tasks\nPose Landmarker"]
     Synthetic["Deterministic synthetic pose"] --> Skeleton["Canonical SkeletonFrame\n33 landmarks + confidence + timestamp"]
     Pose --> Skeleton
-    Skeleton --> Filter["Confidence filter + calibration\ngeometry + limits + stale fallback"]
-    Filter --> Command["RobotJointCommand\n20 targets, radians"]
-    Command --> MuJoCo["MuJoCo fixed/free proxy"]
-    Command -. future adapter .-> Unity["Unity simulator\nlegacy WebSocket"]
-    Command -. future adapter .-> Real["Real robot gateway\nlocal safety + PD"]
+    Skeleton --> Retarget["Calibration + geometric retargeting\nhuman reference, 20 rad"]
+    Skeleton --> Intent["Calibrated foot-height intent\nleft / double / right"]
+    Retarget --> Balance["Motor-angle balance + support FSM\nlimits, slew, contact gates"]
+    Intent --> Balance
+    State["q, dq, IMU, foot loads"] --> Balance
+    Balance --> Safe["Safe RobotJointCommand\n20 targets, radians"]
+    Safe --> MuJoCo["MuJoCo fixed/free proxy"]
+    MuJoCo --> State
+    Safe --> WS["Optional 10 Hz legacy WebSocket\nradians → degrees"]
+    WS --> Unity["Unity / real robot gateway"]
 ```
 
 Основные границы данных намеренно не зависят от симулятора:
@@ -346,7 +413,10 @@ flowchart LR
 - `SkeletonFrame` — 33 landmarks, visibility/presence и система координат;
 - `RobotJointCommand` — имена и 20 целевых положений строго в радианах;
 - `HumanoidState` — joint state, положение/ориентация базы, IMU-подобные
-  скорости, усилия и число контактов.
+  скорости, CoM, позиции/нагрузки стоп, усилия и число контактов;
+- `HumanSupportEstimate` — confidence-gated намерение поднять левую/правую стопу;
+- `safe RobotJointCommand` — единственная команда, которую получают MuJoCo и
+  опциональный внешний WebSocket.
 
 ## Порядок суставов
 
@@ -366,17 +436,20 @@ WebSocket-протоколом:
  9 motors_thigh_ll   19 head
 ```
 
-Внутри Python и MuJoCo используются радианы. Будущий legacy WebSocket adapter
-должен переводить значения в градусы только на внешней границе и отправлять
-версию схемы/robot model вместе с массивом.
+Внутри Python и MuJoCo используются радианы. Реализованный
+`LegacyWebSocketEncoder` проверяет полный именованный набор, переставляет его в
+этот порядок, проверяет Unity limits и переводит значения в градусы только на
+внешней границе. Текущий legacy server не принимает schema/model id, поэтому
+версионированный envelope остаётся следующим изменением протокола.
 
 ## Модель MuJoCo
 
 - `scene_fixed.xml` связывает torso с кареткой, которая свободно движется по
   вертикали: обе стопы физически принимают вес робота, а x/y и ориентация базы
   стабилизированы для безопасной проверки копирующего интерфейса;
-- `scene_free.xml` оставляет free joint базы и предназначен для будущего
-  balance-controller;
+- `scene_free.xml` оставляет настоящий free joint базы; текущий controller
+  удерживает его только целевыми углами 20 приводов, не записывая base pose и
+  не прикладывая внешних сил;
 - 21 OBJ-меш из Unity используется только для визуализации; `V` переключает
   mesh-вид и суставную схему, не затрагивая состояние и контакты;
 - земля относится к render group 0, OBJ — к group 1, физические collision
@@ -400,10 +473,10 @@ system identification.
 [`docs/unity_model_extraction.md`](docs/unity_model_extraction.md), происхождение
 FBX и MediaPipe bundle — в [`assets/README.md`](assets/README.md).
 
-## Retargeting и потеря позы
+## Retargeting, перед робота и устойчивость
 
-Текущая реализация — понятный geometric baseline без нейросетевого
-balance-controller:
+Текущая реализация — понятный geometric + classical-control baseline, на фоне
+которого затем можно честно сравнивать нейросеть:
 
 1. MediaPipe Tasks выдаёт 33 точки, confidence и hip-relative learned 3D.
 2. Скелет канонизируется и сглаживается с учётом confidence.
@@ -412,6 +485,26 @@ balance-controller:
 5. Значения ограничиваются точными Unity joint limits и сглаживаются.
 6. При кратком dropout удерживается последняя команда; затем робот плавно
    возвращается в neutral pose.
+7. Перед человека определяется в реальных MediaPipe camera axes; semantic FK
+   tests проверяют, что рука/нога вперёд движутся вдоль физического переда
+   робота `-X`, а не просто дают ожидаемый знак в массиве.
+8. В double support копируется верх тела, а ограниченный ankle residual зависит
+   от IMU-подобных pitch/pitch-rate и фактической траектории рук.
+9. Подъём стопы превращается в последовательность `shift → verify load → lift →
+   hold → lower → verify touchdown → center`: отрыв разрешается только после
+   подтверждённой нагрузки противоположной стопы, а перенос веса обратно —
+   только после измеренного контакта возвращённой стопы с полом.
+10. Если человек поднимает вторую ногу, пока робот безопасно завершает первый
+    цикл, намерение хранится в одном ограниченном по времени слоте и запускается
+    лишь после подтверждённого возврата в `double support`; прямого переключения
+    опорной ноги в воздухе нет.
+11. Перед началом одноопорного цикла и во время его активной части проверяются
+    ориентация корпуса и полная угловая скорость; выход за настроенный envelope
+    не меняет base pose, а переводит те же моторные targets в безопасный возврат.
+
+Таким образом сеть позже сможет выдавать bounded residual к этому baseline, а
+не учиться одновременно угадывать индексы моторов, кинематику и базовое
+поведение при потере опоры.
 
 Landmarks с низкой уверенностью не используются для соответствующего сустава.
 Например, плохие `INDEX/PINKY` не могут создать случайную команду wrist, а
@@ -425,7 +518,7 @@ MediaPipe monocular world landmarks нельзя считать точным и�
 
 ```text
 assets/                         MediaPipe bundle, тестовый MP4 и копии 21 Unity FBX
-config/                         joint/camera/retargeting параметры
+config/                         joint/camera/retargeting/balance параметры
 docs/                           протокол извлечения и ограничения
 models/humanoid/                MJCF, fixed/free scenes и 21 visual OBJ
 scripts/                        setup, запуск и проверки Windows
@@ -435,6 +528,8 @@ src/robot_human_interface/
   pose/                         MediaPipe Tasks и synthetic skeleton
   skeleton/                     типы, фильтрация, transforms
   retargeting/                  geometry, calibration, safety fallback
+  control/                      standing balance, foot intent, support FSM
+  protocol/                     legacy Unity/WebSocket encoder + 10 Hz publisher
   simulation/                   MuJoCo API и state/command boundary
 tests/                          unit, model, physics и integration tests
 tools/fbx_converter_unity/      изолированный FBX → OBJ batch-конвертер
@@ -468,8 +563,9 @@ physics loop; camera/display можно подключать отдельно.
 2. добавить ROS 2 Jazzy nodes для `SkeletonFrame`, reference command и state;
 3. подключить `ros2_control`/`mujoco_ros2_control` для одинаковой controller
    boundary в симуляции и на железе;
-4. оставить старый WebSocket как тонкий versioned adapter для Unity и реального
-   контроллера, а не как внутренний servo loop;
+4. обернуть уже реализованный legacy WebSocket boundary версионированным
+   ROS/robot-state adapter, оставив его внешним 10 Hz каналом, а не внутренним
+   servo loop;
 5. экспортировать будущую policy в ONNX и проверять одинаковый порядок
    observations/actions на Windows, Ubuntu, MuJoCo и роботе.
 
@@ -503,7 +599,8 @@ jerk, recovery from pushes и sim-to-sim/sim-to-real gap.
 ## Проверенный статус этой сборки
 
 - Windows native Python `3.12.13`;
-- MuJoCo `3.11.0`, MediaPipe `0.10.35`, OpenCV `5.0.0`;
+- MuJoCo `3.11.0`, MediaPipe `0.10.35`, OpenCV `5.0.0`,
+  websocket-client `1.9.0`;
 - обе MJCF-сцены загружаются, 20 actuator mappings совпадают со схемой;
 - 1000 physics steps для fixed/free остаются finite;
 - grounded-fixed после усадки имеет контакты обеих стоп и передаёт на пол около
@@ -511,8 +608,16 @@ jerk, recovery from pushes и sim-to-sim/sim-to-real gap.
 - visual sole и collision sole согласованы с плоскостью примерно до `1 mm`;
 - self-contact proxy в home pose устранён; максимальная tracking error под
   собственным весом после 1000 шагов меньше `3°`;
-- synthetic end-to-end: 30/30 skeleton frames, 0 stale commands;
-- `47 passed` в полном pytest-наборе;
+- semantic FK-регрессии подтверждают: движение человеческой руки/ноги вперёд
+  перемещает соответствующую конечность вдоль физического переда робота `-X`;
+- synthetic free-base end-to-end: 60/60 skeleton frames, 0 stale commands,
+  `max_tilt=2.205°`, `fell=0`;
+- полный slow-balance MP4: 1961 frame, обе ноги подняты (`3.52/4.08 cm`),
+  `base_z=0.9067 m`, `max_tilt=13.086°`, `fell=0`, рассинхронизация
+  media/simulation меньше одного шага `2 ms`;
+- отказ локального WebSocket endpoint изолирован: camera/physics run завершается
+  штатно и отражает ошибку в итоговой статистике;
+- `116 passed` в полном pytest-наборе;
 - 21 FBX-копия сохранена, а 21 OBJ-меш компилируется в обеих MJCF-сценах;
 - Unity git status остался чистым.
 

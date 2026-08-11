@@ -130,7 +130,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "Installing robot-human-interface failed with exit code $LASTEXITCODE."
 }
 
-& $venvPython -c "import mediapipe, mujoco, robot_human_interface; print(f'Environment ready: MuJoCo {mujoco.__version__}')"
+& $venvPython -c "import mediapipe, mujoco, websocket, robot_human_interface; assert callable(websocket.create_connection); print(f'Environment ready: MuJoCo {mujoco.__version__}')"
 if ($LASTEXITCODE -ne 0) {
     throw "The environment was installed but its import smoke test failed."
 }

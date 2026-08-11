@@ -21,26 +21,26 @@ FloatArray = NDArray[np.float64]
 # This is deliberately explicit: it makes the MVP's assumptions reviewable and
 # gives the later learned policy a stable baseline to improve upon.
 HUMAN_TO_ROBOT_MAPPING: dict[str, str] = {
-    "shoulder_rh": "right upper-arm sagittal elevation",
-    "shoulder_lh": "left upper-arm sagittal elevation",
+    "shoulder_rh": "right upper-arm one-DOF elevation (front/side proxy)",
+    "shoulder_lh": "left upper-arm one-DOF elevation (front/side proxy)",
     "elbow_rh": "right elbow flexion",
     "elbow_lh": "left elbow flexion",
     "wrist_rh": "right hand/forearm sagittal flexion",
     "wrist_lh": "left hand/forearm sagittal flexion",
-    "rotat_axis_rl": "right foot heading (hip-yaw proxy)",
-    "rotat_axis_ll": "left foot heading (hip-yaw proxy)",
-    "motors_thigh_rl": "right hip abduction",
-    "motors_thigh_ll": "left hip abduction",
-    "knee_rl": "right hip sagittal flexion",
-    "knee_ll": "left hip sagittal flexion",
+    "rotat_axis_rl": "right foot heading (positive outward hip-yaw proxy)",
+    "rotat_axis_ll": "left foot heading (positive outward hip-yaw proxy)",
+    "motors_thigh_rl": "right hip abduction (positive outward)",
+    "motors_thigh_ll": "left hip abduction (positive outward)",
+    "knee_rl": "right hip sagittal flexion (positive forward)",
+    "knee_ll": "left hip sagittal flexion (positive forward)",
     "shin_rl": "right knee flexion",
     "shin_ll": "left knee flexion",
-    "motors_feet_rl": "right foot pitch (ankle-pitch proxy)",
-    "motors_feet_ll": "left foot pitch (ankle-pitch proxy)",
+    "motors_feet_rl": "right foot pitch (positive toe-up ankle-pitch proxy)",
+    "motors_feet_ll": "left foot pitch (positive toe-up ankle-pitch proxy)",
     "foot_rl": "right lower-leg lateral tilt (ankle-roll proxy)",
     "foot_ll": "left lower-leg lateral tilt (ankle-roll proxy)",
-    "neck": "head yaw relative to torso",
-    "head": "head pitch relative to torso",
+    "neck": "head yaw relative to torso (positive left)",
+    "head": "head pitch relative to torso (positive up)",
 }
 
 
@@ -96,6 +96,20 @@ class BodyBasis:
 
 
 def body_basis(points: FloatArray) -> BodyBasis:
+    """Build an anatomical body basis from MediaPipe world landmarks.
+
+    MediaPipe uses a right-handed camera frame: image-right, image-down and
+    away from the camera are positive X/Y/Z respectively.  Its LEFT/RIGHT
+    labels are anatomical, so a person facing the camera normally has the
+    right hip at negative camera X.  In that pose ``right x up`` points behind
+    the person.  The anatomical front is therefore ``up x right``.
+
+    This order also removes the front/back ambiguity without consulting the
+    head: turning the head must not flip the torso frame by 180 degrees.  For a
+    neutral head, ``nose - ear_center`` consequently has a positive projection
+    on ``forward``.
+    """
+
     hips = 0.5 * (points[int(L.LEFT_HIP)] + points[int(L.RIGHT_HIP)])
     shoulders = 0.5 * (
         points[int(L.LEFT_SHOULDER)] + points[int(L.RIGHT_SHOULDER)]
@@ -103,7 +117,7 @@ def body_basis(points: FloatArray) -> BodyBasis:
     up = _unit(shoulders - hips)
     lateral = points[int(L.RIGHT_HIP)] - points[int(L.LEFT_HIP)]
     lateral = _unit(lateral - up * np.dot(lateral, up))
-    forward = _unit(np.cross(lateral, up))
+    forward = _unit(np.cross(up, lateral))
     return BodyBasis(lateral, up, forward)
 
 
@@ -116,9 +130,20 @@ def _arm_angles(points: FloatArray, basis: BodyBasis, *, left: bool) -> tuple[fl
     upper = elbow - shoulder
     forearm = wrist - elbow
     hand = 0.5 * (index + pinky) - wrist
-    shoulder_pitch = float(
-        np.arctan2(np.dot(upper, basis.forward), np.dot(upper, -basis.vertical_up))
+    # The robot has one shoulder DOF.  A pure side raise used to collapse to
+    # atan2(0, 0), even though it is the dominant motion in the demo video.
+    # Preserve elevation magnitude for any horizontal direction.  Only call a
+    # motion "backward" when its sagittal component is large enough to be
+    # trustworthy; this avoids a +/-pi jump from small depth noise near a
+    # perfectly lateral raise.
+    forward_component = float(np.dot(upper, basis.forward))
+    lateral_component = float(np.dot(upper, basis.lateral_right))
+    horizontal = float(np.hypot(forward_component, lateral_component))
+    elevation = float(np.arctan2(horizontal, np.dot(upper, -basis.vertical_up)))
+    confidently_backward = (
+        horizontal > 1e-8 and forward_component < -0.35 * horizontal
     )
+    shoulder_pitch = -elevation if confidently_backward else elevation
     elbow_flex = _angle(upper, forearm)
     wrist_flex = _signed_angle(forearm, hand, basis.lateral_right)
     return shoulder_pitch, elbow_flex, wrist_flex
@@ -156,7 +181,11 @@ def _leg_angles(points: FloatArray, basis: BodyBasis, *, left: bool) -> tuple[fl
 def _head_angles(points: FloatArray, basis: BodyBasis) -> tuple[float, float]:
     face_center = 0.5 * (points[int(L.LEFT_EAR)] + points[int(L.RIGHT_EAR)])
     face = points[int(L.NOSE)] - face_center
-    yaw = float(np.arctan2(np.dot(face, basis.lateral_right), np.dot(face, basis.forward)))
+    # Positive neck motor rotation turns the -X-facing robot toward MuJoCo +Y
+    # (its physical left).  Use the same positive-left convention here.
+    yaw = float(
+        np.arctan2(-np.dot(face, basis.lateral_right), np.dot(face, basis.forward))
+    )
     pitch = float(np.arctan2(np.dot(face, basis.vertical_up), np.dot(face, basis.forward)))
     return yaw, pitch
 

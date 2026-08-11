@@ -74,6 +74,7 @@ DEFAULT_JOINT_SPECS: tuple[JointSpec, ...] = tuple(
 @dataclass(frozen=True, slots=True)
 class RetargetingConfig:
     mode: str = "whole_body"
+    auto_calibration_frames: int = 30
     confidence_threshold: float = 0.55
     minimum_coverage: float = 0.75
     smoothing_time_constant_s: float = 0.10
@@ -86,6 +87,13 @@ class RetargetingConfig:
     def __post_init__(self) -> None:
         if self.mode not in {"upper_body", "whole_body"}:
             raise ValueError("mode must be upper_body or whole_body")
+        if (
+            isinstance(self.auto_calibration_frames, bool)
+            or int(self.auto_calibration_frames) != self.auto_calibration_frames
+            or self.auto_calibration_frames < 0
+        ):
+            raise ValueError("auto_calibration_frames must be a non-negative integer")
+        object.__setattr__(self, "auto_calibration_frames", int(self.auto_calibration_frames))
         if not 0.0 <= self.confidence_threshold <= 1.0:
             raise ValueError("confidence_threshold must be within [0, 1]")
         if not 0.0 <= self.minimum_coverage <= 1.0:
@@ -189,7 +197,7 @@ def load_retargeting_config(path: str | Path | None = None) -> RetargetingConfig
     if not isinstance(settings, Mapping):
         raise ValueError("retargeting settings must be a mapping")
     allowed = {
-        "mode", "confidence_threshold", "minimum_coverage",
+        "mode", "auto_calibration_frames", "confidence_threshold", "minimum_coverage",
         "smoothing_time_constant_s", "hold_seconds", "return_seconds",
         "mirrored_input", "joint_scales", "joint_signs",
     }
@@ -258,7 +266,7 @@ class GeometricRetargeter:
 
     def reset(self) -> None:
         self._calibration_reference = np.zeros(len(JOINT_NAMES))
-        self._calibration_target = 0
+        self._calibration_target = self.config.auto_calibration_frames
         self._calibration_samples: list[NDArray[np.float64]] = []
         self._last_output: NDArray[np.float64] | None = None
         self._last_output_timestamp: float | None = None
@@ -270,6 +278,10 @@ class GeometricRetargeter:
             raise ValueError("sample_count must be positive")
         self._calibration_target = int(sample_count)
         self._calibration_samples = []
+        self._last_output = None
+        self._last_output_timestamp = None
+        self._last_valid_positions = None
+        self._last_valid_timestamp = None
 
     def calibrate(self, frame: SkeletonFrame) -> bool:
         """Immediately use one confident neutral frame as the human reference."""
@@ -281,9 +293,13 @@ class GeometricRetargeter:
             frame, self.config.confidence_threshold, mirrored_input=self.config.mirrored_input
         )] = np.nan
         finite = np.isfinite(raw) & self._active
+        if not np.any(finite):
+            return False
         self._calibration_reference[finite] = raw[finite]
+        self._calibration_target = 0
+        self._calibration_samples = []
         self._last_output = None
-        return bool(np.any(finite))
+        return True
 
     def _required_landmarks(self):
         return UPPER_BODY_REQUIRED if self.config.mode == "upper_body" else WHOLE_BODY_REQUIRED
@@ -313,8 +329,16 @@ class GeometricRetargeter:
     def _desired(self, raw: NDArray[np.float64]) -> NDArray[np.float64]:
         desired = self.neutral_positions_rad
         finite = np.isfinite(raw) & self._active
+        # Every source value is an angle.  Using the shortest circular delta is
+        # essential for hip/foot/head headings near the -pi/+pi branch cut.
+        # A direct subtraction can otherwise request an almost 2*pi motor jump
+        # from two physically adjacent poses.
+        delta = np.arctan2(
+            np.sin(raw - self._calibration_reference),
+            np.cos(raw - self._calibration_reference),
+        )
         desired[finite] += self._signs[finite] * self._scales[finite] * (
-            raw[finite] - self._calibration_reference[finite]
+            delta[finite]
         )
         if self._last_valid_positions is not None:
             missing = self._active & ~finite
@@ -372,7 +396,28 @@ class GeometricRetargeter:
         )] = np.nan
         if not np.isfinite(raw[self._active]).any():
             return self._fallback(now)
+        was_calibrating = self.is_calibrating
         self._observe_calibration(raw)
+        if was_calibrating:
+            # Calibration is a deliberate safe state: collect only confident
+            # observations and keep every motor at its configured home target.
+            # The first pose-relative command is emitted on the following
+            # frame, after the full reference window has been accepted.
+            positions = self.neutral_positions_rad
+            self._last_output = positions.copy()
+            self._last_output_timestamp = now
+            self._last_valid_positions = positions.copy()
+            self._last_valid_timestamp = now
+            confidence = min(
+                1.0,
+                max(0.0, frame.mean_confidence(self._required_landmarks())),
+            )
+            return RobotJointCommand.humanoid(
+                now,
+                positions,
+                confidence,
+                stale=False,
+            )
         desired = self._desired(raw)
         positions = self._smooth(desired, now)
         confidence = min(1.0, max(0.0, frame.mean_confidence(self._required_landmarks())))

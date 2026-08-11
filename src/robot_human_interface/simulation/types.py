@@ -40,6 +40,11 @@ class HumanoidState:
     base_orientation_wxyz: FloatArray
     base_linear_velocity_m_s: FloatArray
     base_angular_velocity_rad_s: FloatArray
+    center_of_mass_position_m: FloatArray
+    right_foot_position_m: FloatArray
+    left_foot_position_m: FloatArray
+    right_foot_normal_force_n: float
+    left_foot_normal_force_n: float
     actuator_forces: FloatArray
     contact_count: int
 
@@ -96,6 +101,28 @@ class HumanoidState:
         )
         object.__setattr__(
             self,
+            "center_of_mass_position_m",
+            _readonly_vector(
+                self.center_of_mass_position_m, 3, "center_of_mass_position_m"
+            ),
+        )
+        object.__setattr__(
+            self,
+            "right_foot_position_m",
+            _readonly_vector(self.right_foot_position_m, 3, "right_foot_position_m"),
+        )
+        object.__setattr__(
+            self,
+            "left_foot_position_m",
+            _readonly_vector(self.left_foot_position_m, 3, "left_foot_position_m"),
+        )
+        for name in ("right_foot_normal_force_n", "left_foot_normal_force_n"):
+            value = float(getattr(self, name))
+            if not np.isfinite(value) or value < 0.0:
+                raise ValueError(f"{name} must be finite and non-negative")
+            object.__setattr__(self, name, value)
+        object.__setattr__(
+            self,
             "actuator_forces",
             _readonly_vector(self.actuator_forces, len(names), "actuator_forces"),
         )
@@ -116,9 +143,20 @@ class HumanoidState:
                 self.base_orientation_wxyz,
                 self.base_linear_velocity_m_s,
                 self.base_angular_velocity_rad_s,
+                self.center_of_mass_position_m,
+                self.right_foot_position_m,
+                self.left_foot_position_m,
                 self.actuator_forces,
             )
         )
+
+    @property
+    def right_foot_in_contact(self) -> bool:
+        return self.right_foot_normal_force_n > 1e-3
+
+    @property
+    def left_foot_in_contact(self) -> bool:
+        return self.left_foot_normal_force_n > 1e-3
 
 
 class LatestJointCommandBuffer:

@@ -6,20 +6,35 @@ Python 3.12.13
 MuJoCo 3.11.0
 MediaPipe 0.10.35
 OpenCV 5.0.0
+websocket-client 1.9.0
 
 Automated checks
 ----------------
 python -m compileall -q src tests tools/build_slow_demo.py: PASS
-python -m pytest -q: 50 passed in 2.94s
+python -m pytest -q: 116 passed in 41.70s
 git diff --check: PASS
 
-Grounded physics checks
------------------------
+Grounded physics and motor-control checks
+-----------------------------------------
 Both foot collision geoms contact the ground in fixed and free scenes.
 Grounded-fixed normal force after settling: about 28.8 N.
 Robot source mass: 2.933134 kg; expected weight at 9.81 m/s^2: 28.77 N.
 Visual soles and collision soles remain within about 1 mm of the ground.
 No non-ground proxy self-contact is present in the home pose.
+
+The free-base controller writes only the canonical 20 motor position targets.
+It never writes the floating-base qpos, creates a weld, or applies external force.
+Support transitions are gated by measured sole loads, touchdown, base tilt and
+base angular speed. Opposite-leg requests use a bounded one-slot queue and are
+executed only after returning through DOUBLE_SUPPORT.
+
+Coordinate/retargeting checks
+-----------------------------
+MediaPipe camera axes are treated as +X image-right, +Y image-down, +Z away.
+Robot physical front is MuJoCo -X; robot left is +Y; robot up is +Z.
+Semantic FK tests verify that a human right-arm/right-leg forward motion moves
+only the matching robot limb toward physical robot front, rather than merely
+checking a motor-array sign. Angular deltas use shortest-path wrapping at +/-pi.
 
 Visual checks
 -------------
@@ -31,10 +46,23 @@ Both MJCF scenes compile with separate render groups:
   group 2 = physical collision proxies
 Offscreen visual and joints views rendered successfully.
 
-End-to-end smoke checks
------------------------
-synthetic, joints view, headless, 5 frames:
-teleop complete: source=synthetic frames=5 skeleton_frames=5 stale=0 base=fixed command_span_deg=2.393 base_z_m=0.9259
+End-to-end checks
+-----------------
+PowerShell wrapper, synthetic free base, 60 frames:
+teleop complete: source=synthetic frames=60 skeleton_frames=60 stale=0 base=free command_span_deg=16.270 safe_span_deg=16.270 base_z_m=0.9245 max_tilt_deg=2.205 sim_s=1.966 media_s=1.967 fell=0 robot_output=0 robot_sent=0/0 support_transitions=0 right_swing=0 left_swing=0 right_clearance_m=0.0007 left_clearance_m=0.0005
 
-slow-balance bundled MP4, full file, headless:
-teleop complete: source=mp4 frames=1961 skeleton_frames=1960 stale=1 base=fixed command_span_deg=357.518 base_z_m=0.7824
+Bundled slow-balance MP4, full file, free base:
+teleop complete: source=mp4 frames=1961 skeleton_frames=1960 stale=1 base=free command_span_deg=192.865 safe_span_deg=140.000 base_z_m=0.9067 max_tilt_deg=13.086 sim_s=65.398 media_s=65.399 fell=0 robot_output=0 robot_sent=0/0 support_transitions=17 right_swing=1 left_swing=1 right_clearance_m=0.0352 left_clearance_m=0.0408
+
+Unreachable localhost WebSocket, safe command path enabled:
+teleop complete: source=synthetic frames=10 skeleton_frames=10 stale=0 base=free command_span_deg=0.000 safe_span_deg=2.206 base_z_m=0.9266 max_tilt_deg=0.657 sim_s=0.312 media_s=0.312 fell=0 robot_output=1 robot_sent=0/2
+Result: process exit 0; network timeout reported without stopping camera/physics.
+
+Hardware limitation
+-------------------
+No Windows camera device was visible in this tool session, so a physical webcam
+frame could not be verified. The bundled MediaPipe Full model and full MP4 path
+were executed through the real Tasks API. Real-robot feedback is not yet wired:
+the optional legacy WebSocket output is an experimental/shadow motor-command
+boundary and must not be powered without encoder/IMU/foot feedback, onboard slew
+limits/watchdog and a physical E-stop.

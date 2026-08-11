@@ -33,59 +33,68 @@ def make_synthetic_skeleton(
     phase_rad: float = 0.0,
     confidence: float = 0.99,
 ) -> SkeletonFrame:
-    """Create a neutral standing pose with a controlled right-arm elevation."""
+    """Create a camera-facing pose in MediaPipe world-landmark coordinates.
+
+    The axes intentionally match an unmirrored camera frame: positive X points
+    to image-right, positive Y points down, and positive Z points away from the
+    camera.  Consequently, anatomical right is negative X for this
+    camera-facing person and anatomical forward is negative Z.
+
+    ``phase_rad`` rotates the right arm from down (zero) toward anatomical
+    forward (``pi / 2``), while keeping it straight.
+    """
 
     points = np.zeros((LANDMARK_COUNT, 3), dtype=np.float64)
-    # Face and torso, in a human-local right/up/forward basis.
-    points[int(L.NOSE)] = (0.0, 0.73, 0.10)
-    points[int(L.LEFT_EYE_INNER)] = (-0.025, 0.75, 0.075)
-    points[int(L.LEFT_EYE)] = (-0.045, 0.75, 0.07)
-    points[int(L.LEFT_EYE_OUTER)] = (-0.065, 0.75, 0.06)
-    points[int(L.RIGHT_EYE_INNER)] = (0.025, 0.75, 0.075)
-    points[int(L.RIGHT_EYE)] = (0.045, 0.75, 0.07)
-    points[int(L.RIGHT_EYE_OUTER)] = (0.065, 0.75, 0.06)
-    points[int(L.LEFT_EAR)] = (-0.09, 0.72, 0.0)
-    points[int(L.RIGHT_EAR)] = (0.09, 0.72, 0.0)
-    points[int(L.MOUTH_LEFT)] = (-0.03, 0.68, 0.075)
-    points[int(L.MOUTH_RIGHT)] = (0.03, 0.68, 0.075)
-    points[int(L.LEFT_SHOULDER)] = (-0.22, 0.52, 0.0)
-    points[int(L.RIGHT_SHOULDER)] = (0.22, 0.52, 0.0)
-    points[int(L.LEFT_HIP)] = (-0.12, 0.0, 0.0)
-    points[int(L.RIGHT_HIP)] = (0.12, 0.0, 0.0)
+    # Face and torso.  The person's anatomical left appears on image-right.
+    points[int(L.NOSE)] = (0.0, -0.73, -0.10)
+    points[int(L.LEFT_EYE_INNER)] = (0.025, -0.75, -0.075)
+    points[int(L.LEFT_EYE)] = (0.045, -0.75, -0.07)
+    points[int(L.LEFT_EYE_OUTER)] = (0.065, -0.75, -0.06)
+    points[int(L.RIGHT_EYE_INNER)] = (-0.025, -0.75, -0.075)
+    points[int(L.RIGHT_EYE)] = (-0.045, -0.75, -0.07)
+    points[int(L.RIGHT_EYE_OUTER)] = (-0.065, -0.75, -0.06)
+    points[int(L.LEFT_EAR)] = (0.09, -0.72, 0.0)
+    points[int(L.RIGHT_EAR)] = (-0.09, -0.72, 0.0)
+    points[int(L.MOUTH_LEFT)] = (0.03, -0.68, -0.075)
+    points[int(L.MOUTH_RIGHT)] = (-0.03, -0.68, -0.075)
+    points[int(L.LEFT_SHOULDER)] = (0.22, -0.52, 0.0)
+    points[int(L.RIGHT_SHOULDER)] = (-0.22, -0.52, 0.0)
+    points[int(L.LEFT_HIP)] = (0.12, 0.0, 0.0)
+    points[int(L.RIGHT_HIP)] = (-0.12, 0.0, 0.0)
 
     # Left arm remains neutral and straight.
-    points[int(L.LEFT_ELBOW)] = (-0.23, 0.27, 0.0)
-    points[int(L.LEFT_WRIST)] = (-0.23, 0.02, 0.0)
-    points[int(L.LEFT_PINKY)] = (-0.24, -0.04, 0.01)
-    points[int(L.LEFT_INDEX)] = (-0.22, -0.05, 0.02)
-    points[int(L.LEFT_THUMB)] = (-0.20, -0.02, 0.03)
+    points[int(L.LEFT_ELBOW)] = (0.23, -0.27, 0.0)
+    points[int(L.LEFT_WRIST)] = (0.23, -0.02, 0.0)
+    points[int(L.LEFT_PINKY)] = (0.24, 0.04, -0.01)
+    points[int(L.LEFT_INDEX)] = (0.22, 0.05, -0.02)
+    points[int(L.LEFT_THUMB)] = (0.20, 0.02, -0.03)
 
-    # Right arm rotates from down toward body-forward while staying straight.
+    # Right arm rotates from camera-down toward body-forward (-Z).
     angle = float(phase_rad)
-    direction = np.array((0.0, -cos(angle), sin(angle)))
+    direction = np.array((0.0, cos(angle), -sin(angle)))
     shoulder = points[int(L.RIGHT_SHOULDER)]
     elbow = shoulder + 0.25 * direction
     wrist = elbow + 0.25 * direction
     points[int(L.RIGHT_ELBOW)] = elbow
     points[int(L.RIGHT_WRIST)] = wrist
-    points[int(L.RIGHT_PINKY)] = wrist + 0.06 * direction + (-0.01, 0.0, 0.0)
-    points[int(L.RIGHT_INDEX)] = wrist + 0.07 * direction + (0.01, 0.0, 0.0)
-    points[int(L.RIGHT_THUMB)] = wrist + 0.045 * direction + (0.025, 0.0, 0.0)
+    points[int(L.RIGHT_PINKY)] = wrist + 0.06 * direction + (0.01, 0.0, 0.0)
+    points[int(L.RIGHT_INDEX)] = wrist + 0.07 * direction + (-0.01, 0.0, 0.0)
+    points[int(L.RIGHT_THUMB)] = wrist + 0.045 * direction + (-0.025, 0.0, 0.0)
 
-    for left, x in ((True, -0.12), (False, 0.12)):
+    for left, x in ((True, 0.12), (False, -0.12)):
         knee = L.LEFT_KNEE if left else L.RIGHT_KNEE
         ankle = L.LEFT_ANKLE if left else L.RIGHT_ANKLE
         heel = L.LEFT_HEEL if left else L.RIGHT_HEEL
         toe = L.LEFT_FOOT_INDEX if left else L.RIGHT_FOOT_INDEX
-        points[int(knee)] = (x, -0.40, 0.0)
-        points[int(ankle)] = (x, -0.80, 0.0)
-        points[int(heel)] = (x, -0.84, -0.06)
-        points[int(toe)] = (x, -0.84, 0.18)
+        points[int(knee)] = (x, 0.40, 0.0)
+        points[int(ankle)] = (x, 0.80, 0.0)
+        points[int(heel)] = (x, 0.84, 0.06)
+        points[int(toe)] = (x, 0.84, -0.18)
 
     width, height = image_size
     points_2d = np.empty((LANDMARK_COUNT, 2), dtype=np.float64)
     points_2d[:, 0] = 0.5 + 0.75 * points[:, 0]
-    points_2d[:, 1] = 0.52 - 0.58 * points[:, 1]
+    points_2d[:, 1] = 0.52 + 0.58 * points[:, 1]
     np.clip(points_2d, 0.0, 1.0, out=points_2d)
     scores = np.full(LANDMARK_COUNT, float(confidence))
     return SkeletonFrame(
