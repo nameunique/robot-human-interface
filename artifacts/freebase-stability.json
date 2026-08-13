@@ -1,0 +1,2328 @@
+{
+  "schema_version": 1,
+  "description": "End-to-end MediaPipe -> constrained IK -> balance/support -> free-base MuJoCo replay acceptance. No floating-base constraint is enabled.",
+  "command": "python tools/evaluate_freebase_stability.py",
+  "generated_at_utc": "2026-08-13T19:55:42.846421+00:00",
+  "run_started_at_utc": "2026-08-13T19:52:47.046820+00:00",
+  "git_revision": "2d1ddf74e0e59c0da0db46cbcc602aa9b4acbf14",
+  "git_worktree": {
+    "dirty": true,
+    "status_porcelain": [
+      "M README.md",
+      " M config/balance.yaml",
+      " M scripts/run_camera_teleop.ps1",
+      " M scripts/run_checks.ps1",
+      " M src/robot_human_interface/app/teleop.py",
+      " M src/robot_human_interface/control/standing.py",
+      " M src/robot_human_interface/control/support.py",
+      " M src/robot_human_interface/simulation/humanoid.py",
+      " M src/robot_human_interface/simulation/types.py",
+      " M tests/test_simulation.py",
+      " M tests/test_standing_controller.py",
+      " M tests/test_support_controller.py",
+      " M tests/test_teleop_app.py",
+      "?? artifacts/_frontal-combined.json",
+      "?? artifacts/_frontal-diagnostic.json",
+      "?? artifacts/_frontal-feedback.json",
+      "?? artifacts/_frontal-flipped.json",
+      "?? artifacts/_frontal-g15m18.json",
+      "?? artifacts/_frontal-g2m25.json",
+      "?? artifacts/_frontal-phases.json",
+      "?? artifacts/_slow-g15m18.json",
+      "?? artifacts/freebase-stability.json",
+      "?? tests/test_freebase_stability_tool.py",
+      "?? tools/evaluate_freebase_stability.py"
+    ],
+    "tracked_diff_sha256": "72fd867ea1effad409deda0a3359d3703bb664839a08e9352c3ed6da4da50427",
+    "note": "Runtime input SHA-256 values below identify tested file contents, including untracked evaluator code; git revision alone is insufficient when dirty is true."
+  },
+  "runtime_input_sha256": {
+    "tools/evaluate_freebase_stability.py": "388a930aa91e166892832e39fb44f7b757b61f9081eb4eb25a15aff2609b0c06",
+    "config/balance.yaml": "2c71197808a811e830b471c7fe025f2535867bdd5675c9ff6065d1ceae50e739",
+    "config/camera.yaml": "b87c475c14f515e3a875b7621be49d3549853d8d36554a2947816f4b7d87c626",
+    "config/joints.yaml": "47077ce5321b4c06e3a5eb32f0344034e3bc5aa4e90498c57c6f01b4b74a1000",
+    "config/retargeting.yaml": "4988e8400556dd001a4b616a662ea2291b3532e17fc416bac4a2de7f3114fd20",
+    "models/humanoid/robot.xml": "42493dc5d2455fa803ccffb84062e1de45ac08f89a473ddbe8ab793dd9532906",
+    "models/humanoid/scene_free.xml": "290395ff335be322f99806949d9d75b36c995521e5302c5e0661b6bbceb6eafe",
+    "assets/models/pose_landmarker_full.task": "4eaa5eb7a98365221087693fcc286334cf0858e2eb6e15b506aa4a7ecdcec4ad",
+    "src/robot_human_interface/app/teleop.py": "e56dba25b18050d0ac47343cc69c101187d4cdca7329fa25618cb86ee2d30317",
+    "src/robot_human_interface/control/human_intent.py": "545ad65ddd72b803c51d5e86ede14cfb541beddb7a4737371113c74d938cceaf",
+    "src/robot_human_interface/control/standing.py": "e5e58b37031551a8d62a3452a0092c43cfb613ae30dccfd74a240e1b28797fce",
+    "src/robot_human_interface/control/support.py": "a067925f9a7e185a2b7eea61490175008ba1ce20703131e5ec45dea510c5cb71",
+    "src/robot_human_interface/retargeting/mujoco_ik.py": "57bb0e7f1994dbcae5ff70b54b685d713661a9d2378c5774b9b2785995b548d4",
+    "src/robot_human_interface/simulation/humanoid.py": "f23029da164310ace8d59522346184c0ef301b3c17c356d58b465b9c5ec0c9e6",
+    "src/robot_human_interface/simulation/types.py": "70ca5ed7745d5108a980566b6b08f1c5d7a31bef0a93023c4ca3e9b83cb3de6d"
+  },
+  "runtime_input_sha256_at_completion": {
+    "tools/evaluate_freebase_stability.py": "388a930aa91e166892832e39fb44f7b757b61f9081eb4eb25a15aff2609b0c06",
+    "config/balance.yaml": "2c71197808a811e830b471c7fe025f2535867bdd5675c9ff6065d1ceae50e739",
+    "config/camera.yaml": "b87c475c14f515e3a875b7621be49d3549853d8d36554a2947816f4b7d87c626",
+    "config/joints.yaml": "47077ce5321b4c06e3a5eb32f0344034e3bc5aa4e90498c57c6f01b4b74a1000",
+    "config/retargeting.yaml": "4988e8400556dd001a4b616a662ea2291b3532e17fc416bac4a2de7f3114fd20",
+    "models/humanoid/robot.xml": "42493dc5d2455fa803ccffb84062e1de45ac08f89a473ddbe8ab793dd9532906",
+    "models/humanoid/scene_free.xml": "290395ff335be322f99806949d9d75b36c995521e5302c5e0661b6bbceb6eafe",
+    "assets/models/pose_landmarker_full.task": "4eaa5eb7a98365221087693fcc286334cf0858e2eb6e15b506aa4a7ecdcec4ad",
+    "src/robot_human_interface/app/teleop.py": "e56dba25b18050d0ac47343cc69c101187d4cdca7329fa25618cb86ee2d30317",
+    "src/robot_human_interface/control/human_intent.py": "545ad65ddd72b803c51d5e86ede14cfb541beddb7a4737371113c74d938cceaf",
+    "src/robot_human_interface/control/standing.py": "e5e58b37031551a8d62a3452a0092c43cfb613ae30dccfd74a240e1b28797fce",
+    "src/robot_human_interface/control/support.py": "a067925f9a7e185a2b7eea61490175008ba1ce20703131e5ec45dea510c5cb71",
+    "src/robot_human_interface/retargeting/mujoco_ik.py": "57bb0e7f1994dbcae5ff70b54b685d713661a9d2378c5774b9b2785995b548d4",
+    "src/robot_human_interface/simulation/humanoid.py": "f23029da164310ace8d59522346184c0ef301b3c17c356d58b465b9c5ec0c9e6",
+    "src/robot_human_interface/simulation/types.py": "70ca5ed7745d5108a980566b6b08f1c5d7a31bef0a93023c4ca3e9b83cb3de6d"
+  },
+  "runtime_inputs_unchanged_during_run": true,
+  "configuration": {
+    "base_mode": "free",
+    "headless": true,
+    "retargeting": "ik",
+    "balance_controller": true,
+    "settling_requested_s": 5.0,
+    "thresholds": {
+      "minimum_base_height_m": 0.7,
+      "minimum_final_base_height_m": 0.7,
+      "maximum_tilt_deg": 30.0,
+      "maximum_media_sync_error_s": 0.003,
+      "maximum_stale_fraction": 0.1,
+      "minimum_skeleton_fraction": 0.85,
+      "maximum_loaded_foot_slip_speed_m_s": 0.25,
+      "maximum_foot_slip_distance_m": 0.15
+    },
+    "versions": {
+      "mediapipe": "0.10.35",
+      "mujoco": "3.11.0",
+      "numpy": "2.5.2",
+      "opencv-contrib-python": "5.0.0.93"
+    }
+  },
+  "overall_passed": true,
+  "clips": [
+    {
+      "exit_code": 0,
+      "video": "assets/videos/slow_balance_demo.mp4",
+      "video_size_bytes": 13875839,
+      "video_sha256": "5a91b2082043006920eb3d35d0799db5cf1d2657b6d3ec99b9b03e1daaeea222",
+      "teleop_arguments": [
+        "--source",
+        "mp4",
+        "--headless",
+        "--free-base",
+        "--balance-controller",
+        "--retargeting",
+        "ik",
+        "--settle-seconds",
+        "5",
+        "--settle-timeout-s",
+        "20",
+        "--demo-video",
+        "slow-balance"
+      ],
+      "metrics": {
+        "base_mode": "free",
+        "equality_constraint_count": 0,
+        "base_joint_type": "free",
+        "frames": 1961,
+        "skeleton_frames": 1960,
+        "skeleton_fraction": 0.9994900560938297,
+        "stale_commands": 1,
+        "stale_fraction": 0.0005099439061703213,
+        "minimum_base_height_m": 0.8422295948005704,
+        "final_base_height_m": 0.9291885864681355,
+        "maximum_tilt_deg": 14.576230635093271,
+        "fell": false,
+        "support_transitions": 21,
+        "right_swing_completed": true,
+        "left_swing_completed": true,
+        "maximum_right_foot_clearance_m": 0.036588801252375014,
+        "maximum_left_foot_clearance_m": 0.03161206871005946,
+        "simulation_time_s": 72.8180000000117,
+        "input_simulation_time_s": 65.39800000001229,
+        "media_time_s": 65.39873206539778,
+        "media_sync_error_s": 0.0007320653854918646,
+        "raw_command_span_deg": 359.96890250753216,
+        "safe_command_span_deg": 134.29660673866664,
+        "maximum_non_foot_ground_contacts": 0,
+        "maximum_loaded_foot_slip_speed_m_s": 0.1305183158573833,
+        "right_foot_slip_distance_m": 0.05264995418929696,
+        "left_foot_slip_distance_m": 0.06014169688690223,
+        "maximum_swing_foot_impact_speed_m_s": 0.20079253463151633,
+        "maximum_swing_foot_impact_force_n": 24.46275809310729,
+        "maximum_swing_foot_contact_impulse_n_s": 0.04892551618621458,
+        "motion": {
+          "scope": "input video physics; same-simulation settling tail excluded",
+          "settling_steps_excluded": 3710,
+          "safe_command": {
+            "arms": {
+              "maximum_span_deg": 134.29660673866664,
+              "active_joints_over_2deg": 6
+            },
+            "legs": {
+              "maximum_span_deg": 53.59747026416126,
+              "active_joints_over_2deg": 10
+            },
+            "head": {
+              "maximum_span_deg": 60.09298571854679,
+              "active_joints_over_2deg": 2
+            }
+          },
+          "actual_joint": {
+            "arms": {
+              "maximum_span_deg": 131.30496415623986,
+              "active_joints_over_2deg": 6
+            },
+            "legs": {
+              "maximum_span_deg": 61.43594760491545,
+              "active_joints_over_2deg": 12
+            },
+            "head": {
+              "maximum_span_deg": 58.23042972477691,
+              "active_joints_over_2deg": 2
+            }
+          }
+        }
+      },
+      "settling": {
+        "requested_duration_s": 5.0,
+        "elapsed_s": 7.419999999999405,
+        "stable_s": 4.999999999999671,
+        "completed": true,
+        "status": "passed",
+        "same_simulation": true,
+        "simulation_instance_count": 1,
+        "data_instance_count": 1,
+        "minimum_base_height_m": 0.8531339174254922,
+        "maximum_tilt_deg": 4.022638130093287
+      },
+      "name": "slow-balance",
+      "expectation": {
+        "minimum_raw_command_span_deg": 30.0,
+        "minimum_safe_command_span_deg": 30.0,
+        "minimum_safe_arm_span_deg": 30.0,
+        "minimum_safe_leg_span_deg": 20.0,
+        "minimum_safe_head_span_deg": 5.0,
+        "minimum_actual_arm_span_deg": 20.0,
+        "minimum_actual_leg_span_deg": 15.0,
+        "minimum_actual_head_span_deg": 5.0,
+        "right_swing_completed": true,
+        "left_swing_completed": true,
+        "minimum_right_clearance_m": 0.02,
+        "minimum_left_clearance_m": 0.025,
+        "minimum_support_transitions": 8
+      },
+      "gates": [
+        {
+          "name": "base_mode",
+          "passed": true,
+          "observed": "free",
+          "required": "free"
+        },
+        {
+          "name": "equality_constraint_count",
+          "passed": true,
+          "observed": 0,
+          "required": 0
+        },
+        {
+          "name": "base_joint_type",
+          "passed": true,
+          "observed": "free",
+          "required": "free"
+        },
+        {
+          "name": "exit_code",
+          "passed": true,
+          "observed": 0,
+          "required": 0
+        },
+        {
+          "name": "fell",
+          "passed": true,
+          "observed": false,
+          "required": false
+        },
+        {
+          "name": "frames",
+          "passed": true,
+          "observed": 1961,
+          "required": 1961
+        },
+        {
+          "name": "skeleton_fraction",
+          "passed": true,
+          "observed": 0.9994900560938297,
+          "required": {
+            "minimum": 0.85
+          }
+        },
+        {
+          "name": "stale_fraction",
+          "passed": true,
+          "observed": 0.0005099439061703213,
+          "required": {
+            "maximum": 0.1
+          }
+        },
+        {
+          "name": "minimum_base_height_m",
+          "passed": true,
+          "observed": 0.8422295948005704,
+          "required": {
+            "minimum": 0.7
+          }
+        },
+        {
+          "name": "final_base_height_m",
+          "passed": true,
+          "observed": 0.9291885864681355,
+          "required": {
+            "minimum": 0.7
+          }
+        },
+        {
+          "name": "maximum_tilt_deg",
+          "passed": true,
+          "observed": 14.576230635093271,
+          "required": {
+            "maximum": 30.0
+          }
+        },
+        {
+          "name": "media_sync_error_s",
+          "passed": true,
+          "observed": 0.0007320653854918646,
+          "required": {
+            "maximum": 0.003
+          }
+        },
+        {
+          "name": "maximum_non_foot_ground_contacts",
+          "passed": true,
+          "observed": 0,
+          "required": 0
+        },
+        {
+          "name": "maximum_loaded_foot_slip_speed_m_s",
+          "passed": true,
+          "observed": 0.1305183158573833,
+          "required": {
+            "maximum": 0.25
+          }
+        },
+        {
+          "name": "right_foot_slip_distance_m",
+          "passed": true,
+          "observed": 0.05264995418929696,
+          "required": {
+            "maximum": 0.15
+          }
+        },
+        {
+          "name": "left_foot_slip_distance_m",
+          "passed": true,
+          "observed": 0.06014169688690223,
+          "required": {
+            "maximum": 0.15
+          }
+        },
+        {
+          "name": "finite_metrics",
+          "passed": true,
+          "observed": [],
+          "required": []
+        },
+        {
+          "name": "settling_same_simulation",
+          "passed": true,
+          "observed": true,
+          "required": true
+        },
+        {
+          "name": "settling_simulation_instance_count",
+          "passed": true,
+          "observed": 1,
+          "required": 1
+        },
+        {
+          "name": "settling_data_instance_count",
+          "passed": true,
+          "observed": 1,
+          "required": 1
+        },
+        {
+          "name": "settling_status",
+          "passed": true,
+          "observed": "passed",
+          "required": "passed"
+        },
+        {
+          "name": "settling_completed",
+          "passed": true,
+          "observed": true,
+          "required": true
+        },
+        {
+          "name": "settling_requested_duration_s",
+          "passed": true,
+          "observed": 5.0,
+          "required": 5.0
+        },
+        {
+          "name": "settling_stable_duration_s",
+          "passed": true,
+          "observed": 4.999999999999671,
+          "required": {
+            "minimum": 5.0
+          }
+        },
+        {
+          "name": "settling_elapsed_s",
+          "passed": true,
+          "observed": 7.419999999999405,
+          "required": {
+            "minimum": 4.999999999999671
+          }
+        },
+        {
+          "name": "settling_minimum_base_height_m",
+          "passed": true,
+          "observed": 0.8531339174254922,
+          "required": {
+            "minimum": 0.7
+          }
+        },
+        {
+          "name": "settling_maximum_tilt_deg",
+          "passed": true,
+          "observed": 4.022638130093287,
+          "required": {
+            "maximum": 30.0
+          }
+        },
+        {
+          "name": "finite_settling_metrics",
+          "passed": true,
+          "observed": true,
+          "required": true
+        },
+        {
+          "name": "raw_command_span_deg",
+          "passed": true,
+          "observed": 359.96890250753216,
+          "required": {
+            "minimum": 30.0
+          }
+        },
+        {
+          "name": "safe_command_span_deg",
+          "passed": true,
+          "observed": 134.29660673866664,
+          "required": {
+            "minimum": 30.0
+          }
+        },
+        {
+          "name": "safe_arms_motion",
+          "passed": true,
+          "observed": 134.29660673866664,
+          "required": {
+            "minimum_span_deg": 30.0
+          }
+        },
+        {
+          "name": "safe_legs_motion",
+          "passed": true,
+          "observed": 53.59747026416126,
+          "required": {
+            "minimum_span_deg": 20.0
+          }
+        },
+        {
+          "name": "safe_head_motion",
+          "passed": true,
+          "observed": 60.09298571854679,
+          "required": {
+            "minimum_span_deg": 5.0
+          }
+        },
+        {
+          "name": "actual_arms_motion",
+          "passed": true,
+          "observed": 131.30496415623986,
+          "required": {
+            "minimum_span_deg": 20.0
+          }
+        },
+        {
+          "name": "actual_legs_motion",
+          "passed": true,
+          "observed": 61.43594760491545,
+          "required": {
+            "minimum_span_deg": 15.0
+          }
+        },
+        {
+          "name": "actual_head_motion",
+          "passed": true,
+          "observed": 58.23042972477691,
+          "required": {
+            "minimum_span_deg": 5.0
+          }
+        },
+        {
+          "name": "right_swing_completed",
+          "passed": true,
+          "observed": true,
+          "required": true
+        },
+        {
+          "name": "left_swing_completed",
+          "passed": true,
+          "observed": true,
+          "required": true
+        },
+        {
+          "name": "maximum_right_foot_clearance_m",
+          "passed": true,
+          "observed": 0.036588801252375014,
+          "required": {
+            "minimum": 0.02
+          }
+        },
+        {
+          "name": "maximum_left_foot_clearance_m",
+          "passed": true,
+          "observed": 0.03161206871005946,
+          "required": {
+            "minimum": 0.025
+          }
+        },
+        {
+          "name": "support_transitions",
+          "passed": true,
+          "observed": 21,
+          "required": {
+            "minimum": 8.0
+          }
+        }
+      ],
+      "passed": true
+    },
+    {
+      "exit_code": 0,
+      "video": "assets/videos/jumping_jacks_demo.mp4",
+      "video_size_bytes": 2017366,
+      "video_sha256": "323c0bc5b458f3139d8b9a9bf6f7032ef0a198d521fff1d8f659e1e534a63569",
+      "teleop_arguments": [
+        "--source",
+        "mp4",
+        "--headless",
+        "--free-base",
+        "--balance-controller",
+        "--retargeting",
+        "ik",
+        "--settle-seconds",
+        "5",
+        "--settle-timeout-s",
+        "20",
+        "--demo-video",
+        "jumping-jacks"
+      ],
+      "metrics": {
+        "base_mode": "free",
+        "equality_constraint_count": 0,
+        "base_joint_type": "free",
+        "frames": 194,
+        "skeleton_frames": 194,
+        "skeleton_fraction": 1.0,
+        "stale_commands": 0,
+        "stale_fraction": 0.0,
+        "minimum_base_height_m": 0.9161964858987186,
+        "final_base_height_m": 0.9240120215280738,
+        "maximum_tilt_deg": 3.9425729221276486,
+        "fell": false,
+        "support_transitions": 0,
+        "right_swing_completed": false,
+        "left_swing_completed": false,
+        "maximum_right_foot_clearance_m": 0.0006766446549905797,
+        "maximum_left_foot_clearance_m": 0.0004854561870263896,
+        "simulation_time_s": 11.438000000000489,
+        "input_simulation_time_s": 6.438000000000818,
+        "media_time_s": 6.439766666662763,
+        "media_sync_error_s": 0.0017666666619451377,
+        "raw_command_span_deg": 135.90062753649372,
+        "safe_command_span_deg": 109.64002718207111,
+        "maximum_non_foot_ground_contacts": 0,
+        "maximum_loaded_foot_slip_speed_m_s": 0.025530820654896785,
+        "right_foot_slip_distance_m": 0.005071372965117579,
+        "left_foot_slip_distance_m": 0.0049447678322005134,
+        "maximum_swing_foot_impact_speed_m_s": 0.0,
+        "maximum_swing_foot_impact_force_n": 0.0,
+        "maximum_swing_foot_contact_impulse_n_s": 0.0,
+        "motion": {
+          "scope": "input video physics; same-simulation settling tail excluded",
+          "settling_steps_excluded": 2500,
+          "safe_command": {
+            "arms": {
+              "maximum_span_deg": 109.64002718207111,
+              "active_joints_over_2deg": 6
+            },
+            "legs": {
+              "maximum_span_deg": 9.898055761710387,
+              "active_joints_over_2deg": 6
+            },
+            "head": {
+              "maximum_span_deg": 13.895766620043482,
+              "active_joints_over_2deg": 2
+            }
+          },
+          "actual_joint": {
+            "arms": {
+              "maximum_span_deg": 83.7176039780665,
+              "active_joints_over_2deg": 6
+            },
+            "legs": {
+              "maximum_span_deg": 9.538813732305242,
+              "active_joints_over_2deg": 6
+            },
+            "head": {
+              "maximum_span_deg": 11.761734721673148,
+              "active_joints_over_2deg": 2
+            }
+          }
+        }
+      },
+      "settling": {
+        "requested_duration_s": 5.0,
+        "elapsed_s": 4.999999999999671,
+        "stable_s": 4.999999999999671,
+        "completed": true,
+        "status": "passed",
+        "same_simulation": true,
+        "simulation_instance_count": 1,
+        "data_instance_count": 1,
+        "minimum_base_height_m": 0.9228802065309719,
+        "maximum_tilt_deg": 1.889897669423001
+      },
+      "name": "jumping-jacks",
+      "expectation": {
+        "minimum_raw_command_span_deg": 20.0,
+        "minimum_safe_command_span_deg": 10.0,
+        "minimum_safe_arm_span_deg": 15.0,
+        "minimum_safe_leg_span_deg": 5.0,
+        "minimum_safe_head_span_deg": 0.0,
+        "minimum_actual_arm_span_deg": 10.0,
+        "minimum_actual_leg_span_deg": 3.0,
+        "minimum_actual_head_span_deg": 0.0,
+        "right_swing_completed": false,
+        "left_swing_completed": false,
+        "minimum_right_clearance_m": 0.0,
+        "minimum_left_clearance_m": 0.0,
+        "minimum_support_transitions": 0
+      },
+      "gates": [
+        {
+          "name": "base_mode",
+          "passed": true,
+          "observed": "free",
+          "required": "free"
+        },
+        {
+          "name": "equality_constraint_count",
+          "passed": true,
+          "observed": 0,
+          "required": 0
+        },
+        {
+          "name": "base_joint_type",
+          "passed": true,
+          "observed": "free",
+          "required": "free"
+        },
+        {
+          "name": "exit_code",
+          "passed": true,
+          "observed": 0,
+          "required": 0
+        },
+        {
+          "name": "fell",
+          "passed": true,
+          "observed": false,
+          "required": false
+        },
+        {
+          "name": "frames",
+          "passed": true,
+          "observed": 194,
+          "required": 194
+        },
+        {
+          "name": "skeleton_fraction",
+          "passed": true,
+          "observed": 1.0,
+          "required": {
+            "minimum": 0.85
+          }
+        },
+        {
+          "name": "stale_fraction",
+          "passed": true,
+          "observed": 0.0,
+          "required": {
+            "maximum": 0.1
+          }
+        },
+        {
+          "name": "minimum_base_height_m",
+          "passed": true,
+          "observed": 0.9161964858987186,
+          "required": {
+            "minimum": 0.7
+          }
+        },
+        {
+          "name": "final_base_height_m",
+          "passed": true,
+          "observed": 0.9240120215280738,
+          "required": {
+            "minimum": 0.7
+          }
+        },
+        {
+          "name": "maximum_tilt_deg",
+          "passed": true,
+          "observed": 3.9425729221276486,
+          "required": {
+            "maximum": 30.0
+          }
+        },
+        {
+          "name": "media_sync_error_s",
+          "passed": true,
+          "observed": 0.0017666666619451377,
+          "required": {
+            "maximum": 0.003
+          }
+        },
+        {
+          "name": "maximum_non_foot_ground_contacts",
+          "passed": true,
+          "observed": 0,
+          "required": 0
+        },
+        {
+          "name": "maximum_loaded_foot_slip_speed_m_s",
+          "passed": true,
+          "observed": 0.025530820654896785,
+          "required": {
+            "maximum": 0.25
+          }
+        },
+        {
+          "name": "right_foot_slip_distance_m",
+          "passed": true,
+          "observed": 0.005071372965117579,
+          "required": {
+            "maximum": 0.15
+          }
+        },
+        {
+          "name": "left_foot_slip_distance_m",
+          "passed": true,
+          "observed": 0.0049447678322005134,
+          "required": {
+            "maximum": 0.15
+          }
+        },
+        {
+          "name": "finite_metrics",
+          "passed": true,
+          "observed": [],
+          "required": []
+        },
+        {
+          "name": "settling_same_simulation",
+          "passed": true,
+          "observed": true,
+          "required": true
+        },
+        {
+          "name": "settling_simulation_instance_count",
+          "passed": true,
+          "observed": 1,
+          "required": 1
+        },
+        {
+          "name": "settling_data_instance_count",
+          "passed": true,
+          "observed": 1,
+          "required": 1
+        },
+        {
+          "name": "settling_status",
+          "passed": true,
+          "observed": "passed",
+          "required": "passed"
+        },
+        {
+          "name": "settling_completed",
+          "passed": true,
+          "observed": true,
+          "required": true
+        },
+        {
+          "name": "settling_requested_duration_s",
+          "passed": true,
+          "observed": 5.0,
+          "required": 5.0
+        },
+        {
+          "name": "settling_stable_duration_s",
+          "passed": true,
+          "observed": 4.999999999999671,
+          "required": {
+            "minimum": 5.0
+          }
+        },
+        {
+          "name": "settling_elapsed_s",
+          "passed": true,
+          "observed": 4.999999999999671,
+          "required": {
+            "minimum": 4.999999999999671
+          }
+        },
+        {
+          "name": "settling_minimum_base_height_m",
+          "passed": true,
+          "observed": 0.9228802065309719,
+          "required": {
+            "minimum": 0.7
+          }
+        },
+        {
+          "name": "settling_maximum_tilt_deg",
+          "passed": true,
+          "observed": 1.889897669423001,
+          "required": {
+            "maximum": 30.0
+          }
+        },
+        {
+          "name": "finite_settling_metrics",
+          "passed": true,
+          "observed": true,
+          "required": true
+        },
+        {
+          "name": "raw_command_span_deg",
+          "passed": true,
+          "observed": 135.90062753649372,
+          "required": {
+            "minimum": 20.0
+          }
+        },
+        {
+          "name": "safe_command_span_deg",
+          "passed": true,
+          "observed": 109.64002718207111,
+          "required": {
+            "minimum": 10.0
+          }
+        },
+        {
+          "name": "safe_arms_motion",
+          "passed": true,
+          "observed": 109.64002718207111,
+          "required": {
+            "minimum_span_deg": 15.0
+          }
+        },
+        {
+          "name": "safe_legs_motion",
+          "passed": true,
+          "observed": 9.898055761710387,
+          "required": {
+            "minimum_span_deg": 5.0
+          }
+        },
+        {
+          "name": "actual_arms_motion",
+          "passed": true,
+          "observed": 83.7176039780665,
+          "required": {
+            "minimum_span_deg": 10.0
+          }
+        },
+        {
+          "name": "actual_legs_motion",
+          "passed": true,
+          "observed": 9.538813732305242,
+          "required": {
+            "minimum_span_deg": 3.0
+          }
+        },
+        {
+          "name": "right_swing_completed",
+          "passed": true,
+          "observed": false,
+          "required": false
+        },
+        {
+          "name": "left_swing_completed",
+          "passed": true,
+          "observed": false,
+          "required": false
+        }
+      ],
+      "passed": true
+    },
+    {
+      "exit_code": 0,
+      "video": "assets/videos/external/dvids_arm_circles.mp4",
+      "video_size_bytes": 6318191,
+      "video_sha256": "b44f9ea5707c091863755a9c65231e06a3a790219bbaa41eb0be04c1b622a3e2",
+      "teleop_arguments": [
+        "--source",
+        "replay",
+        "--headless",
+        "--free-base",
+        "--balance-controller",
+        "--retargeting",
+        "ik",
+        "--settle-seconds",
+        "5",
+        "--settle-timeout-s",
+        "20",
+        "--video-path",
+        "C:\\Users\\k_desktop\\Desktop\\robot-human-interface\\assets\\videos\\external\\dvids_arm_circles.mp4"
+      ],
+      "metrics": {
+        "base_mode": "free",
+        "equality_constraint_count": 0,
+        "base_joint_type": "free",
+        "frames": 796,
+        "skeleton_frames": 776,
+        "skeleton_fraction": 0.9748743718592965,
+        "stale_commands": 20,
+        "stale_fraction": 0.02512562814070352,
+        "minimum_base_height_m": 0.9118710591093726,
+        "final_base_height_m": 0.9239309591164919,
+        "maximum_tilt_deg": 6.946938210852382,
+        "fell": false,
+        "support_transitions": 0,
+        "right_swing_completed": false,
+        "left_swing_completed": false,
+        "maximum_right_foot_clearance_m": 0.0006766446549905797,
+        "maximum_left_foot_clearance_m": 0.0004854561870263896,
+        "simulation_time_s": 31.525999999993406,
+        "input_simulation_time_s": 26.525999999993736,
+        "media_time_s": 26.526500000007218,
+        "media_sync_error_s": 0.0005000000134813831,
+        "raw_command_span_deg": 305.3474370566048,
+        "safe_command_span_deg": 144.81892787595757,
+        "maximum_non_foot_ground_contacts": 0,
+        "maximum_loaded_foot_slip_speed_m_s": 0.014950015732751513,
+        "right_foot_slip_distance_m": 0.0023667610834653065,
+        "left_foot_slip_distance_m": 0.002588100224586802,
+        "maximum_swing_foot_impact_speed_m_s": 0.0,
+        "maximum_swing_foot_impact_force_n": 0.0,
+        "maximum_swing_foot_contact_impulse_n_s": 0.0,
+        "motion": {
+          "scope": "input video physics; same-simulation settling tail excluded",
+          "settling_steps_excluded": 2500,
+          "safe_command": {
+            "arms": {
+              "maximum_span_deg": 144.81892787595757,
+              "active_joints_over_2deg": 6
+            },
+            "legs": {
+              "maximum_span_deg": 5.0049922011986325,
+              "active_joints_over_2deg": 6
+            },
+            "head": {
+              "maximum_span_deg": 13.434334599588908,
+              "active_joints_over_2deg": 2
+            }
+          },
+          "actual_joint": {
+            "arms": {
+              "maximum_span_deg": 144.3554640451283,
+              "active_joints_over_2deg": 6
+            },
+            "legs": {
+              "maximum_span_deg": 4.948502601121829,
+              "active_joints_over_2deg": 6
+            },
+            "head": {
+              "maximum_span_deg": 12.483361077316399,
+              "active_joints_over_2deg": 2
+            }
+          }
+        }
+      },
+      "settling": {
+        "requested_duration_s": 5.0,
+        "elapsed_s": 4.999999999999671,
+        "stable_s": 4.999999999999671,
+        "completed": true,
+        "status": "passed",
+        "same_simulation": true,
+        "simulation_instance_count": 1,
+        "data_instance_count": 1,
+        "minimum_base_height_m": 0.9217299968346403,
+        "maximum_tilt_deg": 2.5502872306958175
+      },
+      "name": "arm-circles",
+      "expectation": {
+        "minimum_raw_command_span_deg": 60.0,
+        "minimum_safe_command_span_deg": 30.0,
+        "minimum_safe_arm_span_deg": 30.0,
+        "minimum_safe_leg_span_deg": 0.0,
+        "minimum_safe_head_span_deg": 0.0,
+        "minimum_actual_arm_span_deg": 25.0,
+        "minimum_actual_leg_span_deg": 0.0,
+        "minimum_actual_head_span_deg": 0.0,
+        "right_swing_completed": false,
+        "left_swing_completed": false,
+        "minimum_right_clearance_m": 0.0,
+        "minimum_left_clearance_m": 0.0,
+        "minimum_support_transitions": 0
+      },
+      "gates": [
+        {
+          "name": "base_mode",
+          "passed": true,
+          "observed": "free",
+          "required": "free"
+        },
+        {
+          "name": "equality_constraint_count",
+          "passed": true,
+          "observed": 0,
+          "required": 0
+        },
+        {
+          "name": "base_joint_type",
+          "passed": true,
+          "observed": "free",
+          "required": "free"
+        },
+        {
+          "name": "exit_code",
+          "passed": true,
+          "observed": 0,
+          "required": 0
+        },
+        {
+          "name": "fell",
+          "passed": true,
+          "observed": false,
+          "required": false
+        },
+        {
+          "name": "frames",
+          "passed": true,
+          "observed": 796,
+          "required": 796
+        },
+        {
+          "name": "skeleton_fraction",
+          "passed": true,
+          "observed": 0.9748743718592965,
+          "required": {
+            "minimum": 0.85
+          }
+        },
+        {
+          "name": "stale_fraction",
+          "passed": true,
+          "observed": 0.02512562814070352,
+          "required": {
+            "maximum": 0.1
+          }
+        },
+        {
+          "name": "minimum_base_height_m",
+          "passed": true,
+          "observed": 0.9118710591093726,
+          "required": {
+            "minimum": 0.7
+          }
+        },
+        {
+          "name": "final_base_height_m",
+          "passed": true,
+          "observed": 0.9239309591164919,
+          "required": {
+            "minimum": 0.7
+          }
+        },
+        {
+          "name": "maximum_tilt_deg",
+          "passed": true,
+          "observed": 6.946938210852382,
+          "required": {
+            "maximum": 30.0
+          }
+        },
+        {
+          "name": "media_sync_error_s",
+          "passed": true,
+          "observed": 0.0005000000134813831,
+          "required": {
+            "maximum": 0.003
+          }
+        },
+        {
+          "name": "maximum_non_foot_ground_contacts",
+          "passed": true,
+          "observed": 0,
+          "required": 0
+        },
+        {
+          "name": "maximum_loaded_foot_slip_speed_m_s",
+          "passed": true,
+          "observed": 0.014950015732751513,
+          "required": {
+            "maximum": 0.25
+          }
+        },
+        {
+          "name": "right_foot_slip_distance_m",
+          "passed": true,
+          "observed": 0.0023667610834653065,
+          "required": {
+            "maximum": 0.15
+          }
+        },
+        {
+          "name": "left_foot_slip_distance_m",
+          "passed": true,
+          "observed": 0.002588100224586802,
+          "required": {
+            "maximum": 0.15
+          }
+        },
+        {
+          "name": "finite_metrics",
+          "passed": true,
+          "observed": [],
+          "required": []
+        },
+        {
+          "name": "settling_same_simulation",
+          "passed": true,
+          "observed": true,
+          "required": true
+        },
+        {
+          "name": "settling_simulation_instance_count",
+          "passed": true,
+          "observed": 1,
+          "required": 1
+        },
+        {
+          "name": "settling_data_instance_count",
+          "passed": true,
+          "observed": 1,
+          "required": 1
+        },
+        {
+          "name": "settling_status",
+          "passed": true,
+          "observed": "passed",
+          "required": "passed"
+        },
+        {
+          "name": "settling_completed",
+          "passed": true,
+          "observed": true,
+          "required": true
+        },
+        {
+          "name": "settling_requested_duration_s",
+          "passed": true,
+          "observed": 5.0,
+          "required": 5.0
+        },
+        {
+          "name": "settling_stable_duration_s",
+          "passed": true,
+          "observed": 4.999999999999671,
+          "required": {
+            "minimum": 5.0
+          }
+        },
+        {
+          "name": "settling_elapsed_s",
+          "passed": true,
+          "observed": 4.999999999999671,
+          "required": {
+            "minimum": 4.999999999999671
+          }
+        },
+        {
+          "name": "settling_minimum_base_height_m",
+          "passed": true,
+          "observed": 0.9217299968346403,
+          "required": {
+            "minimum": 0.7
+          }
+        },
+        {
+          "name": "settling_maximum_tilt_deg",
+          "passed": true,
+          "observed": 2.5502872306958175,
+          "required": {
+            "maximum": 30.0
+          }
+        },
+        {
+          "name": "finite_settling_metrics",
+          "passed": true,
+          "observed": true,
+          "required": true
+        },
+        {
+          "name": "raw_command_span_deg",
+          "passed": true,
+          "observed": 305.3474370566048,
+          "required": {
+            "minimum": 60.0
+          }
+        },
+        {
+          "name": "safe_command_span_deg",
+          "passed": true,
+          "observed": 144.81892787595757,
+          "required": {
+            "minimum": 30.0
+          }
+        },
+        {
+          "name": "safe_arms_motion",
+          "passed": true,
+          "observed": 144.81892787595757,
+          "required": {
+            "minimum_span_deg": 30.0
+          }
+        },
+        {
+          "name": "actual_arms_motion",
+          "passed": true,
+          "observed": 144.3554640451283,
+          "required": {
+            "minimum_span_deg": 25.0
+          }
+        },
+        {
+          "name": "right_swing_completed",
+          "passed": true,
+          "observed": false,
+          "required": false
+        },
+        {
+          "name": "left_swing_completed",
+          "passed": true,
+          "observed": false,
+          "required": false
+        }
+      ],
+      "passed": true
+    },
+    {
+      "exit_code": 0,
+      "video": "assets/videos/external/dvids_frontal_leg_swing.mp4",
+      "video_size_bytes": 6634218,
+      "video_sha256": "a936684973411c674f86fb7cc1f8003137593c6aafa223df6b1b8ad46f60a967",
+      "teleop_arguments": [
+        "--source",
+        "replay",
+        "--headless",
+        "--free-base",
+        "--balance-controller",
+        "--retargeting",
+        "ik",
+        "--settle-seconds",
+        "5",
+        "--settle-timeout-s",
+        "20",
+        "--video-path",
+        "C:\\Users\\k_desktop\\Desktop\\robot-human-interface\\assets\\videos\\external\\dvids_frontal_leg_swing.mp4"
+      ],
+      "metrics": {
+        "base_mode": "free",
+        "equality_constraint_count": 0,
+        "base_joint_type": "free",
+        "frames": 836,
+        "skeleton_frames": 816,
+        "skeleton_fraction": 0.9760765550239234,
+        "stale_commands": 20,
+        "stale_fraction": 0.023923444976076555,
+        "minimum_base_height_m": 0.8549379953058248,
+        "final_base_height_m": 0.9292405023201034,
+        "maximum_tilt_deg": 11.71857889183227,
+        "fell": false,
+        "support_transitions": 14,
+        "right_swing_completed": true,
+        "left_swing_completed": false,
+        "maximum_right_foot_clearance_m": 0.03327531885102018,
+        "maximum_left_foot_clearance_m": 0.00162657710014473,
+        "simulation_time_s": 36.02999999999807,
+        "input_simulation_time_s": 27.85999999999867,
+        "media_time_s": 27.861166666669305,
+        "media_sync_error_s": 0.0011666666706346973,
+        "raw_command_span_deg": 79.81506847534529,
+        "safe_command_span_deg": 37.84693582709262,
+        "maximum_non_foot_ground_contacts": 0,
+        "maximum_loaded_foot_slip_speed_m_s": 0.08301448885726687,
+        "right_foot_slip_distance_m": 0.03854321229606988,
+        "left_foot_slip_distance_m": 0.04388744009957232,
+        "maximum_swing_foot_impact_speed_m_s": 0.20892326053655982,
+        "maximum_swing_foot_impact_force_n": 37.0916567405373,
+        "maximum_swing_foot_contact_impulse_n_s": 0.07418331348107461,
+        "motion": {
+          "scope": "input video physics; same-simulation settling tail excluded",
+          "settling_steps_excluded": 4085,
+          "safe_command": {
+            "arms": {
+              "maximum_span_deg": 37.84693582709262,
+              "active_joints_over_2deg": 6
+            },
+            "legs": {
+              "maximum_span_deg": 25.657929193424234,
+              "active_joints_over_2deg": 10
+            },
+            "head": {
+              "maximum_span_deg": 34.19494963257879,
+              "active_joints_over_2deg": 2
+            }
+          },
+          "actual_joint": {
+            "arms": {
+              "maximum_span_deg": 34.823242965016064,
+              "active_joints_over_2deg": 6
+            },
+            "legs": {
+              "maximum_span_deg": 32.817595314972536,
+              "active_joints_over_2deg": 11
+            },
+            "head": {
+              "maximum_span_deg": 30.112666459144968,
+              "active_joints_over_2deg": 2
+            }
+          }
+        }
+      },
+      "settling": {
+        "requested_duration_s": 5.0,
+        "elapsed_s": 8.169999999999398,
+        "stable_s": 4.999999999999671,
+        "completed": true,
+        "status": "passed",
+        "same_simulation": true,
+        "simulation_instance_count": 1,
+        "data_instance_count": 1,
+        "minimum_base_height_m": 0.8692934893939098,
+        "maximum_tilt_deg": 8.442203570633232
+      },
+      "name": "frontal-leg-swing",
+      "expectation": {
+        "minimum_raw_command_span_deg": 30.0,
+        "minimum_safe_command_span_deg": 15.0,
+        "minimum_safe_arm_span_deg": 0.0,
+        "minimum_safe_leg_span_deg": 15.0,
+        "minimum_safe_head_span_deg": 0.0,
+        "minimum_actual_arm_span_deg": 0.0,
+        "minimum_actual_leg_span_deg": 10.0,
+        "minimum_actual_head_span_deg": 0.0,
+        "right_swing_completed": true,
+        "left_swing_completed": false,
+        "minimum_right_clearance_m": 0.02,
+        "minimum_left_clearance_m": 0.0,
+        "minimum_support_transitions": 4
+      },
+      "gates": [
+        {
+          "name": "base_mode",
+          "passed": true,
+          "observed": "free",
+          "required": "free"
+        },
+        {
+          "name": "equality_constraint_count",
+          "passed": true,
+          "observed": 0,
+          "required": 0
+        },
+        {
+          "name": "base_joint_type",
+          "passed": true,
+          "observed": "free",
+          "required": "free"
+        },
+        {
+          "name": "exit_code",
+          "passed": true,
+          "observed": 0,
+          "required": 0
+        },
+        {
+          "name": "fell",
+          "passed": true,
+          "observed": false,
+          "required": false
+        },
+        {
+          "name": "frames",
+          "passed": true,
+          "observed": 836,
+          "required": 836
+        },
+        {
+          "name": "skeleton_fraction",
+          "passed": true,
+          "observed": 0.9760765550239234,
+          "required": {
+            "minimum": 0.85
+          }
+        },
+        {
+          "name": "stale_fraction",
+          "passed": true,
+          "observed": 0.023923444976076555,
+          "required": {
+            "maximum": 0.1
+          }
+        },
+        {
+          "name": "minimum_base_height_m",
+          "passed": true,
+          "observed": 0.8549379953058248,
+          "required": {
+            "minimum": 0.7
+          }
+        },
+        {
+          "name": "final_base_height_m",
+          "passed": true,
+          "observed": 0.9292405023201034,
+          "required": {
+            "minimum": 0.7
+          }
+        },
+        {
+          "name": "maximum_tilt_deg",
+          "passed": true,
+          "observed": 11.71857889183227,
+          "required": {
+            "maximum": 30.0
+          }
+        },
+        {
+          "name": "media_sync_error_s",
+          "passed": true,
+          "observed": 0.0011666666706346973,
+          "required": {
+            "maximum": 0.003
+          }
+        },
+        {
+          "name": "maximum_non_foot_ground_contacts",
+          "passed": true,
+          "observed": 0,
+          "required": 0
+        },
+        {
+          "name": "maximum_loaded_foot_slip_speed_m_s",
+          "passed": true,
+          "observed": 0.08301448885726687,
+          "required": {
+            "maximum": 0.25
+          }
+        },
+        {
+          "name": "right_foot_slip_distance_m",
+          "passed": true,
+          "observed": 0.03854321229606988,
+          "required": {
+            "maximum": 0.15
+          }
+        },
+        {
+          "name": "left_foot_slip_distance_m",
+          "passed": true,
+          "observed": 0.04388744009957232,
+          "required": {
+            "maximum": 0.15
+          }
+        },
+        {
+          "name": "finite_metrics",
+          "passed": true,
+          "observed": [],
+          "required": []
+        },
+        {
+          "name": "settling_same_simulation",
+          "passed": true,
+          "observed": true,
+          "required": true
+        },
+        {
+          "name": "settling_simulation_instance_count",
+          "passed": true,
+          "observed": 1,
+          "required": 1
+        },
+        {
+          "name": "settling_data_instance_count",
+          "passed": true,
+          "observed": 1,
+          "required": 1
+        },
+        {
+          "name": "settling_status",
+          "passed": true,
+          "observed": "passed",
+          "required": "passed"
+        },
+        {
+          "name": "settling_completed",
+          "passed": true,
+          "observed": true,
+          "required": true
+        },
+        {
+          "name": "settling_requested_duration_s",
+          "passed": true,
+          "observed": 5.0,
+          "required": 5.0
+        },
+        {
+          "name": "settling_stable_duration_s",
+          "passed": true,
+          "observed": 4.999999999999671,
+          "required": {
+            "minimum": 5.0
+          }
+        },
+        {
+          "name": "settling_elapsed_s",
+          "passed": true,
+          "observed": 8.169999999999398,
+          "required": {
+            "minimum": 4.999999999999671
+          }
+        },
+        {
+          "name": "settling_minimum_base_height_m",
+          "passed": true,
+          "observed": 0.8692934893939098,
+          "required": {
+            "minimum": 0.7
+          }
+        },
+        {
+          "name": "settling_maximum_tilt_deg",
+          "passed": true,
+          "observed": 8.442203570633232,
+          "required": {
+            "maximum": 30.0
+          }
+        },
+        {
+          "name": "finite_settling_metrics",
+          "passed": true,
+          "observed": true,
+          "required": true
+        },
+        {
+          "name": "raw_command_span_deg",
+          "passed": true,
+          "observed": 79.81506847534529,
+          "required": {
+            "minimum": 30.0
+          }
+        },
+        {
+          "name": "safe_command_span_deg",
+          "passed": true,
+          "observed": 37.84693582709262,
+          "required": {
+            "minimum": 15.0
+          }
+        },
+        {
+          "name": "safe_legs_motion",
+          "passed": true,
+          "observed": 25.657929193424234,
+          "required": {
+            "minimum_span_deg": 15.0
+          }
+        },
+        {
+          "name": "actual_legs_motion",
+          "passed": true,
+          "observed": 32.817595314972536,
+          "required": {
+            "minimum_span_deg": 10.0
+          }
+        },
+        {
+          "name": "right_swing_completed",
+          "passed": true,
+          "observed": true,
+          "required": true
+        },
+        {
+          "name": "left_swing_completed",
+          "passed": true,
+          "observed": false,
+          "required": false
+        },
+        {
+          "name": "maximum_right_foot_clearance_m",
+          "passed": true,
+          "observed": 0.03327531885102018,
+          "required": {
+            "minimum": 0.02
+          }
+        },
+        {
+          "name": "support_transitions",
+          "passed": true,
+          "observed": 14,
+          "required": {
+            "minimum": 4.0
+          }
+        }
+      ],
+      "passed": true
+    },
+    {
+      "exit_code": 0,
+      "video": "assets/videos/external/dvids_stationary_squat.mp4",
+      "video_size_bytes": 6471387,
+      "video_sha256": "3b82ead850f106e0691385008fa8af0fe48b1f973a68ac098b7f3acf49e6f340",
+      "teleop_arguments": [
+        "--source",
+        "replay",
+        "--headless",
+        "--free-base",
+        "--balance-controller",
+        "--retargeting",
+        "ik",
+        "--settle-seconds",
+        "5",
+        "--settle-timeout-s",
+        "20",
+        "--video-path",
+        "C:\\Users\\k_desktop\\Desktop\\robot-human-interface\\assets\\videos\\external\\dvids_stationary_squat.mp4"
+      ],
+      "metrics": {
+        "base_mode": "free",
+        "equality_constraint_count": 0,
+        "base_joint_type": "free",
+        "frames": 817,
+        "skeleton_frames": 797,
+        "skeleton_fraction": 0.9755201958384333,
+        "stale_commands": 20,
+        "stale_fraction": 0.02447980416156671,
+        "minimum_base_height_m": 0.9067828597975712,
+        "final_base_height_m": 0.9239504106242089,
+        "maximum_tilt_deg": 6.629694321511748,
+        "fell": false,
+        "support_transitions": 0,
+        "right_swing_completed": false,
+        "left_swing_completed": false,
+        "maximum_right_foot_clearance_m": 0.0006766446549905797,
+        "maximum_left_foot_clearance_m": 0.0004854561870263896,
+        "simulation_time_s": 32.22599999999342,
+        "input_simulation_time_s": 27.225999999993746,
+        "media_time_s": 27.2271999999939,
+        "media_sync_error_s": 0.0012000000001535227,
+        "raw_command_span_deg": 99.7981414590341,
+        "safe_command_span_deg": 78.95040443482105,
+        "maximum_non_foot_ground_contacts": 0,
+        "maximum_loaded_foot_slip_speed_m_s": 0.014950015732751513,
+        "right_foot_slip_distance_m": 0.003262989106540264,
+        "left_foot_slip_distance_m": 0.003733679102670053,
+        "maximum_swing_foot_impact_speed_m_s": 0.0,
+        "maximum_swing_foot_impact_force_n": 0.0,
+        "maximum_swing_foot_contact_impulse_n_s": 0.0,
+        "motion": {
+          "scope": "input video physics; same-simulation settling tail excluded",
+          "settling_steps_excluded": 2500,
+          "safe_command": {
+            "arms": {
+              "maximum_span_deg": 78.95040443482105,
+              "active_joints_over_2deg": 6
+            },
+            "legs": {
+              "maximum_span_deg": 8.456770073932658,
+              "active_joints_over_2deg": 6
+            },
+            "head": {
+              "maximum_span_deg": 41.51110428054355,
+              "active_joints_over_2deg": 2
+            }
+          },
+          "actual_joint": {
+            "arms": {
+              "maximum_span_deg": 76.18379909810781,
+              "active_joints_over_2deg": 6
+            },
+            "legs": {
+              "maximum_span_deg": 7.9019002036518495,
+              "active_joints_over_2deg": 6
+            },
+            "head": {
+              "maximum_span_deg": 41.280005411610475,
+              "active_joints_over_2deg": 2
+            }
+          }
+        }
+      },
+      "settling": {
+        "requested_duration_s": 5.0,
+        "elapsed_s": 4.999999999999671,
+        "stable_s": 4.999999999999671,
+        "completed": true,
+        "status": "passed",
+        "same_simulation": true,
+        "simulation_instance_count": 1,
+        "data_instance_count": 1,
+        "minimum_base_height_m": 0.9238865749849844,
+        "maximum_tilt_deg": 1.3460184718807362
+      },
+      "name": "stationary-squat",
+      "expectation": {
+        "minimum_raw_command_span_deg": 30.0,
+        "minimum_safe_command_span_deg": 10.0,
+        "minimum_safe_arm_span_deg": 0.0,
+        "minimum_safe_leg_span_deg": 5.0,
+        "minimum_safe_head_span_deg": 0.0,
+        "minimum_actual_arm_span_deg": 0.0,
+        "minimum_actual_leg_span_deg": 3.0,
+        "minimum_actual_head_span_deg": 0.0,
+        "right_swing_completed": false,
+        "left_swing_completed": false,
+        "minimum_right_clearance_m": 0.0,
+        "minimum_left_clearance_m": 0.0,
+        "minimum_support_transitions": 0
+      },
+      "gates": [
+        {
+          "name": "base_mode",
+          "passed": true,
+          "observed": "free",
+          "required": "free"
+        },
+        {
+          "name": "equality_constraint_count",
+          "passed": true,
+          "observed": 0,
+          "required": 0
+        },
+        {
+          "name": "base_joint_type",
+          "passed": true,
+          "observed": "free",
+          "required": "free"
+        },
+        {
+          "name": "exit_code",
+          "passed": true,
+          "observed": 0,
+          "required": 0
+        },
+        {
+          "name": "fell",
+          "passed": true,
+          "observed": false,
+          "required": false
+        },
+        {
+          "name": "frames",
+          "passed": true,
+          "observed": 817,
+          "required": 817
+        },
+        {
+          "name": "skeleton_fraction",
+          "passed": true,
+          "observed": 0.9755201958384333,
+          "required": {
+            "minimum": 0.85
+          }
+        },
+        {
+          "name": "stale_fraction",
+          "passed": true,
+          "observed": 0.02447980416156671,
+          "required": {
+            "maximum": 0.1
+          }
+        },
+        {
+          "name": "minimum_base_height_m",
+          "passed": true,
+          "observed": 0.9067828597975712,
+          "required": {
+            "minimum": 0.7
+          }
+        },
+        {
+          "name": "final_base_height_m",
+          "passed": true,
+          "observed": 0.9239504106242089,
+          "required": {
+            "minimum": 0.7
+          }
+        },
+        {
+          "name": "maximum_tilt_deg",
+          "passed": true,
+          "observed": 6.629694321511748,
+          "required": {
+            "maximum": 30.0
+          }
+        },
+        {
+          "name": "media_sync_error_s",
+          "passed": true,
+          "observed": 0.0012000000001535227,
+          "required": {
+            "maximum": 0.003
+          }
+        },
+        {
+          "name": "maximum_non_foot_ground_contacts",
+          "passed": true,
+          "observed": 0,
+          "required": 0
+        },
+        {
+          "name": "maximum_loaded_foot_slip_speed_m_s",
+          "passed": true,
+          "observed": 0.014950015732751513,
+          "required": {
+            "maximum": 0.25
+          }
+        },
+        {
+          "name": "right_foot_slip_distance_m",
+          "passed": true,
+          "observed": 0.003262989106540264,
+          "required": {
+            "maximum": 0.15
+          }
+        },
+        {
+          "name": "left_foot_slip_distance_m",
+          "passed": true,
+          "observed": 0.003733679102670053,
+          "required": {
+            "maximum": 0.15
+          }
+        },
+        {
+          "name": "finite_metrics",
+          "passed": true,
+          "observed": [],
+          "required": []
+        },
+        {
+          "name": "settling_same_simulation",
+          "passed": true,
+          "observed": true,
+          "required": true
+        },
+        {
+          "name": "settling_simulation_instance_count",
+          "passed": true,
+          "observed": 1,
+          "required": 1
+        },
+        {
+          "name": "settling_data_instance_count",
+          "passed": true,
+          "observed": 1,
+          "required": 1
+        },
+        {
+          "name": "settling_status",
+          "passed": true,
+          "observed": "passed",
+          "required": "passed"
+        },
+        {
+          "name": "settling_completed",
+          "passed": true,
+          "observed": true,
+          "required": true
+        },
+        {
+          "name": "settling_requested_duration_s",
+          "passed": true,
+          "observed": 5.0,
+          "required": 5.0
+        },
+        {
+          "name": "settling_stable_duration_s",
+          "passed": true,
+          "observed": 4.999999999999671,
+          "required": {
+            "minimum": 5.0
+          }
+        },
+        {
+          "name": "settling_elapsed_s",
+          "passed": true,
+          "observed": 4.999999999999671,
+          "required": {
+            "minimum": 4.999999999999671
+          }
+        },
+        {
+          "name": "settling_minimum_base_height_m",
+          "passed": true,
+          "observed": 0.9238865749849844,
+          "required": {
+            "minimum": 0.7
+          }
+        },
+        {
+          "name": "settling_maximum_tilt_deg",
+          "passed": true,
+          "observed": 1.3460184718807362,
+          "required": {
+            "maximum": 30.0
+          }
+        },
+        {
+          "name": "finite_settling_metrics",
+          "passed": true,
+          "observed": true,
+          "required": true
+        },
+        {
+          "name": "raw_command_span_deg",
+          "passed": true,
+          "observed": 99.7981414590341,
+          "required": {
+            "minimum": 30.0
+          }
+        },
+        {
+          "name": "safe_command_span_deg",
+          "passed": true,
+          "observed": 78.95040443482105,
+          "required": {
+            "minimum": 10.0
+          }
+        },
+        {
+          "name": "safe_legs_motion",
+          "passed": true,
+          "observed": 8.456770073932658,
+          "required": {
+            "minimum_span_deg": 5.0
+          }
+        },
+        {
+          "name": "actual_legs_motion",
+          "passed": true,
+          "observed": 7.9019002036518495,
+          "required": {
+            "minimum_span_deg": 3.0
+          }
+        },
+        {
+          "name": "right_swing_completed",
+          "passed": true,
+          "observed": false,
+          "required": false
+        },
+        {
+          "name": "left_swing_completed",
+          "passed": true,
+          "observed": false,
+          "required": false
+        }
+      ],
+      "passed": true
+    },
+    {
+      "exit_code": 0,
+      "video": "assets/videos/external/dvids_trunk_circles.mp4",
+      "video_size_bytes": 6871249,
+      "video_sha256": "5095be71e318228c0cc5686d1fc52696368ac71577bea5f032872635a39ceff6",
+      "teleop_arguments": [
+        "--source",
+        "replay",
+        "--headless",
+        "--free-base",
+        "--balance-controller",
+        "--retargeting",
+        "ik",
+        "--settle-seconds",
+        "5",
+        "--settle-timeout-s",
+        "20",
+        "--video-path",
+        "C:\\Users\\k_desktop\\Desktop\\robot-human-interface\\assets\\videos\\external\\dvids_trunk_circles.mp4"
+      ],
+      "metrics": {
+        "base_mode": "free",
+        "equality_constraint_count": 0,
+        "base_joint_type": "free",
+        "frames": 867,
+        "skeleton_frames": 848,
+        "skeleton_fraction": 0.9780853517877739,
+        "stale_commands": 19,
+        "stale_fraction": 0.02191464821222607,
+        "minimum_base_height_m": 0.9002109563670587,
+        "final_base_height_m": 0.9239876467111294,
+        "maximum_tilt_deg": 2.481928399771962,
+        "fell": false,
+        "support_transitions": 0,
+        "right_swing_completed": false,
+        "left_swing_completed": false,
+        "maximum_right_foot_clearance_m": 0.0006766446549905797,
+        "maximum_left_foot_clearance_m": 0.0004854561870263896,
+        "simulation_time_s": 33.89399999999546,
+        "input_simulation_time_s": 28.893999999995785,
+        "media_time_s": 28.895533333328785,
+        "media_sync_error_s": 0.0015333333330005416,
+        "raw_command_span_deg": 84.90990725756716,
+        "safe_command_span_deg": 39.54908847209804,
+        "maximum_non_foot_ground_contacts": 0,
+        "maximum_loaded_foot_slip_speed_m_s": 0.014950015732751513,
+        "right_foot_slip_distance_m": 0.0018213822575123759,
+        "left_foot_slip_distance_m": 0.0018733311320701896,
+        "maximum_swing_foot_impact_speed_m_s": 0.0,
+        "maximum_swing_foot_impact_force_n": 0.0,
+        "maximum_swing_foot_contact_impulse_n_s": 0.0,
+        "motion": {
+          "scope": "input video physics; same-simulation settling tail excluded",
+          "settling_steps_excluded": 2500,
+          "safe_command": {
+            "arms": {
+              "maximum_span_deg": 36.38744237587916,
+              "active_joints_over_2deg": 3
+            },
+            "legs": {
+              "maximum_span_deg": 12.911230717946667,
+              "active_joints_over_2deg": 6
+            },
+            "head": {
+              "maximum_span_deg": 39.54908847209804,
+              "active_joints_over_2deg": 2
+            }
+          },
+          "actual_joint": {
+            "arms": {
+              "maximum_span_deg": 35.263281370091065,
+              "active_joints_over_2deg": 3
+            },
+            "legs": {
+              "maximum_span_deg": 14.250585486970461,
+              "active_joints_over_2deg": 6
+            },
+            "head": {
+              "maximum_span_deg": 39.78306711680181,
+              "active_joints_over_2deg": 2
+            }
+          }
+        }
+      },
+      "settling": {
+        "requested_duration_s": 5.0,
+        "elapsed_s": 4.999999999999671,
+        "stable_s": 4.999999999999671,
+        "completed": true,
+        "status": "passed",
+        "same_simulation": true,
+        "simulation_instance_count": 1,
+        "data_instance_count": 1,
+        "minimum_base_height_m": 0.9239747292480638,
+        "maximum_tilt_deg": 1.3186893566317035
+      },
+      "name": "trunk-circles",
+      "expectation": {
+        "minimum_raw_command_span_deg": 30.0,
+        "minimum_safe_command_span_deg": 10.0,
+        "minimum_safe_arm_span_deg": 0.0,
+        "minimum_safe_leg_span_deg": 5.0,
+        "minimum_safe_head_span_deg": 5.0,
+        "minimum_actual_arm_span_deg": 0.0,
+        "minimum_actual_leg_span_deg": 3.0,
+        "minimum_actual_head_span_deg": 5.0,
+        "right_swing_completed": false,
+        "left_swing_completed": false,
+        "minimum_right_clearance_m": 0.0,
+        "minimum_left_clearance_m": 0.0,
+        "minimum_support_transitions": 0
+      },
+      "gates": [
+        {
+          "name": "base_mode",
+          "passed": true,
+          "observed": "free",
+          "required": "free"
+        },
+        {
+          "name": "equality_constraint_count",
+          "passed": true,
+          "observed": 0,
+          "required": 0
+        },
+        {
+          "name": "base_joint_type",
+          "passed": true,
+          "observed": "free",
+          "required": "free"
+        },
+        {
+          "name": "exit_code",
+          "passed": true,
+          "observed": 0,
+          "required": 0
+        },
+        {
+          "name": "fell",
+          "passed": true,
+          "observed": false,
+          "required": false
+        },
+        {
+          "name": "frames",
+          "passed": true,
+          "observed": 867,
+          "required": 867
+        },
+        {
+          "name": "skeleton_fraction",
+          "passed": true,
+          "observed": 0.9780853517877739,
+          "required": {
+            "minimum": 0.85
+          }
+        },
+        {
+          "name": "stale_fraction",
+          "passed": true,
+          "observed": 0.02191464821222607,
+          "required": {
+            "maximum": 0.1
+          }
+        },
+        {
+          "name": "minimum_base_height_m",
+          "passed": true,
+          "observed": 0.9002109563670587,
+          "required": {
+            "minimum": 0.7
+          }
+        },
+        {
+          "name": "final_base_height_m",
+          "passed": true,
+          "observed": 0.9239876467111294,
+          "required": {
+            "minimum": 0.7
+          }
+        },
+        {
+          "name": "maximum_tilt_deg",
+          "passed": true,
+          "observed": 2.481928399771962,
+          "required": {
+            "maximum": 30.0
+          }
+        },
+        {
+          "name": "media_sync_error_s",
+          "passed": true,
+          "observed": 0.0015333333330005416,
+          "required": {
+            "maximum": 0.003
+          }
+        },
+        {
+          "name": "maximum_non_foot_ground_contacts",
+          "passed": true,
+          "observed": 0,
+          "required": 0
+        },
+        {
+          "name": "maximum_loaded_foot_slip_speed_m_s",
+          "passed": true,
+          "observed": 0.014950015732751513,
+          "required": {
+            "maximum": 0.25
+          }
+        },
+        {
+          "name": "right_foot_slip_distance_m",
+          "passed": true,
+          "observed": 0.0018213822575123759,
+          "required": {
+            "maximum": 0.15
+          }
+        },
+        {
+          "name": "left_foot_slip_distance_m",
+          "passed": true,
+          "observed": 0.0018733311320701896,
+          "required": {
+            "maximum": 0.15
+          }
+        },
+        {
+          "name": "finite_metrics",
+          "passed": true,
+          "observed": [],
+          "required": []
+        },
+        {
+          "name": "settling_same_simulation",
+          "passed": true,
+          "observed": true,
+          "required": true
+        },
+        {
+          "name": "settling_simulation_instance_count",
+          "passed": true,
+          "observed": 1,
+          "required": 1
+        },
+        {
+          "name": "settling_data_instance_count",
+          "passed": true,
+          "observed": 1,
+          "required": 1
+        },
+        {
+          "name": "settling_status",
+          "passed": true,
+          "observed": "passed",
+          "required": "passed"
+        },
+        {
+          "name": "settling_completed",
+          "passed": true,
+          "observed": true,
+          "required": true
+        },
+        {
+          "name": "settling_requested_duration_s",
+          "passed": true,
+          "observed": 5.0,
+          "required": 5.0
+        },
+        {
+          "name": "settling_stable_duration_s",
+          "passed": true,
+          "observed": 4.999999999999671,
+          "required": {
+            "minimum": 5.0
+          }
+        },
+        {
+          "name": "settling_elapsed_s",
+          "passed": true,
+          "observed": 4.999999999999671,
+          "required": {
+            "minimum": 4.999999999999671
+          }
+        },
+        {
+          "name": "settling_minimum_base_height_m",
+          "passed": true,
+          "observed": 0.9239747292480638,
+          "required": {
+            "minimum": 0.7
+          }
+        },
+        {
+          "name": "settling_maximum_tilt_deg",
+          "passed": true,
+          "observed": 1.3186893566317035,
+          "required": {
+            "maximum": 30.0
+          }
+        },
+        {
+          "name": "finite_settling_metrics",
+          "passed": true,
+          "observed": true,
+          "required": true
+        },
+        {
+          "name": "raw_command_span_deg",
+          "passed": true,
+          "observed": 84.90990725756716,
+          "required": {
+            "minimum": 30.0
+          }
+        },
+        {
+          "name": "safe_command_span_deg",
+          "passed": true,
+          "observed": 39.54908847209804,
+          "required": {
+            "minimum": 10.0
+          }
+        },
+        {
+          "name": "safe_legs_motion",
+          "passed": true,
+          "observed": 12.911230717946667,
+          "required": {
+            "minimum_span_deg": 5.0
+          }
+        },
+        {
+          "name": "safe_head_motion",
+          "passed": true,
+          "observed": 39.54908847209804,
+          "required": {
+            "minimum_span_deg": 5.0
+          }
+        },
+        {
+          "name": "actual_legs_motion",
+          "passed": true,
+          "observed": 14.250585486970461,
+          "required": {
+            "minimum_span_deg": 3.0
+          }
+        },
+        {
+          "name": "actual_head_motion",
+          "passed": true,
+          "observed": 39.78306711680181,
+          "required": {
+            "minimum_span_deg": 5.0
+          }
+        },
+        {
+          "name": "right_swing_completed",
+          "passed": true,
+          "observed": false,
+          "required": false
+        },
+        {
+          "name": "left_swing_completed",
+          "passed": true,
+          "observed": false,
+          "required": false
+        }
+      ],
+      "passed": true
+    }
+  ]
+}

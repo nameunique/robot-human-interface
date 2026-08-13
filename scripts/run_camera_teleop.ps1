@@ -15,6 +15,7 @@ param(
     [switch]$MirrorInput,
     [string]$PoseModel = "",
     [switch]$FreeBase,
+    [switch]$FixedBase,
     [ValidateSet("ik", "geometric")]
     [string]$Retargeting = "ik",
     [ValidateSet("visual", "joints")]
@@ -23,6 +24,8 @@ param(
     [double]$RobotWebSocketTimeoutSeconds = 0.5,
     [switch]$Headless,
     [int]$MaxFrames = 0,
+    [double]$SettleSeconds = 0.0,
+    [double]$SettleTimeoutSeconds = 20.0,
     [string]$PythonExe = "",
 
     [Parameter(ValueFromRemainingArguments = $true)]
@@ -64,11 +67,21 @@ if ($CameraIndex -lt 0) {
 if ($MaxFrames -lt 0) {
     throw "-MaxFrames must be non-negative."
 }
+if ($SettleSeconds -lt 0.0) {
+    throw "-SettleSeconds must be non-negative."
+}
+if ($SettleTimeoutSeconds -le 0.0 -or $SettleSeconds -gt $SettleTimeoutSeconds) {
+    throw "-SettleTimeoutSeconds must be positive and at least -SettleSeconds."
+}
+if ($FreeBase -and $FixedBase) {
+    throw "-FreeBase and -FixedBase are mutually exclusive."
+}
 if ($RobotWebSocketTimeoutSeconds -le 0.0) {
     throw "-RobotWebSocketTimeoutSeconds must be positive."
 }
-if ($RobotWebSocketUrl -and -not $FreeBase) {
-    throw "-RobotWebSocketUrl requires -FreeBase so the motor-angle safety layer is active."
+$effectiveFreeBase = -not $FixedBase
+if ($RobotWebSocketUrl -and -not $effectiveFreeBase) {
+    throw "-RobotWebSocketUrl requires free-base mode and cannot be used with -FixedBase."
 }
 
 $teleopArguments = @(
@@ -100,7 +113,11 @@ if ($PoseModel) {
 if ($MirrorInput) {
     $teleopArguments += "--mirror-input"
 }
-if ($FreeBase) {
+if ($FixedBase) {
+    $teleopArguments += "--fixed-base"
+}
+elseif ($FreeBase) {
+    # Backward-compatible explicit spelling; free-base is already the default.
     $teleopArguments += "--free-base"
 }
 if ($RobotWebSocketUrl) {
@@ -114,6 +131,12 @@ if ($Headless) {
 }
 if ($MaxFrames -gt 0) {
     $teleopArguments += @("--max-frames", "$MaxFrames")
+}
+if ($SettleSeconds -gt 0.0) {
+    $teleopArguments += @(
+        "--settle-seconds", "$SettleSeconds",
+        "--settle-timeout-s", "$SettleTimeoutSeconds"
+    )
 }
 if ($AdditionalArguments) {
     $teleopArguments += $AdditionalArguments

@@ -35,6 +35,29 @@ standing_balance:
   arm_to_ankle_gain: -0.055
   pitch_feedback_gain: 0.08
   pitch_rate_feedback_s: 0.005
+  # Sagittal reference governor.  The divergent component of motion is
+  # estimated from CoM relative to the midpoint of the two feet:
+  #   xi = (com_x - neutral_x) + com_vx / sqrt(g / com_height)
+  # Pose tracking fades only outside the inner capture margin.  A symmetric
+  # knee/ankle motor residual then moves the pressure response back toward the
+  # support region without writing the floating-base pose or applying force.
+  capture_velocity_filter_time_constant_s: 0.08
+  capture_tracking_margin_start_m: 0.035
+  capture_tracking_margin_full_m: 0.075
+  capture_recovery_gain_rad_per_m: 1.0
+  capture_recovery_full_gain_rad_per_m: 2.0
+  capture_recovery_max_rad: 0.3141592653589793 # 18 deg
+  # Smoothly enable the extra recovery authority only when both soles carry
+  # meaningful load.  Single-support landing retains the validated inner gain.
+  capture_full_gain_start_foot_force_n: 4.0
+  capture_full_gain_min_foot_force_n: 10.0
+  capture_minimum_com_height_m: 0.20
+  capture_minimum_total_support_force_n: 1.0
+  capture_support_point_filter_time_constant_s: 0.04
+  # Extension is much less stable than positive crouch in this provisional
+  # linkage.  Preserve the full positive range but bound the signed negative
+  # crouch coordinate to the measured recoverable envelope.
+  max_inverse_crouch_amplitude_rad: 0.10471975511965977 # 6 deg
   upper_body_rate_limit_rad_s: 2.5
   lower_body_rate_limit_rad_s: 1.2
   # The provisional robot cannot statically balance both heavy arms beyond

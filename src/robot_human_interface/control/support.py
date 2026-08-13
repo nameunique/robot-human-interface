@@ -337,6 +337,7 @@ class SupportStateMachine:
         self._abort_reason: str | None = None
         self._last_diagnostics: SupportDiagnostics | None = None
         self._cycle_reference_rad: FloatArray | None = None
+        self._cycle_capture_recovery_rad: FloatArray | None = None
         self._admitted_pose_rad: FloatArray | None = None
         self._last_output_rad = None if self._home is None else self._home.copy()
 
@@ -371,6 +372,7 @@ class SupportStateMachine:
         self._phase_elapsed_s = 0.0
         if phase is SupportPhase.DOUBLE_SUPPORT:
             self._cycle_reference_rad = None
+            self._cycle_capture_recovery_rad = None
             self._admitted_pose_rad = None
         elif phase is SupportPhase.VERIFY_STANCE:
             self._load_confirm_elapsed_s = 0.0
@@ -632,6 +634,14 @@ class SupportStateMachine:
             getattr(reference, "pose_reference_positions_rad", positions),
             "reference.pose_reference_positions_rad",
         )
+        capture_recovery = self._vector(
+            getattr(
+                reference,
+                "capture_recovery_positions_rad",
+                np.zeros(len(JOINT_NAMES)),
+            ),
+            "reference.capture_recovery_positions_rad",
+        )
         if self._home is None:
             # Lightweight/controller-only callers need not provide a model;
             # their first canonical balanced command becomes the neutral seed.
@@ -672,6 +682,7 @@ class SupportStateMachine:
             # reset it to home at phase admission: the final slew limiter is a
             # guard, not a substitute for a continuous desired trajectory.
             self._cycle_reference_rad = positions.copy()
+            self._cycle_capture_recovery_rad = capture_recovery.copy()
         # Re-evaluate side-specific diagnostics if DOUBLE_SUPPORT just accepted
         # a request during this update.
         stance_force, swing_force, stance_fraction, support_ready = self._loads(state)
@@ -710,6 +721,12 @@ class SupportStateMachine:
             # following every later camera-frame perturbation would instead
             # move the stance geometry during the one-foot support cycle.
             cycle_lower = self._cycle_reference_rad[LOWER_BODY_INDICES]
+            cycle_capture = (
+                np.zeros(len(JOINT_NAMES), dtype=np.float64)
+                if self._cycle_capture_recovery_rad is None
+                else self._cycle_capture_recovery_rad
+            )
+            capture_delta = capture_recovery - cycle_capture
             if self._phase is SupportPhase.CENTER_WEIGHT:
                 cycle_weight = _smoothstep(
                     self._shift_progress / self._center_start_shift_progress
@@ -717,9 +734,16 @@ class SupportStateMachine:
                 composed_positions[LOWER_BODY_INDICES] = (
                     cycle_weight * cycle_lower
                     + (1.0 - cycle_weight) * positions[LOWER_BODY_INDICES]
+                    + cycle_weight * capture_delta[LOWER_BODY_INDICES]
                 )
             else:
-                composed_positions[LOWER_BODY_INDICES] = cycle_lower
+                composed_positions[LOWER_BODY_INDICES] = (
+                    cycle_lower + capture_delta[LOWER_BODY_INDICES]
+                )
+            # The frozen cycle base rejects moving camera references, but must
+            # retain the standing layer's live deployable capture feedback.
+            # Otherwise the governor is silently disconnected throughout a
+            # support cycle exactly when a disturbance needs recovery torque.
             if self._active_intent is SupportIntent.RIGHT_SWING:
                 swing_indices = RIGHT_LEG_INDICES
             else:

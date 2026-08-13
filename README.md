@@ -13,9 +13,9 @@
 > он копирует руки, переносит вес перед подъёмом ноги, проверяет нагрузку стоп и
 > не фиксирует корпус в физике. На реальном роботе ему всё ещё нужны настоящие
 > encoder/IMU/foot-sensor observations, локальный watchdog и E-stop. Collision
-> shapes, inertia/CoM и gains текущей модели явно помечены provisional. Поэтому
-> по умолчанию сохранена grounded-fixed сцена, а свободная база включается
-> осознанно параметром `-FreeBase`.
+> shapes, inertia/CoM и gains текущей модели явно помечены provisional. Основной
+> запуск использует свободную базу без weld; grounded-fixed сцена доступна только
+> как явный диагностический режим `-FixedBase`.
 
 ## Windows: пошаговый запуск
 
@@ -118,7 +118,7 @@ Get-PnpDevice -Class Camera
 
 Откроются два окна:
 
-1. `MuJoCo : humanoid_v4_grounded_fixed` — симуляция робота;
+1. `MuJoCo : humanoid_v4_free` — симуляция робота со свободным корпусом;
 2. `Robot human interface - camera skeleton` — синтетический кадр и скелет.
 
 Чтобы остановить программу, выберите окно `camera skeleton` и нажмите `Esc`.
@@ -155,16 +155,41 @@ MediaPipe → retargeting → MuJoCo pipeline, что и камера:
 .\scripts\run_camera_teleop.ps1 -Source mp4 -DemoVideo slow-balance -Retargeting geometric
 ```
 
-Проверка именно свободной физики и motor-angle balance layer (без weld/каретки):
+Свободная физика и motor-angle balance layer без weld/каретки включены по
+умолчанию. Старое явное написание `-FreeBase` сохранено для совместимости:
 
 ```powershell
 .\scripts\run_camera_teleop.ps1 -Source mp4 -DemoVideo slow-balance -FreeBase
 ```
 
-На эталонном полном прогоне обе swing-стопы отрываются на `2.31/3.01 cm`
-(правая/левая), максимальный наклон корпуса остаётся около `16.16°`, падение
-не регистрируется,
-а время MuJoCo расходится с временем MP4 не более чем на один шаг `2 ms`.
+Grounded-fixed режим предназначен для отдельной проверки IK и визуальной модели
+без оценки устойчивости и включается только явно:
+
+```powershell
+.\scripts\run_camera_teleop.ps1 -Source mp4 -DemoVideo slow-balance -FixedBase
+```
+
+На эталонном полном прогоне обе swing-стопы отрываются на `3.66/3.16 cm`
+(правая/левая), максимальный наклон корпуса остаётся около `14.58°`, падение
+не регистрируется, а время MuJoCo расходится с временем MP4 не более чем на
+один шаг `2 ms`. После последнего кадра робот возвращается к высоте корпуса
+`0.929 m` и выдерживает ещё 5 секунд устойчивой стойки в той же симуляции.
+
+Для строгой проверки конечной устойчивости можно потребовать, чтобы после
+последнего кадра робот на **той же** свободной симуляции плавно вернулся в
+double support и простоял ещё 5 секунд:
+
+```powershell
+.\scripts\run_camera_teleop.ps1 `
+  -Source mp4 `
+  -DemoVideo slow-balance `
+  -SettleSeconds 5 `
+  -SettleTimeoutSeconds 20 `
+  -Headless
+```
+
+Успех отражается в итоговой строке как `settled=1`; касание пола не стопой,
+падение во время возврата или нехватка времени делают acceptance неуспешным.
 
 Старый быстрый ролик с jumping jacks сохранён как отдельный вариант:
 
@@ -211,13 +236,13 @@ viewer с роботом. Источник, авторы, лицензии, пр
 Сетевой выход и подключение по умолчанию полностью выключены; библиотека
 транспорта устанавливается обычным `setup_windows.ps1`. После проверки E-stop,
 знаков/нулей моторов, локального watchdog и ограничения
-скорости включите экспериментальный выход явным URL. `-FreeBase` обязателен,
-чтобы наружу не могла уйти необработанная fixed-base команда:
+скорости включите экспериментальный выход явным URL. Основной запуск уже
+free-base; сочетание WebSocket с `-FixedBase` отклоняется до старта, чтобы наружу
+не могла уйти необработанная fixed-base команда:
 
 ```powershell
 .\scripts\run_camera_teleop.ps1 `
   -Source camera `
-  -FreeBase `
   -RobotWebSocketUrl "ws://127.0.0.1:1233"
 ```
 
@@ -346,14 +371,16 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\scripts\run_camera_teleop.ps1 -Source mp4 -LoopReplay -ViewerMode joints
 ```
 
-Свободная база включается только явно:
+Свободная база и motor-angle balance layer используются по умолчанию. Для
+кинематической/визуальной диагностики с закреплённым корпусом укажите:
 
 ```powershell
-.\scripts\run_camera_teleop.ps1 -Source mp4 -DemoVideo slow-balance -FreeBase
+.\scripts\run_camera_teleop.ps1 -Source mp4 -DemoVideo slow-balance -FixedBase
 ```
 
-В этом режиме на каждом физическом шаге `2 ms` выполняется motor-angle balance
-layer. Камера задаёт медленную целевую позу, а q/dq, ориентация/угловая скорость
+В используемом по умолчанию free-base режиме на каждом физическом шаге `2 ms`
+выполняется motor-angle balance layer. Камера задаёт медленную целевую позу, а
+q/dq, ориентация/угловая скорость
 корпуса и нагрузки стоп определяют безопасную итоговую команду. Перед подъёмом
 ноги робот сначала переносит вес на противоположную стопу и подтверждает её
 нагрузку. Новый одноопорный цикл не начинается при наклоне больше `12°` или
@@ -379,6 +406,25 @@ perception и локальный servo/balance loop всё равно должн
 ```powershell
 .\scripts\run_checks.ps1
 ```
+
+Воспроизводимый тяжёлый free-base acceptance по двум встроенным и четырём
+независимым роликам (MediaPipe → IK → balance/support → MuJoCo → 5 секунд
+settling) запускается отдельно и сохраняет машинно-читаемый отчёт:
+
+```powershell
+.\.venv\Scripts\python.exe tools\evaluate_freebase_stability.py
+```
+
+Эквивалентный единый запуск обычных тестов и тяжёлой матрицы:
+
+```powershell
+.\scripts\run_checks.ps1 -FullFreeBaseAcceptance
+```
+
+Результат: `artifacts/freebase-stability.json`. Проверка требует `neq=0`
+косвенно через выбранную free-сцену, отсутствие падения и не-стопных контактов,
+ограниченное проскальзывание нагруженных стоп, ожидаемую реальную амплитуду
+рук/ног/головы и успешный возврат в устойчивую стойку.
 
 Проверка именно camera → MediaPipe → retargeter → MuJoCo без окон:
 
@@ -530,8 +576,12 @@ geometric mapper оставлен как baseline, на фоне которог�
    робота `-X`, а не просто дают ожидаемый знак в массиве.
 8. В grounded-fixed режиме вся достижимая IK-поза передаётся в приводы. В
    free-base режиме balance compositor сохраняет безопасную долю непрерывной
-   позы ног, ограничивает верх тела в одноопорной фазе и добавляет ankle
-   residual по IMU-подобным pitch/pitch-rate.
+   позы ног, ограничивает верх тела в одноопорной фазе и добавляет motor-angle
+   residual по IMU-подобным pitch/pitch-rate и capture point центра масс
+   относительно реально нагруженных стоп. При выходе capture point из
+   внутреннего запаса поза плавно ослабляется, а симметричная hip/knee/ankle
+   стратегия возвращает давление внутрь опоры — без weld, внешней силы или
+   записи floating-base pose.
 9. Подъём стопы превращается в последовательность `shift → verify load → lift →
    hold → lower → verify touchdown → center`: отрыв разрешается только после
    подтверждённой нагрузки противоположной стопы, а перенос веса обратно —
@@ -695,18 +745,25 @@ jerk, recovery from pushes и sim-to-sim/sim-to-real gap.
   перемещает соответствующую конечность вдоль физического переда робота `-X`;
 - synthetic free-base end-to-end: 60/60 skeleton frames, 0 stale commands,
   `max_tilt=2.217°`, `fell=0`;
+- полная матрица из шести роликов выполняется на `scene_free.xml`: каждый
+  прогон прямо подтверждает `neq=0`, тип `base_free`, один экземпляр
+  `HumanoidSimulation`/`MjData`, отсутствие падения и не-стопных контактов,
+  после чего робот устойчиво стоит ещё 5 секунд;
 - полный slow-balance MP4: 1961 frame, обе ноги отработали безопасный цикл,
-  clearance правой/левой стопы `2.31/3.01 cm`, `base_z=0.8536 m`,
-  `max_tilt=16.157°`, `fell=0`, рассинхронизация media/simulation меньше
-  одного шага `2 ms`;
-- четыре независимых public-domain DVIDS replay также завершились с `fell=0`:
-  arm circles `10.242°`, frontal leg swing `12.844°`, stationary squat
-  `9.959°`, trunk circles `2.785°` максимального наклона;
+  clearance правой/левой стопы `3.66/3.16 cm`, минимальная/финальная высота
+  корпуса `0.842/0.929 m`, `max_tilt=14.576°`, `fell=0`, рассинхронизация
+  media/simulation меньше одного шага `2 ms`;
+- jumping jacks и четыре независимых public-domain DVIDS replay также
+  завершились с `fell=0`: jumping jacks `3.943°`, arm circles `6.947°`,
+  frontal leg swing `11.719°`, stationary squat `6.630°`, trunk circles
+  `2.482°` максимального наклона;
+- максимальная скорость скольжения реально нагруженной опорной стопы во всей
+  матрице `0.131 m/s`, а накопленное скольжение каждой стопы меньше `0.061 m`;
 - итоговая команда ограничена на каждом physics tick: не более `0.2865°`
   для верхних приводов и `0.1375°` для ног за `2 ms`;
 - отказ локального WebSocket endpoint изолирован: camera/physics run завершается
   штатно и отражает ошибку в итоговой статистике;
-- `150 passed` в полном pytest-наборе;
+- `191 passed` в полном pytest-наборе;
 - 21 FBX-копия сохранена, а 21 OBJ-меш компилируется в обеих MJCF-сценах;
 - Unity git status остался чистым.
 

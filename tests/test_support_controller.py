@@ -524,6 +524,48 @@ def test_support_yaml_is_runtime_source_for_phase_timing_and_force_gates() -> No
     assert config.minimum_hold_duration_s == 0.25
 
 
+def test_frozen_cycle_applies_live_capture_delta_exactly_once() -> None:
+    machine = SupportStateMachine(LOWER, UPPER, _fast_config())
+    loaded = _loads(right_n=1.0, left_n=27.0)
+    sagittal = np.asarray((10, 11, 12, 13, 14, 15))
+
+    def command(recovery_rad: float) -> BalancedJointCommand:
+        recovery = np.zeros(20)
+        recovery[10:12] = -0.5 * recovery_rad
+        recovery[12:14] = 0.5 * recovery_rad
+        recovery[14:16] = recovery_rad
+        return BalancedJointCommand(
+            0.0,
+            tuple(spec.name for spec in DEFAULT_JOINT_SPECS),
+            HOME + recovery,
+            1.0,
+            False,
+            pose_reference_positions_rad=HOME,
+            capture_recovery_positions_rad=recovery,
+        )
+
+    admitted = command(0.04)
+    first = machine.update(
+        admitted,
+        loaded,
+        dt_s=0.01,
+        intent=SupportIntent.RIGHT_SWING,
+    )
+    assert machine.phase is SupportPhase.SHIFT_WEIGHT
+    np.testing.assert_allclose(first.positions_rad[sagittal], admitted.positions_rad[sagittal])
+
+    changed = command(0.10)
+    second = machine.update(changed, loaded, dt_s=0.01)
+    expected_delta = (
+        changed.capture_recovery_positions_rad
+        - admitted.capture_recovery_positions_rad
+    )
+    np.testing.assert_allclose(
+        second.positions_rad[sagittal],
+        first.positions_rad[sagittal] + expected_delta[sagittal],
+    )
+
+
 def test_swing_pose_reference_waits_for_load_gate_then_remains_correlated() -> None:
     config = _fast_config()
     machine = SupportStateMachine(LOWER, UPPER, config)
@@ -717,26 +759,44 @@ def test_final_slew_limit_covers_touchdown_to_center_transition() -> None:
 def test_camera_intent_is_latched_until_the_safe_lift_reaches_hold() -> None:
     latch = SupportIntentLatch()
 
-    assert latch.update(SupportIntent.RIGHT_SWING, SupportPhase.DOUBLE_SUPPORT) is SupportIntent.RIGHT_SWING
+    assert latch.update(
+        SupportIntent.RIGHT_SWING, SupportPhase.DOUBLE_SUPPORT
+    ) is SupportIntent.RIGHT_SWING
     # A short visual gesture cannot cancel halfway through weight transfer.
-    assert latch.update(SupportIntent.DOUBLE_SUPPORT, SupportPhase.SHIFT_WEIGHT) is SupportIntent.RIGHT_SWING
-    assert latch.update(SupportIntent.DOUBLE_SUPPORT, SupportPhase.LIFT_SWING) is SupportIntent.RIGHT_SWING
-    assert latch.update(SupportIntent.DOUBLE_SUPPORT, SupportPhase.HOLD_SWING) is SupportIntent.DOUBLE_SUPPORT
+    assert latch.update(
+        SupportIntent.DOUBLE_SUPPORT, SupportPhase.SHIFT_WEIGHT
+    ) is SupportIntent.RIGHT_SWING
+    assert latch.update(
+        SupportIntent.DOUBLE_SUPPORT, SupportPhase.LIFT_SWING
+    ) is SupportIntent.RIGHT_SWING
+    assert latch.update(
+        SupportIntent.DOUBLE_SUPPORT, SupportPhase.HOLD_SWING
+    ) is SupportIntent.DOUBLE_SUPPORT
 
 
 def test_latched_intent_releases_immediately_on_stale_or_controller_abort() -> None:
     latch = SupportIntentLatch()
     latch.update(SupportIntent.LEFT_SWING, SupportPhase.DOUBLE_SUPPORT)
-    assert latch.update(SupportIntent.LEFT_SWING, SupportPhase.SHIFT_WEIGHT, stale=True) is SupportIntent.DOUBLE_SUPPORT
+    assert latch.update(
+        SupportIntent.LEFT_SWING, SupportPhase.SHIFT_WEIGHT, stale=True
+    ) is SupportIntent.DOUBLE_SUPPORT
 
     latch.update(SupportIntent.RIGHT_SWING, SupportPhase.DOUBLE_SUPPORT)
-    assert latch.update(SupportIntent.RIGHT_SWING, SupportPhase.VERIFY_STANCE, aborted=True) is SupportIntent.DOUBLE_SUPPORT
+    assert latch.update(
+        SupportIntent.RIGHT_SWING, SupportPhase.VERIFY_STANCE, aborted=True
+    ) is SupportIntent.DOUBLE_SUPPORT
     assert latch.blocked_intent is SupportIntent.RIGHT_SWING
     # The same still-raised leg cannot create an abort/retry loop.
-    assert latch.update(SupportIntent.RIGHT_SWING, SupportPhase.DOUBLE_SUPPORT) is SupportIntent.DOUBLE_SUPPORT
-    assert latch.update(SupportIntent.DOUBLE_SUPPORT, SupportPhase.DOUBLE_SUPPORT) is SupportIntent.DOUBLE_SUPPORT
+    assert latch.update(
+        SupportIntent.RIGHT_SWING, SupportPhase.DOUBLE_SUPPORT
+    ) is SupportIntent.DOUBLE_SUPPORT
+    assert latch.update(
+        SupportIntent.DOUBLE_SUPPORT, SupportPhase.DOUBLE_SUPPORT
+    ) is SupportIntent.DOUBLE_SUPPORT
     assert latch.blocked_intent is None
-    assert latch.update(SupportIntent.RIGHT_SWING, SupportPhase.DOUBLE_SUPPORT) is SupportIntent.RIGHT_SWING
+    assert latch.update(
+        SupportIntent.RIGHT_SWING, SupportPhase.DOUBLE_SUPPORT
+    ) is SupportIntent.RIGHT_SWING
 
 
 def test_persistent_failed_camera_intent_does_not_retry_without_a_new_edge() -> None:

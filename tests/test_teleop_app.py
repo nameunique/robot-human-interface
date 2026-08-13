@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -19,12 +20,12 @@ from robot_human_interface.app.teleop import (
 )
 
 
-def test_parser_defaults_to_camera_and_fixed_base() -> None:
+def test_parser_defaults_to_camera_and_free_base() -> None:
     args = build_parser().parse_args([])
     config = yaml.safe_load((PROJECT_ROOT / "config" / "camera.yaml").read_text(encoding="utf-8"))
     assert args.source == "camera"
     assert args.demo_video == "slow-balance"
-    assert not args.free_base
+    assert args.free_base
     assert args.balance_controller
     assert args.retargeting == "ik"
     assert args.physics_steps_per_frame == 0
@@ -40,6 +41,32 @@ def test_parser_defaults_to_camera_and_fixed_base() -> None:
     assert args.min_pose_detection_confidence == config["pose"]["min_pose_detection_confidence"]
     assert args.pose_model == PROJECT_ROOT / "assets" / "models" / "pose_landmarker_full.task"
     assert Path(args.pose_model).is_file()
+
+
+def test_parser_keeps_explicit_fixed_and_legacy_free_base_options() -> None:
+    parser = build_parser()
+
+    assert not parser.parse_args(["--fixed-base"]).free_base
+    assert parser.parse_args(["--free-base"]).free_base
+
+
+@pytest.mark.parametrize(
+    "phase,active,expected",
+    (
+        ("double_support", "double_support", (True, True)),
+        ("center_weight", "right_swing", (True, True)),
+        ("shift_weight", "right_swing", (False, True)),
+        ("lift_swing", "left_swing", (True, False)),
+        ("verify_touchdown", "right_swing", (False, True)),
+        ("verify_touchdown", "left_swing", (True, False)),
+    ),
+)
+def test_phase_aware_loaded_feet_excludes_swing_impact_from_stance_slip(
+    phase: str,
+    active: str,
+    expected: tuple[bool, bool],
+) -> None:
+    assert teleop_module._phase_aware_loaded_feet(phase, active) == expected
 
 
 def test_parser_selects_slow_bundled_demo() -> None:
@@ -81,14 +108,14 @@ def test_headless_synthetic_runs_the_full_command_pipeline() -> None:
     )
     stats = run_teleop(args)
     assert stats.source == "synthetic"
-    assert stats.base_mode == "fixed"
+    assert stats.base_mode == "free"
     assert stats.frames == stats.skeleton_frames == 60
     assert stats.stale_commands == 0
     assert stats.command_span_rad > 0.2
     assert abs(stats.simulation_time_s - stats.media_time_s) <= 0.0021
     assert not stats.fell
-    # The grounded stabilizer allows vertical motion, so copied leg motion can
-    # physically raise/lower the torso while both feet remain on the floor.
+    # The default path is the unconstrained torso with the motor-angle balance
+    # layer active; this is not the grounded-fixed carriage scene.
     assert 0.7 < stats.final_base_height_m < 1.0
 
 
@@ -168,7 +195,64 @@ def test_main_prints_machine_readable_smoke_summary(capsys: pytest.CaptureFixtur
     assert "teleop complete:" in captured.out
     assert "source=synthetic" in captured.out
     assert "frames=3" in captured.out
-    assert "base=fixed" in captured.out
+    assert "base=free" in captured.out
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    (
+        {"fell": True},
+        {
+            "settling_requested_s": 1.0,
+            "settling_completed": False,
+            "settling_stable_s": 0.2,
+        },
+    ),
+)
+def test_main_returns_nonzero_when_free_base_acceptance_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    overrides: dict[str, object],
+) -> None:
+    baseline = run_teleop(
+        build_parser().parse_args(
+            ["--source", "synthetic", "--headless", "--max-frames", "1"]
+        )
+    )
+    monkeypatch.setattr(
+        teleop_module,
+        "run_teleop",
+        lambda _args: replace(baseline, **overrides),
+    )
+
+    assert main(["--source", "synthetic", "--headless", "--max-frames", "1"]) == 3
+
+
+def test_finite_source_settles_on_the_same_free_base_simulation() -> None:
+    args = build_parser().parse_args(
+        [
+            "--source",
+            "synthetic",
+            "--headless",
+            "--max-frames",
+            "30",
+            "--settle-seconds",
+            "0.2",
+            "--settle-timeout-s",
+            "3",
+        ]
+    )
+
+    stats = run_teleop(args)
+
+    assert stats.base_mode == "free"
+    assert stats.settling_completed
+    assert stats.settling_requested_s == pytest.approx(0.2)
+    assert stats.settling_stable_s >= 0.2
+    assert stats.settling_elapsed_s >= stats.settling_stable_s
+    assert stats.simulation_time_s > stats.media_time_s
+    assert not stats.fell
+    assert stats.settling_minimum_base_height_m > 0.85
+    assert np.degrees(stats.settling_maximum_tilt_rad) < 10.0
 
 
 @pytest.mark.parametrize(
@@ -176,6 +260,8 @@ def test_main_prints_machine_readable_smoke_summary(capsys: pytest.CaptureFixtur
     [
         (["--source", "replay", "--headless", "--max-frames", "1"], "video-path"),
         (["--source", "synthetic", "--headless", "--max-frames", "-1"], "non-negative"),
+        (["--settle-seconds", "-1"], "non-negative"),
+        (["--settle-seconds", "2", "--settle-timeout-s", "1"], "cannot exceed"),
         (
             [
                 "--source",
@@ -219,10 +305,24 @@ def test_main_prints_machine_readable_smoke_summary(capsys: pytest.CaptureFixtur
                 "--headless",
                 "--max-frames",
                 "1",
+                "--fixed-base",
                 "--robot-websocket-url",
                 "ws://127.0.0.1:9000",
             ],
-            "requires --free-base",
+            "requires free-base",
+        ),
+        (
+            [
+                "--source",
+                "synthetic",
+                "--headless",
+                "--max-frames",
+                "1",
+                "--no-balance-controller",
+                "--robot-websocket-url",
+                "ws://127.0.0.1:9000",
+            ],
+            "--balance-controller",
         ),
     ],
 )
@@ -332,6 +432,9 @@ def test_free_base_uses_motor_angle_balance_at_every_physics_tick() -> None:
     assert stats.final_base_height_m > 0.85
     assert np.degrees(stats.maximum_tilt_rad) < 10.0
     assert stats.safe_command_span_rad > 0.2
+    assert stats.maximum_swing_foot_impact_speed_m_s >= 0.0
+    assert stats.maximum_swing_foot_impact_force_n >= 0.0
+    assert stats.maximum_swing_foot_contact_impulse_n_s >= 0.0
     assert abs(stats.simulation_time_s - stats.media_time_s) <= 0.0021
 
 
@@ -375,7 +478,6 @@ def test_optional_robot_output_receives_the_same_safe_motor_command(
             "--source",
             "synthetic",
             "--headless",
-            "--free-base",
             "--max-frames",
             "60",
             "--robot-websocket-url",

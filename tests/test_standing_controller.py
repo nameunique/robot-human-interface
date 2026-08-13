@@ -34,6 +34,65 @@ def _state(
     return state
 
 
+def _free_base_tilt_rad(quaternion_wxyz: np.ndarray) -> float:
+    _, x, y, _ = quaternion_wxyz
+    return float(np.arccos(np.clip(1.0 - 2.0 * (x * x + y * y), -1.0, 1.0)))
+
+
+def _run_free_base_reference(
+    reference_at_time: object,
+    *,
+    duration_s: float,
+    velocity_impulse_x_m_s: float | None = None,
+) -> tuple[object, float, np.ndarray, np.ndarray]:
+    """Exercise the deployed standing layer without fixing or pushing the base."""
+
+    with HumanoidSimulation("free") as simulation:
+        controller = StandingBalanceController.from_simulation(
+            simulation, load_standing_balance_config("config/balance.yaml")
+        )
+        dt_s = float(simulation.model.opt.timestep)
+        base_dof_address = int(
+            simulation.model.jnt_dofadr[simulation._base_joint_id]
+        )
+        minimum_command = np.full(20, np.inf)
+        maximum_command = np.full(20, -np.inf)
+        maximum_tilt_rad = 0.0
+        warmup_s = 3.0
+
+        for step in range(int((warmup_s + duration_s) / dt_s)):
+            elapsed_s = step * dt_s
+            state = simulation.get_state()
+            if (
+                velocity_impulse_x_m_s is not None
+                and abs(elapsed_s - 5.0) < 0.5 * dt_s
+            ):
+                # Deterministic bounded perturbation of the physical free-base
+                # generalized velocity; the controller itself still emits only
+                # the canonical 20 motor-angle targets.
+                simulation.data.qvel[base_dof_address] += velocity_impulse_x_m_s
+            positions = (
+                simulation.home_positions_rad.copy()
+                if elapsed_s < warmup_s
+                else reference_at_time(elapsed_s - warmup_s, simulation)
+            )
+            command = controller.update(
+                RobotJointCommand.humanoid(elapsed_s, positions, 1.0),
+                state,
+                dt_s=dt_s,
+            )
+            minimum_command = np.minimum(minimum_command, command.positions_rad)
+            maximum_command = np.maximum(maximum_command, command.positions_rad)
+            simulation.apply_joint_command(command)
+            state = simulation.step()
+            maximum_tilt_rad = max(
+                maximum_tilt_rad,
+                _free_base_tilt_rad(state.base_orientation_wxyz),
+            )
+
+        return state, maximum_tilt_rad, minimum_command, maximum_command
+
+
 def test_controller_outputs_only_bounded_canonical_motor_angles() -> None:
     with HumanoidSimulation("free") as simulation:
         controller = StandingBalanceController.from_simulation(
@@ -110,6 +169,119 @@ def test_balance_yaml_is_the_runtime_source_of_controller_gains() -> None:
     assert config.transverse_lower_body_imitation_scale == 0.0
     assert config.swing_leg_imitation_scale == 0.65
     assert config.ankle_pitch_bias_rad == -0.04
+    assert config.capture_tracking_margin_start_m == pytest.approx(0.035)
+    assert config.capture_tracking_margin_full_m == pytest.approx(0.075)
+    assert config.capture_recovery_gain_rad_per_m == pytest.approx(1.0)
+    assert config.capture_recovery_full_gain_rad_per_m == pytest.approx(2.0)
+    assert np.degrees(config.capture_recovery_max_rad) == pytest.approx(18.0)
+    assert config.capture_full_gain_start_foot_force_n == pytest.approx(4.0)
+    assert config.capture_full_gain_min_foot_force_n == pytest.approx(10.0)
+    assert np.degrees(config.max_inverse_crouch_amplitude_rad) == pytest.approx(6.0)
+
+
+def test_stale_reference_slews_imitation_to_home_but_keeps_feedback_active() -> None:
+    with HumanoidSimulation("free") as simulation:
+        config = StandingBalanceConfig(
+            upper_body_rate_limit_rad_s=1000.0,
+            lower_body_rate_limit_rad_s=1000.0,
+        )
+        controller = StandingBalanceController.from_simulation(simulation, config)
+        target = simulation.home_positions_rad.copy()
+        target[:2] += np.radians(60.0)
+        target[10:12] += np.radians(10.0)
+        stale = RobotJointCommand.humanoid(1.0, target, 0.0, stale=True)
+
+        command = controller.update(
+            stale,
+            _state(pitch_rad=0.1, pitch_rate_rad_s=0.2),
+            dt_s=0.01,
+        )
+
+        np.testing.assert_allclose(
+            command.positions_rad[:14], simulation.home_positions_rad[:14]
+        )
+        np.testing.assert_allclose(
+            command.positions_rad[16:], simulation.home_positions_rad[16:]
+        )
+        assert not np.allclose(
+            command.positions_rad[14:16], simulation.home_positions_rad[14:16]
+        )
+        assert controller.last_diagnostics is not None
+        assert controller.last_diagnostics.tracking_weight == 0.0
+
+
+def test_capture_full_gain_changes_continuously_across_bilateral_load_thresholds() -> None:
+    with HumanoidSimulation("free") as simulation:
+        config = StandingBalanceConfig(
+            capture_velocity_filter_time_constant_s=0.0,
+            capture_support_point_filter_time_constant_s=0.0,
+            upper_body_rate_limit_rad_s=1000.0,
+            lower_body_rate_limit_rad_s=1000.0,
+        )
+
+        def recovery_at_force(force_n: float) -> float:
+            controller = StandingBalanceController.from_simulation(simulation, config)
+            state = simulation.get_state()
+            loaded = _state()
+            loaded.center_of_mass_position_m = (
+                state.center_of_mass_position_m + np.asarray((0.08, 0.0, 0.0))
+            )
+            loaded.base_linear_velocity_m_s = np.asarray((0.35, 0.0, 0.0))
+            loaded.right_foot_position_m = state.right_foot_position_m
+            loaded.left_foot_position_m = state.left_foot_position_m
+            loaded.right_foot_normal_force_n = force_n
+            loaded.left_foot_normal_force_n = force_n
+            reference = RobotJointCommand.humanoid(
+                0.0, simulation.home_positions_rad, 1.0
+            )
+            controller.update(reference, loaded, dt_s=0.01)
+            assert controller.last_diagnostics is not None
+            return controller.last_diagnostics.capture_recovery_rad
+
+        below_full = recovery_at_force(9.9)
+        above_full = recovery_at_force(10.1)
+        assert abs(above_full - below_full) < np.radians(0.1)
+        assert above_full >= below_full
+
+
+def test_exported_capture_recovery_is_deployed_after_slew_and_clears_without_reversal() -> None:
+    with HumanoidSimulation("free") as simulation:
+        config = StandingBalanceConfig(
+            capture_velocity_filter_time_constant_s=0.0,
+            capture_support_point_filter_time_constant_s=0.0,
+            capture_recovery_gain_rad_per_m=100.0,
+            capture_recovery_full_gain_rad_per_m=100.0,
+            lower_body_rate_limit_rad_s=1.2,
+        )
+        controller = StandingBalanceController.from_simulation(simulation, config)
+        source = simulation.get_state()
+        state = _state()
+        state.center_of_mass_position_m = source.center_of_mass_position_m
+        state.right_foot_position_m = source.right_foot_position_m
+        state.left_foot_position_m = source.left_foot_position_m
+        state.right_foot_normal_force_n = 14.0
+        state.left_foot_normal_force_n = 14.0
+        state.base_linear_velocity_m_s = np.asarray((2.0, 0.0, 0.0))
+        reference = RobotJointCommand.humanoid(
+            0.0, simulation.home_positions_rad, 1.0
+        )
+
+        saturated = controller.update(reference, state, dt_s=0.01)
+        assert controller.last_diagnostics is not None
+        assert np.degrees(
+            controller.last_diagnostics.capture_recovery_rad
+        ) == pytest.approx(18.0)
+        deployed_ankle = saturated.capture_recovery_positions_rad[14]
+        assert 0.0 < deployed_ankle <= 2.0 * 1.2 * 0.01 + 1e-12
+
+        state.base_linear_velocity_m_s = np.zeros(3)
+        clearing_trace = []
+        for _ in range(8):
+            clearing = controller.update(reference, state, dt_s=0.01)
+            clearing_trace.append(clearing.capture_recovery_positions_rad[14])
+
+        assert min(clearing_trace) >= -1e-12
+        assert clearing_trace[-1] == pytest.approx(0.0, abs=1e-12)
 
 
 def test_continuous_lower_body_reference_is_correlated_and_family_bounded() -> None:
@@ -307,3 +479,88 @@ def test_bounded_continuous_leg_motion_keeps_free_base_upright() -> None:
         assert np.ptp(command_trace) > np.radians(10.0)
         assert state.base_position_m[2] > 0.82
         assert np.degrees(maximum_tilt_rad) < 18.0
+
+
+def test_capture_governor_survives_combined_heavy_arm_pose_with_material_motion() -> None:
+    def reference(_elapsed_s: float, simulation: HumanoidSimulation) -> np.ndarray:
+        target = simulation.home_positions_rad.copy()
+        target[:2] += np.radians(70.0)
+        target[2:4] = simulation.upper_limits_rad[2:4]
+        return target
+
+    state, maximum_tilt, minimum_command, maximum_command = _run_free_base_reference(
+        reference,
+        duration_s=12.0,
+    )
+
+    assert state.base_position_m[2] > 0.85
+    assert np.degrees(maximum_tilt) < 18.0
+    assert np.max(np.degrees(maximum_command[:4] - minimum_command[:4])) > 65.0
+
+
+def test_capture_governor_survives_abrupt_and_sinusoidal_shoulder_motion() -> None:
+    def reference(elapsed_s: float, simulation: HumanoidSimulation) -> np.ndarray:
+        target = simulation.home_positions_rad.copy()
+        square = 70.0 if int(elapsed_s) % 2 == 0 else 0.0
+        sinusoid = 70.0 * np.sin(2.0 * np.pi * 0.25 * elapsed_s)
+        target[0] += np.radians(square)
+        target[1] += np.radians(sinusoid)
+        return target
+
+    state, maximum_tilt, minimum_command, maximum_command = _run_free_base_reference(
+        reference,
+        duration_s=20.0,
+    )
+
+    assert state.base_position_m[2] > 0.85
+    assert np.degrees(maximum_tilt) < 18.0
+    assert np.degrees(maximum_command[0] - minimum_command[0]) > 65.0
+    assert np.degrees(maximum_command[1] - minimum_command[1]) > 110.0
+
+
+def test_signed_crouch_governor_survives_abrupt_reversals_and_keeps_motion() -> None:
+    crouch_basis = np.asarray((0.7, 1.0, 0.3))
+
+    def reference(elapsed_s: float, simulation: HumanoidSimulation) -> np.ndarray:
+        target = simulation.home_positions_rad.copy()
+        sign = 1.0 if int(elapsed_s) % 2 == 0 else -1.0
+        delta = np.radians(20.0) * sign * crouch_basis
+        for indices in (
+            np.asarray((10, 12, 14)),
+            np.asarray((11, 13, 15)),
+        ):
+            target[indices] = np.clip(
+                target[indices] + delta,
+                simulation.lower_limits_rad[indices],
+                simulation.upper_limits_rad[indices],
+            )
+        return target
+
+    state, maximum_tilt, minimum_command, maximum_command = _run_free_base_reference(
+        reference,
+        duration_s=16.0,
+    )
+
+    assert state.base_position_m[2] > 0.85
+    assert np.degrees(maximum_tilt) < 18.0
+    assert np.max(np.degrees(maximum_command[10:16] - minimum_command[10:16])) > 10.0
+
+
+@pytest.mark.parametrize("velocity_x_m_s", (-0.15, 0.35))
+def test_capture_governor_recovers_bounded_bidirectional_velocity_impulse(
+    velocity_x_m_s: float,
+) -> None:
+    def reference(_elapsed_s: float, simulation: HumanoidSimulation) -> np.ndarray:
+        return simulation.home_positions_rad.copy()
+
+    state, maximum_tilt, _minimum_command, _maximum_command = (
+        _run_free_base_reference(
+            reference,
+            duration_s=9.0,
+            velocity_impulse_x_m_s=velocity_x_m_s,
+        )
+    )
+
+    assert state.base_position_m[2] > 0.85
+    assert np.degrees(maximum_tilt) < 18.0
+    assert _free_base_tilt_rad(state.base_orientation_wxyz) < np.radians(8.0)

@@ -60,6 +60,18 @@ class StandingBalanceConfig:
     max_shoulder_deviation_rad: float = 70.0 * pi / 180.0
     tracking_fade_start_rad: float = 8.0 * pi / 180.0
     recovery_tilt_rad: float = 18.0 * pi / 180.0
+    capture_velocity_filter_time_constant_s: float = 0.08
+    capture_tracking_margin_start_m: float = 0.035
+    capture_tracking_margin_full_m: float = 0.075
+    capture_recovery_gain_rad_per_m: float = 1.0
+    capture_recovery_full_gain_rad_per_m: float = 2.0
+    capture_recovery_max_rad: float = 18.0 * pi / 180.0
+    capture_full_gain_start_foot_force_n: float = 4.0
+    capture_full_gain_min_foot_force_n: float = 10.0
+    capture_minimum_com_height_m: float = 0.20
+    capture_minimum_total_support_force_n: float = 1.0
+    capture_support_point_filter_time_constant_s: float = 0.04
+    max_inverse_crouch_amplitude_rad: float = 6.0 * pi / 180.0
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.lower_body_imitation_scale <= 1.0:
@@ -92,6 +104,18 @@ class StandingBalanceConfig:
             self.max_shoulder_deviation_rad,
             self.tracking_fade_start_rad,
             self.recovery_tilt_rad,
+            self.capture_velocity_filter_time_constant_s,
+            self.capture_tracking_margin_start_m,
+            self.capture_tracking_margin_full_m,
+            self.capture_recovery_gain_rad_per_m,
+            self.capture_recovery_full_gain_rad_per_m,
+            self.capture_recovery_max_rad,
+            self.capture_full_gain_start_foot_force_n,
+            self.capture_full_gain_min_foot_force_n,
+            self.capture_minimum_com_height_m,
+            self.capture_minimum_total_support_force_n,
+            self.capture_support_point_filter_time_constant_s,
+            self.max_inverse_crouch_amplitude_rad,
         )
         if not np.isfinite(finite).all():
             raise ValueError("balance-controller parameters must be finite")
@@ -122,17 +146,57 @@ class StandingBalanceConfig:
             raise ValueError("tracking_fade_start_rad must be non-negative")
         if self.recovery_tilt_rad <= self.tracking_fade_start_rad:
             raise ValueError("recovery_tilt_rad must exceed tracking_fade_start_rad")
+        if self.capture_velocity_filter_time_constant_s < 0.0:
+            raise ValueError(
+                "capture_velocity_filter_time_constant_s must be non-negative"
+            )
+        if self.capture_support_point_filter_time_constant_s < 0.0:
+            raise ValueError(
+                "capture_support_point_filter_time_constant_s must be non-negative"
+            )
+        if (
+            self.capture_tracking_margin_start_m < 0.0
+            or self.capture_tracking_margin_full_m
+            <= self.capture_tracking_margin_start_m
+        ):
+            raise ValueError("capture tracking margins must be positive and ordered")
+        if (
+            self.capture_recovery_gain_rad_per_m < 0.0
+            or self.capture_recovery_full_gain_rad_per_m
+            < self.capture_recovery_gain_rad_per_m
+            or self.capture_recovery_max_rad <= 0.0
+            or self.capture_full_gain_start_foot_force_n < 0.0
+            or self.capture_minimum_com_height_m <= 0.0
+            or self.capture_minimum_total_support_force_n <= 0.0
+            or self.max_inverse_crouch_amplitude_rad <= 0.0
+        ):
+            raise ValueError("capture and inverse-crouch limits must be positive")
+        if (
+            self.capture_full_gain_min_foot_force_n
+            <= self.capture_full_gain_start_foot_force_n
+        ):
+            raise ValueError("capture full-gain foot-force thresholds must be ordered")
 
 
 @dataclass(frozen=True, slots=True)
 class BalanceDiagnostics:
-    """Signals needed to distinguish imitation from stability corrections."""
+    """Signals needed to distinguish imitation from stability corrections.
+
+    ``capture_recovery_rad`` is the raw bounded recovery request.  The
+    ``BalancedJointCommand`` separately exports the portion actually deployed
+    after motor-target slew and joint-limit projection.
+    """
 
     roll_rad: float
     pitch_rad: float
     tilt_rad: float
     tracking_weight: float
     ankle_pitch_residual_rad: float
+    com_offset_x_m: float
+    com_velocity_x_m_s: float
+    capture_point_error_x_m: float
+    capture_tracking_weight: float
+    capture_recovery_rad: float
     reference_positions_rad: FloatArray
     safe_positions_rad: FloatArray
 
@@ -151,6 +215,9 @@ class BalancedJointCommand(RobotJointCommand):
     """
 
     pose_reference_positions_rad: FloatArray = field(kw_only=True)
+    capture_recovery_positions_rad: FloatArray | None = field(
+        default=None, kw_only=True
+    )
 
     def __post_init__(self) -> None:
         RobotJointCommand.__post_init__(self)
@@ -167,6 +234,23 @@ class BalancedJointCommand(RobotJointCommand):
         pose_reference.setflags(write=False)
         object.__setattr__(
             self, "pose_reference_positions_rad", pose_reference
+        )
+        capture_recovery = np.asarray(
+            np.zeros(len(JOINT_NAMES))
+            if self.capture_recovery_positions_rad is None
+            else self.capture_recovery_positions_rad,
+            dtype=np.float64,
+        )
+        if capture_recovery.shape != (len(JOINT_NAMES),) or not np.isfinite(
+            capture_recovery
+        ).all():
+            raise ValueError(
+                "capture_recovery_positions_rad must be a finite canonical vector"
+            )
+        capture_recovery = capture_recovery.copy()
+        capture_recovery.setflags(write=False)
+        object.__setattr__(
+            self, "capture_recovery_positions_rad", capture_recovery
         )
 
 
@@ -265,11 +349,165 @@ class StandingBalanceController:
 
     def reset(self) -> None:
         self._last_output = self._home.copy()
+        self._last_output_without_capture = self._home.copy()
         self._last_diagnostics: BalanceDiagnostics | None = None
+        self._neutral_com_offset_x_m: float | None = None
+        self._previous_com_offset_x_m: float | None = None
+        self._filtered_com_velocity_x_m_s = 0.0
+        self._filtered_support_point_m: FloatArray | None = None
 
     @property
     def last_diagnostics(self) -> BalanceDiagnostics | None:
         return self._last_diagnostics
+
+    def _capture_observation(
+        self,
+        state: object,
+        dt_s: float,
+    ) -> tuple[float, float, float, float, float]:
+        """Return CoM/CP signals, tracking weight, and bilateral-load weight.
+
+        Lightweight controller callers predating the free-base governor do
+        not necessarily expose CoM/foot positions.  In that case the governor
+        is deliberately neutral while the existing IMU feedback still runs.
+        """
+
+        try:
+            center_of_mass = np.asarray(
+                getattr(state, "center_of_mass_position_m"), dtype=np.float64
+            )
+            right_foot = np.asarray(
+                getattr(state, "right_foot_position_m"), dtype=np.float64
+            )
+            left_foot = np.asarray(
+                getattr(state, "left_foot_position_m"), dtype=np.float64
+            )
+        except (AttributeError, TypeError, ValueError):
+            return 0.0, 0.0, 0.0, 1.0, 0.0
+        if (
+            center_of_mass.shape != (3,)
+            or right_foot.shape != (3,)
+            or left_foot.shape != (3,)
+            or not np.isfinite(
+                np.concatenate((center_of_mass, right_foot, left_foot))
+            ).all()
+        ):
+            return 0.0, 0.0, 0.0, 1.0, 0.0
+
+        support_point = 0.5 * (right_foot + left_foot)
+        try:
+            foot_forces = np.asarray(
+                (
+                    getattr(state, "right_foot_normal_force_n"),
+                    getattr(state, "left_foot_normal_force_n"),
+                ),
+                dtype=np.float64,
+            )
+        except (AttributeError, TypeError, ValueError):
+            foot_forces = np.zeros(2, dtype=np.float64)
+        if np.isfinite(foot_forces).all():
+            foot_forces = np.maximum(foot_forces, 0.0)
+            total_support_force_n = float(np.sum(foot_forces))
+            if total_support_force_n >= self.config.capture_minimum_total_support_force_n:
+                support_point = (
+                    foot_forces[0] * right_foot + foot_forces[1] * left_foot
+                ) / total_support_force_n
+        bilateral_support_weight = 0.0
+        if np.isfinite(foot_forces).all():
+            load_progress = float(
+                np.clip(
+                    (
+                        np.min(foot_forces)
+                        - self.config.capture_full_gain_start_foot_force_n
+                    )
+                    / (
+                        self.config.capture_full_gain_min_foot_force_n
+                        - self.config.capture_full_gain_start_foot_force_n
+                    ),
+                    0.0,
+                    1.0,
+                )
+            )
+            bilateral_support_weight = load_progress * load_progress * (
+                3.0 - 2.0 * load_progress
+            )
+        if self._filtered_support_point_m is None:
+            self._filtered_support_point_m = support_point.copy()
+        else:
+            support_time_constant = (
+                self.config.capture_support_point_filter_time_constant_s
+            )
+            support_alpha = (
+                1.0
+                if support_time_constant == 0.0
+                else dt_s / (support_time_constant + dt_s)
+            )
+            self._filtered_support_point_m += support_alpha * (
+                support_point - self._filtered_support_point_m
+            )
+        support_point = self._filtered_support_point_m
+        com_offset_x_m = float(center_of_mass[0] - support_point[0])
+        if self._neutral_com_offset_x_m is None:
+            self._neutral_com_offset_x_m = com_offset_x_m
+        if self._previous_com_offset_x_m is None:
+            base_linear_velocity = np.asarray(
+                getattr(state, "base_linear_velocity_m_s", np.zeros(3)),
+                dtype=np.float64,
+            )
+            raw_velocity_x_m_s = (
+                float(base_linear_velocity[0])
+                if base_linear_velocity.shape == (3,)
+                and np.isfinite(base_linear_velocity).all()
+                else 0.0
+            )
+        else:
+            raw_velocity_x_m_s = (
+                com_offset_x_m - self._previous_com_offset_x_m
+            ) / dt_s
+        self._previous_com_offset_x_m = com_offset_x_m
+        time_constant = self.config.capture_velocity_filter_time_constant_s
+        velocity_alpha = 1.0 if time_constant == 0.0 else dt_s / (
+            time_constant + dt_s
+        )
+        self._filtered_com_velocity_x_m_s += velocity_alpha * (
+            raw_velocity_x_m_s - self._filtered_com_velocity_x_m_s
+        )
+
+        com_height_m = max(
+            float(center_of_mass[2] - support_point[2]),
+            self.config.capture_minimum_com_height_m,
+        )
+        natural_frequency_rad_s = float(np.sqrt(9.81 / com_height_m))
+        capture_point_error_x_m = (
+            com_offset_x_m
+            - self._neutral_com_offset_x_m
+            + self._filtered_com_velocity_x_m_s / natural_frequency_rad_s
+        )
+        margin_span = (
+            self.config.capture_tracking_margin_full_m
+            - self.config.capture_tracking_margin_start_m
+        )
+        progress = float(
+            np.clip(
+                (
+                    abs(capture_point_error_x_m)
+                    - self.config.capture_tracking_margin_start_m
+                )
+                / margin_span,
+                0.0,
+                1.0,
+            )
+        )
+        capture_tracking_weight = 1.0 - progress * progress * (
+            3.0 - 2.0 * progress
+        )
+        return (
+            com_offset_x_m,
+            self._filtered_com_velocity_x_m_s,
+            capture_point_error_x_m,
+            capture_tracking_weight,
+            bilateral_support_weight,
+        )
 
     def update(
         self,
@@ -298,6 +536,19 @@ class StandingBalanceController:
         tracking_weight = float(
             np.clip((self.config.recovery_tilt_rad - tilt) / span, 0.0, 1.0)
         )
+        (
+            com_offset_x_m,
+            com_velocity_x_m_s,
+            capture_point_error_x_m,
+            capture_tracking_weight,
+            bilateral_support_weight,
+        ) = self._capture_observation(state, dt_s)
+        tracking_weight *= capture_tracking_weight
+        if reference.stale:
+            # A stale camera pose is not an authorization to hold an arbitrary
+            # imitation target.  Slew back toward neutral while retaining the
+            # feedback-only ankle/capture recovery needed by the free base.
+            tracking_weight = 0.0
 
         raw_lower_delta = human - self._home
         bilateral_hip_bend = max(
@@ -371,11 +622,11 @@ class StandingBalanceController:
             np.dot(symmetric_sagittal, crouch_basis)
             / np.dot(crouch_basis, crouch_basis)
         )
-        crouch_delta = (
-            self.config.lower_body_imitation_scale
-            * crouch_amplitude
-            * crouch_basis
+        scaled_crouch_amplitude = max(
+            self.config.lower_body_imitation_scale * crouch_amplitude,
+            -self.config.max_inverse_crouch_amplitude_rad,
         )
+        crouch_delta = scaled_crouch_amplitude * crouch_basis
         lower_delta[right_sagittal] = crouch_delta
         lower_delta[left_sagittal] = crouch_delta
 
@@ -416,6 +667,36 @@ class StandingBalanceController:
             + self.config.pitch_rate_feedback_s * float(angular_velocity[1])
         )
         desired[ANKLE_PITCH_INDICES] += ankle_residual
+        recovery_gain = (
+            self.config.capture_recovery_gain_rad_per_m
+            + bilateral_support_weight
+            * (1.0 - capture_tracking_weight)
+            * (
+                self.config.capture_recovery_full_gain_rad_per_m
+                - self.config.capture_recovery_gain_rad_per_m
+            )
+        )
+        capture_recovery = float(
+            np.clip(
+                recovery_gain * capture_point_error_x_m,
+                -self.config.capture_recovery_max_rad,
+                self.config.capture_recovery_max_rad,
+            )
+        )
+        # Shift the pressure response opposite the divergent capture-point
+        # motion while keeping both legs symmetric.  The blended coefficients
+        # obey hip - knee + ankle = 0 for this model's signed axes, preserving
+        # sole pitch.  This is a motor-angle recovery, not a base-pose edit.
+        raw_capture_recovery_positions = np.zeros(
+            len(JOINT_NAMES), dtype=np.float64
+        )
+        raw_capture_recovery_positions[HIP_PITCH_INDICES] -= (
+            0.5 * capture_recovery
+        )
+        raw_capture_recovery_positions[KNEE_INDICES] += 0.5 * capture_recovery
+        raw_capture_recovery_positions[ANKLE_PITCH_INDICES] += capture_recovery
+        desired_without_capture = desired.copy()
+        desired += raw_capture_recovery_positions
         # The support FSM may replace the safe double-support leg projection
         # with this bounded pose candidate only after it has established an
         # intentional swing phase.  Keep the same live ankle stabilization in
@@ -423,6 +704,9 @@ class StandingBalanceController:
         # LIFT gate and can prevent a controlled touchdown.
         pose_reference[ANKLE_PITCH_INDICES] += ankle_residual
         pose_reference = np.clip(pose_reference, self._lower, self._upper)
+        desired_without_capture = np.clip(
+            desired_without_capture, self._lower, self._upper
+        )
         desired = np.clip(desired, self._lower, self._upper)
 
         if self.config.enabled:
@@ -430,18 +714,34 @@ class StandingBalanceController:
             safe = self._last_output + np.clip(
                 desired - self._last_output, -maximum_change, maximum_change
             )
+            safe_without_capture = self._last_output_without_capture + np.clip(
+                desired_without_capture - self._last_output_without_capture,
+                -maximum_change,
+                maximum_change,
+            )
         else:
             safe = np.clip(human, self._lower, self._upper)
+            safe_without_capture = safe.copy()
             ankle_residual = 0.0
             tracking_weight = 1.0
         safe = np.clip(safe, self._lower, self._upper)
+        safe_without_capture = np.clip(
+            safe_without_capture, self._lower, self._upper
+        )
+        deployed_capture_recovery_positions = safe - safe_without_capture
         self._last_output = safe.copy()
+        self._last_output_without_capture = safe_without_capture.copy()
         self._last_diagnostics = BalanceDiagnostics(
             roll_rad=roll,
             pitch_rad=pitch,
             tilt_rad=tilt,
             tracking_weight=tracking_weight,
             ankle_pitch_residual_rad=float(ankle_residual),
+            com_offset_x_m=com_offset_x_m,
+            com_velocity_x_m_s=com_velocity_x_m_s,
+            capture_point_error_x_m=capture_point_error_x_m,
+            capture_tracking_weight=capture_tracking_weight,
+            capture_recovery_rad=capture_recovery,
             reference_positions_rad=human.copy(),
             safe_positions_rad=safe.copy(),
         )
@@ -452,4 +752,5 @@ class StandingBalanceController:
             reference.confidence,
             reference.stale,
             pose_reference_positions_rad=pose_reference,
+            capture_recovery_positions_rad=deployed_capture_recovery_positions,
         )

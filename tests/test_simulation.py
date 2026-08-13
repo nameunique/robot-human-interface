@@ -61,6 +61,9 @@ def test_simulation_reset_step_and_state_contract() -> None:
         assert state.joint_velocities_rad_s.shape == (20,)
         assert state.base_position_m.shape == (3,)
         assert state.base_orientation_wxyz.shape == (4,)
+        assert state.right_foot_linear_velocity_m_s.shape == (3,)
+        assert state.left_foot_linear_velocity_m_s.shape == (3,)
+        assert state.non_foot_ground_contact_count == 0
         assert state.actuator_forces.shape == (20,)
         assert state.is_finite
 
@@ -131,6 +134,18 @@ def test_free_mode_initially_transfers_weight_through_both_feet() -> None:
 
         assert {"foot_rl_geom", "foot_ll_geom"} <= contacted_feet
         assert normal_force == pytest.approx(2.933134 * 9.81, rel=0.05)
+
+
+def test_state_distinguishes_sole_support_from_non_foot_ground_contact() -> None:
+    with HumanoidSimulation("free") as simulation:
+        supported = simulation.step(100)
+        assert supported.non_foot_ground_contact_count == 0
+        assert supported.right_foot_normal_force_n > 0.0
+        assert supported.left_foot_normal_force_n > 0.0
+
+        simulation.reset(base_position_m=(0.0, 0.0, 0.30))
+        collapsed = simulation.step()
+        assert collapsed.non_foot_ground_contact_count > 0
 
 
 def test_targets_are_reordered_and_clamped() -> None:

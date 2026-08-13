@@ -48,6 +48,46 @@ class TeleopStats:
     left_swing_completed: bool
     maximum_right_foot_clearance_m: float
     maximum_left_foot_clearance_m: float
+    minimum_base_height_m: float
+    settling_requested_s: float
+    settling_elapsed_s: float
+    settling_stable_s: float
+    settling_completed: bool
+    settling_minimum_base_height_m: float
+    settling_maximum_tilt_rad: float
+    maximum_non_foot_ground_contacts: int
+    maximum_loaded_foot_slip_speed_m_s: float
+    right_foot_slip_distance_m: float
+    left_foot_slip_distance_m: float
+    maximum_swing_foot_impact_speed_m_s: float
+    maximum_swing_foot_impact_force_n: float
+    maximum_swing_foot_contact_impulse_n_s: float
+
+
+def _phase_aware_loaded_feet(
+    phase: object | None,
+    active_intent: object | None,
+) -> tuple[bool, bool]:
+    """Return which feet count as load-bearing for slip telemetry.
+
+    A swing sole can briefly collide with the ground while moving quickly.  A
+    one-tick impact is useful impact telemetry, but it is not stance-foot slip.
+    Count only the stance foot during a one-leg cycle. ``touchdown_ready`` in
+    support diagnostics is only an instantaneous force predicate, so the swing
+    sole remains impact telemetry throughout VERIFY_TOUCHDOWN. The support FSM
+    enters CENTER_WEIGHT only after its timed touchdown confirmation; that
+    phase, and double support, admit both feet as load-bearing.
+    """
+
+    phase_value = getattr(phase, "value", phase)
+    intent_value = getattr(active_intent, "value", active_intent)
+    if phase_value in {"double_support", "center_weight"}:
+        return True, True
+    if intent_value == "right_swing":
+        return False, True
+    if intent_value == "left_swing":
+        return True, False
+    return True, True
 
 
 def _load_camera_yaml_defaults() -> tuple[dict[str, Any], dict[str, Any]]:
@@ -110,15 +150,21 @@ def build_parser() -> argparse.ArgumentParser:
     base_group.add_argument(
         "--free-base",
         action="store_true",
-        help="Allow the unbalanced proxy to fall (experimental).",
+        help=(
+            "Use the unconstrained torso and motor-angle balance controller "
+            "(default)."
+        ),
     )
     base_group.add_argument(
         "--fixed-base",
         action="store_false",
         dest="free_base",
-        help="Use the grounded vertical stabilizer so the feet carry the robot (default).",
+        help=(
+            "Explicitly use the grounded vertical stabilizer for kinematic/visual "
+            "inspection instead of free-base balance."
+        ),
     )
-    parser.set_defaults(free_base=False)
+    parser.set_defaults(free_base=True)
     balance_group = parser.add_mutually_exclusive_group()
     balance_group.add_argument(
         "--balance-controller",
@@ -202,6 +248,24 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--settle-seconds",
+        type=float,
+        default=0.0,
+        help=(
+            "After a finite source ends, command double support and require this "
+            "many quiet seconds on the same free-base simulation (default: 0)."
+        ),
+    )
+    parser.add_argument(
+        "--settle-timeout-s",
+        type=float,
+        default=20.0,
+        help=(
+            "Maximum same-simulation return-and-settle time when --settle-seconds "
+            "is enabled (default: 20 s)."
+        ),
+    )
+    parser.add_argument(
         "--robot-websocket-url",
         default="",
         help=(
@@ -223,6 +287,12 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--max-frames must be non-negative")
     if args.physics_steps_per_frame < 0:
         raise ValueError("--physics-steps-per-frame must be non-negative")
+    if not np.isfinite(args.settle_seconds) or args.settle_seconds < 0.0:
+        raise ValueError("--settle-seconds must be finite and non-negative")
+    if not np.isfinite(args.settle_timeout_s) or args.settle_timeout_s <= 0.0:
+        raise ValueError("--settle-timeout-s must be finite and positive")
+    if args.settle_seconds > args.settle_timeout_s:
+        raise ValueError("--settle-seconds cannot exceed --settle-timeout-s")
     if args.camera_index < 0:
         raise ValueError("--camera-index must be non-negative")
     if args.camera_width <= 0 or args.camera_height <= 0 or args.camera_fps <= 0.0:
@@ -248,7 +318,8 @@ def _validate_args(args: argparse.Namespace) -> None:
             raise ValueError("--robot-websocket-url must be an absolute ws:// or wss:// URL")
         if not args.free_base or not args.balance_controller:
             raise ValueError(
-                "robot WebSocket output requires --free-base and --balance-controller"
+                "robot WebSocket output requires free-base mode and "
+                "--balance-controller; --fixed-base is incompatible"
             )
 
 
@@ -503,6 +574,7 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
     )
     from robot_human_interface.retargeting import GeometricRetargeter, MujocoIKRetargeter
     from robot_human_interface.simulation import HumanoidSimulation
+    from robot_human_interface.skeleton import RobotJointCommand
 
     robot_publisher = _make_robot_publisher(args)
     source, pose = _make_perception(args)
@@ -520,10 +592,8 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
     balance_controller = StandingBalanceController.from_simulation(
         simulation, replace(balance_config, enabled=balance_enabled)
     )
-    support_machine = SupportStateMachine.from_simulation(
-        simulation,
-        load_support_control_config(PROJECT_ROOT / "config" / "balance.yaml"),
-    )
+    support_config = load_support_control_config(PROJECT_ROOT / "config" / "balance.yaml")
+    support_machine = SupportStateMachine.from_simulation(simulation, support_config)
     support_latch = SupportIntentLatch()
     support_intent_estimator = HumanSupportIntentEstimator(
         load_human_support_intent_config(PROJECT_ROOT / "config" / "balance.yaml")
@@ -541,8 +611,10 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
     command_max: np.ndarray | None = None
     safe_command_min: np.ndarray | None = None
     safe_command_max: np.ndarray | None = None
-    final_base_height = float(simulation.get_state().base_position_m[2])
-    final_simulation_time = float(simulation.get_state().simulation_time_s)
+    initial_state = simulation.get_state()
+    final_base_height = float(initial_state.base_position_m[2])
+    minimum_base_height = final_base_height
+    final_simulation_time = float(initial_state.simulation_time_s)
     first_frame_timestamp: float | None = None
     previous_frame_timestamp: float | None = None
     final_frame_timestamp: float | None = None
@@ -555,12 +627,72 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
     left_swing_completed = False
     maximum_right_foot_clearance_m = 0.0
     maximum_left_foot_clearance_m = 0.0
+    settling_elapsed_s = 0.0
+    settling_stable_s = 0.0
+    settling_completed = args.settle_seconds <= 0.0
+    settling_minimum_base_height = final_base_height
+    settling_maximum_tilt_rad = 0.0
+    maximum_non_foot_ground_contacts = 0
+    maximum_loaded_foot_slip_speed_m_s = 0.0
+    right_foot_slip_distance_m = 0.0
+    left_foot_slip_distance_m = 0.0
+    maximum_swing_foot_impact_speed_m_s = 0.0
+    maximum_swing_foot_impact_force_n = 0.0
+    maximum_swing_foot_contact_impulse_n_s = 0.0
+    finite_input_completed = False
     observed_support_intent = SupportIntent.DOUBLE_SUPPORT
     last_pose_overlay: np.ndarray | None = None
     last_command_stale = True
     source_label = args.source
     if args.source in {"mp4", "replay"}:
         source_label = _video_path(args).name
+
+    def record_foot_contact_motion(state: object, *, dt_s: float) -> None:
+        """Accumulate phase-aware stance slip and separate swing impacts."""
+
+        nonlocal maximum_loaded_foot_slip_speed_m_s
+        nonlocal right_foot_slip_distance_m, left_foot_slip_distance_m
+        nonlocal maximum_swing_foot_impact_speed_m_s
+        nonlocal maximum_swing_foot_impact_force_n
+        nonlocal maximum_swing_foot_contact_impulse_n_s
+
+        diagnostics = support_machine.last_diagnostics if support_enabled else None
+        track_right, track_left = _phase_aware_loaded_feet(
+            None if diagnostics is None else diagnostics.phase,
+            None if diagnostics is None else diagnostics.active_intent,
+        )
+        forces = (
+            float(state.right_foot_normal_force_n),
+            float(state.left_foot_normal_force_n),
+        )
+        speeds = (
+            float(np.linalg.norm(state.right_foot_linear_velocity_m_s[:2])),
+            float(np.linalg.norm(state.left_foot_linear_velocity_m_s[:2])),
+        )
+        tracked = (track_right, track_left)
+        for index, (force_n, speed_m_s, is_stance) in enumerate(
+            zip(forces, speeds, tracked, strict=True)
+        ):
+            if force_n < 4.0:
+                continue
+            if is_stance:
+                maximum_loaded_foot_slip_speed_m_s = max(
+                    maximum_loaded_foot_slip_speed_m_s, speed_m_s
+                )
+                if index == 0:
+                    right_foot_slip_distance_m += speed_m_s * dt_s
+                else:
+                    left_foot_slip_distance_m += speed_m_s * dt_s
+                continue
+            maximum_swing_foot_impact_speed_m_s = max(
+                maximum_swing_foot_impact_speed_m_s, speed_m_s
+            )
+            maximum_swing_foot_impact_force_n = max(
+                maximum_swing_foot_impact_force_n, force_n
+            )
+            maximum_swing_foot_contact_impulse_n_s = max(
+                maximum_swing_foot_contact_impulse_n_s, force_n * dt_s
+            )
 
     try:
         if display_enabled:
@@ -627,6 +759,7 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
 
             frame = source.read()
             if frame is None:
+                finite_input_completed = True
                 break
             skeleton = pose.estimate(frame)
             if skeleton is not None:
@@ -655,11 +788,11 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
                 command_max = np.maximum(command_max, command.positions_rad)
 
             if not paused:
+                timestep_s = float(simulation.model.opt.timestep)
                 if args.physics_steps_per_frame > 0:
                     physics_steps = args.physics_steps_per_frame
                 else:
                     physics_accumulator_s += frame_delta_s
-                    timestep_s = float(simulation.model.opt.timestep)
                     physics_steps = int((physics_accumulator_s + 1e-12) // timestep_s)
                     physics_accumulator_s -= physics_steps * timestep_s
 
@@ -714,6 +847,14 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
                             robot_publisher.start()
                             robot_publisher_started = True
                     state = simulation.step()
+                    minimum_base_height = min(
+                        minimum_base_height, float(state.base_position_m[2])
+                    )
+                    maximum_non_foot_ground_contacts = max(
+                        maximum_non_foot_ground_contacts,
+                        state.non_foot_ground_contact_count,
+                    )
+                    record_foot_contact_motion(state, dt_s=timestep_s)
                     maximum_right_foot_clearance_m = max(
                         maximum_right_foot_clearance_m,
                         float(state.right_foot_position_m[2] - state.left_foot_position_m[2]),
@@ -749,6 +890,7 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
                     fall_detected = bool(
                         state.base_position_m[2] < 0.55
                         or tilt_rad > np.radians(45.0)
+                        or state.non_foot_ground_contact_count > 0
                     )
                     if fall_detected and not fell:
                         LOGGER.warning(
@@ -818,6 +960,138 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
                 if viewer_started and not simulation.viewer_is_running:
                     LOGGER.info("MuJoCo viewer was closed")
                     break
+        finite_input_completed |= bool(
+            args.max_frames > 0 and frames >= args.max_frames
+        )
+        if args.settle_seconds > 0.0 and finite_input_completed and not fell:
+            LOGGER.info(
+                "input complete; returning to double support and requiring %.3f s "
+                "of same-simulation settling",
+                args.settle_seconds,
+            )
+            support_latch.reset()
+            timestep_s = float(simulation.model.opt.timestep)
+            stable_tilt_limit_rad = min(
+                support_config.start_max_tilt_rad, np.radians(12.0)
+            )
+            while settling_elapsed_s + 1e-12 < args.settle_timeout_s:
+                state = simulation.get_state()
+                neutral_reference = RobotJointCommand.humanoid(
+                    (final_frame_timestamp or 0.0) + settling_elapsed_s,
+                    simulation.home_positions_rad,
+                    1.0,
+                )
+                standing_command = balance_controller.update(
+                    neutral_reference,
+                    state,
+                    dt_s=timestep_s,
+                )
+                if support_enabled:
+                    safe_command = support_machine.update(
+                        standing_command,
+                        state,
+                        dt_s=timestep_s,
+                        intent=SupportIntent.DOUBLE_SUPPORT,
+                    )
+                else:
+                    safe_command = standing_command
+                if safe_command_min is None:
+                    safe_command_min = safe_command.positions_rad.copy()
+                    safe_command_max = safe_command.positions_rad.copy()
+                else:
+                    safe_command_min = np.minimum(
+                        safe_command_min, safe_command.positions_rad
+                    )
+                    safe_command_max = np.maximum(
+                        safe_command_max, safe_command.positions_rad
+                    )
+                simulation.apply_joint_command(safe_command)
+                if robot_publisher is not None:
+                    robot_publisher.submit(safe_command)
+                    if not robot_publisher_started:
+                        robot_publisher.start()
+                        robot_publisher_started = True
+                state = simulation.step()
+                settling_elapsed_s += timestep_s
+                height_m = float(state.base_position_m[2])
+                settling_minimum_base_height = min(
+                    settling_minimum_base_height, height_m
+                )
+                minimum_base_height = min(minimum_base_height, height_m)
+                maximum_non_foot_ground_contacts = max(
+                    maximum_non_foot_ground_contacts,
+                    state.non_foot_ground_contact_count,
+                )
+                record_foot_contact_motion(state, dt_s=timestep_s)
+                quaternion = state.base_orientation_wxyz
+                upright = 1.0 - 2.0 * (
+                    quaternion[1] ** 2 + quaternion[2] ** 2
+                )
+                tilt_rad = float(np.arccos(np.clip(upright, -1.0, 1.0)))
+                settling_maximum_tilt_rad = max(
+                    settling_maximum_tilt_rad, tilt_rad
+                )
+                maximum_tilt_rad = max(maximum_tilt_rad, tilt_rad)
+                fall_detected = bool(
+                    height_m < 0.55
+                    or tilt_rad > np.radians(45.0)
+                    or state.non_foot_ground_contact_count > 0
+                )
+                fell |= fall_detected
+                if support_enabled and support_machine.phase is not previous_support_phase:
+                    support_transitions += 1
+                    previous_support_phase = support_machine.phase
+                angular_speed = float(
+                    np.linalg.norm(state.base_angular_velocity_rad_s)
+                )
+                both_feet_loaded = bool(
+                    state.right_foot_normal_force_n
+                    >= support_config.min_touchdown_force_n
+                    and state.left_foot_normal_force_n
+                    >= support_config.min_touchdown_force_n
+                    and (
+                        state.right_foot_normal_force_n
+                        + state.left_foot_normal_force_n
+                    )
+                    >= support_config.min_touchdown_total_force_n
+                )
+                double_support = bool(
+                    not support_enabled
+                    or support_machine.phase is SupportPhase.DOUBLE_SUPPORT
+                )
+                quiet = bool(
+                    double_support
+                    and both_feet_loaded
+                    and height_m >= 0.70
+                    and tilt_rad <= stable_tilt_limit_rad
+                    and angular_speed
+                    <= support_config.start_max_angular_speed_rad_s
+                )
+                settling_stable_s = (
+                    settling_stable_s + timestep_s if quiet else 0.0
+                )
+                final_base_height = height_m
+                final_simulation_time = float(state.simulation_time_s)
+                if settling_stable_s + 1e-12 >= args.settle_seconds:
+                    settling_completed = True
+                    break
+                if fall_detected:
+                    LOGGER.warning(
+                        "fall threshold crossed during settling at t=%.3f: "
+                        "base_z=%.3f tilt_deg=%.2f",
+                        state.simulation_time_s,
+                        height_m,
+                        np.degrees(tilt_rad),
+                    )
+                    break
+            if not settling_completed:
+                LOGGER.warning(
+                    "same-simulation settling did not complete: stable=%.3f s "
+                    "elapsed=%.3f s phase=%s",
+                    settling_stable_s,
+                    settling_elapsed_s,
+                    support_machine.phase.value,
+                )
         if args.source in {"mp4", "replay"} and frames == 0:
             raise RuntimeError(f"video did not yield a decodable frame: {_video_path(args)}")
     finally:
@@ -874,6 +1148,24 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
         left_swing_completed=left_swing_completed,
         maximum_right_foot_clearance_m=maximum_right_foot_clearance_m,
         maximum_left_foot_clearance_m=maximum_left_foot_clearance_m,
+        minimum_base_height_m=minimum_base_height,
+        settling_requested_s=float(args.settle_seconds),
+        settling_elapsed_s=settling_elapsed_s,
+        settling_stable_s=settling_stable_s,
+        settling_completed=settling_completed,
+        settling_minimum_base_height_m=settling_minimum_base_height,
+        settling_maximum_tilt_rad=settling_maximum_tilt_rad,
+        maximum_non_foot_ground_contacts=maximum_non_foot_ground_contacts,
+        maximum_loaded_foot_slip_speed_m_s=maximum_loaded_foot_slip_speed_m_s,
+        right_foot_slip_distance_m=right_foot_slip_distance_m,
+        left_foot_slip_distance_m=left_foot_slip_distance_m,
+        maximum_swing_foot_impact_speed_m_s=(
+            maximum_swing_foot_impact_speed_m_s
+        ),
+        maximum_swing_foot_impact_force_n=maximum_swing_foot_impact_force_n,
+        maximum_swing_foot_contact_impulse_n_s=(
+            maximum_swing_foot_contact_impulse_n_s
+        ),
     )
 
 
@@ -915,8 +1207,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"right_swing={int(stats.right_swing_completed)} "
         f"left_swing={int(stats.left_swing_completed)} "
         f"right_clearance_m={stats.maximum_right_foot_clearance_m:.4f} "
-        f"left_clearance_m={stats.maximum_left_foot_clearance_m:.4f}"
+        f"left_clearance_m={stats.maximum_left_foot_clearance_m:.4f} "
+        f"min_base_z_m={stats.minimum_base_height_m:.4f} "
+        f"settled={int(stats.settling_completed)} "
+        f"settle_stable_s={stats.settling_stable_s:.3f}/"
+        f"{stats.settling_requested_s:.3f} "
+        f"nonfoot_contacts={stats.maximum_non_foot_ground_contacts} "
+        f"max_loaded_slip_m_s={stats.maximum_loaded_foot_slip_speed_m_s:.4f} "
+        f"max_swing_impact_m_s={stats.maximum_swing_foot_impact_speed_m_s:.4f} "
+        f"max_swing_impact_Ns={stats.maximum_swing_foot_contact_impulse_n_s:.4f}"
     )
+    if stats.fell:
+        LOGGER.error("free-base safety acceptance failed: a fall invariant was crossed")
+        return 3
+    if stats.settling_requested_s > 0.0 and not stats.settling_completed:
+        LOGGER.error("free-base safety acceptance failed: settling did not complete")
+        return 3
     return 0
 
 

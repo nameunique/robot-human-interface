@@ -315,7 +315,9 @@ class HumanoidSimulation:
             velocity,
             1,
         )
-        foot_forces = self._foot_normal_forces()
+        foot_forces, non_foot_ground_contacts = self._ground_contact_diagnostics()
+        right_foot_velocity = self._site_linear_velocity(self._right_foot_site_id)
+        left_foot_velocity = self._site_linear_velocity(self._left_foot_site_id)
         return HumanoidState(
             simulation_time_s=float(self.data.time),
             joint_names=self.joint_names,
@@ -328,16 +330,34 @@ class HumanoidSimulation:
             center_of_mass_position_m=self.data.subtree_com[self._base_body_id],
             right_foot_position_m=self.data.site_xpos[self._right_foot_site_id],
             left_foot_position_m=self.data.site_xpos[self._left_foot_site_id],
+            right_foot_linear_velocity_m_s=right_foot_velocity,
+            left_foot_linear_velocity_m_s=left_foot_velocity,
             right_foot_normal_force_n=foot_forces[0],
             left_foot_normal_force_n=foot_forces[1],
             actuator_forces=self.data.actuator_force[self._actuator_ids],
             contact_count=int(self.data.ncon),
+            non_foot_ground_contact_count=non_foot_ground_contacts,
         )
 
-    def _foot_normal_forces(self) -> tuple[float, float]:
-        """Sum normal contact force separately for each physical sole."""
+    def _site_linear_velocity(self, site_id: int) -> FloatArray:
+        """Return one site's world-frame linear velocity."""
+
+        velocity = np.empty(6, dtype=np.float64)
+        mujoco.mj_objectVelocity(
+            self.model,
+            self.data,
+            mujoco.mjtObj.mjOBJ_SITE,
+            site_id,
+            velocity,
+            0,
+        )
+        return velocity[3:6].copy()
+
+    def _ground_contact_diagnostics(self) -> tuple[tuple[float, float], int]:
+        """Return sole loads and robot-ground contacts outside both soles."""
 
         result = {self._right_foot_geom_id: 0.0, self._left_foot_geom_id: 0.0}
+        non_foot_ground_contacts = 0
         force_torque = np.empty(6, dtype=np.float64)
         for contact_index, contact in enumerate(self.data.contact):
             pair = {int(contact.geom1), int(contact.geom2)}
@@ -345,10 +365,14 @@ class HumanoidSimulation:
                 continue
             foot_id = next((identifier for identifier in result if identifier in pair), None)
             if foot_id is None:
+                non_foot_ground_contacts += 1
                 continue
             mujoco.mj_contactForce(self.model, self.data, contact_index, force_torque)
             result[foot_id] += abs(float(force_torque[0]))
-        return result[self._right_foot_geom_id], result[self._left_foot_geom_id]
+        return (
+            (result[self._right_foot_geom_id], result[self._left_foot_geom_id]),
+            non_foot_ground_contacts,
+        )
 
     @property
     def viewer_mode(self) -> ViewMode:

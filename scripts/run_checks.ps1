@@ -1,5 +1,7 @@
 [CmdletBinding()]
-param()
+param(
+    [switch]$FullFreeBaseAcceptance
+)
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
@@ -26,13 +28,22 @@ if ($LASTEXITCODE -ne 0) {
     throw "pytest failed with exit code $LASTEXITCODE."
 }
 
-Write-Host "Running a finite camera-free, display-free teleoperation smoke test..."
+Write-Host "Running a finite camera-free, display-free free-base smoke test..."
 & $venvPython -m robot_human_interface.app.teleop `
     --source synthetic `
     --headless `
+    --free-base `
     --max-frames 30
 if ($LASTEXITCODE -ne 0) {
     throw "Headless synthetic teleoperation failed with exit code $LASTEXITCODE."
+}
+
+if ($FullFreeBaseAcceptance) {
+    Write-Host "Running the six-video free-base stability acceptance matrix..."
+    & $venvPython (Join-Path $projectRoot "tools\evaluate_freebase_stability.py")
+    if ($LASTEXITCODE -ne 0) {
+        throw "Free-base stability acceptance failed with exit code $LASTEXITCODE."
+    }
 }
 
 Write-Host "All checks passed."

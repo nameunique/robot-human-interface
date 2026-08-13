@@ -43,10 +43,13 @@ class HumanoidState:
     center_of_mass_position_m: FloatArray
     right_foot_position_m: FloatArray
     left_foot_position_m: FloatArray
+    right_foot_linear_velocity_m_s: FloatArray
+    left_foot_linear_velocity_m_s: FloatArray
     right_foot_normal_force_n: float
     left_foot_normal_force_n: float
     actuator_forces: FloatArray
     contact_count: int
+    non_foot_ground_contact_count: int
 
     def __post_init__(self) -> None:
         names = tuple(str(name) for name in self.joint_names)
@@ -116,6 +119,24 @@ class HumanoidState:
             "left_foot_position_m",
             _readonly_vector(self.left_foot_position_m, 3, "left_foot_position_m"),
         )
+        object.__setattr__(
+            self,
+            "right_foot_linear_velocity_m_s",
+            _readonly_vector(
+                self.right_foot_linear_velocity_m_s,
+                3,
+                "right_foot_linear_velocity_m_s",
+            ),
+        )
+        object.__setattr__(
+            self,
+            "left_foot_linear_velocity_m_s",
+            _readonly_vector(
+                self.left_foot_linear_velocity_m_s,
+                3,
+                "left_foot_linear_velocity_m_s",
+            ),
+        )
         for name in ("right_foot_normal_force_n", "left_foot_normal_force_n"):
             value = float(getattr(self, name))
             if not np.isfinite(value) or value < 0.0:
@@ -129,6 +150,13 @@ class HumanoidState:
         if int(self.contact_count) < 0:
             raise ValueError("contact_count must be non-negative")
         object.__setattr__(self, "contact_count", int(self.contact_count))
+        if int(self.non_foot_ground_contact_count) < 0:
+            raise ValueError("non_foot_ground_contact_count must be non-negative")
+        object.__setattr__(
+            self,
+            "non_foot_ground_contact_count",
+            int(self.non_foot_ground_contact_count),
+        )
 
     @property
     def is_finite(self) -> bool:
@@ -146,6 +174,8 @@ class HumanoidState:
                 self.center_of_mass_position_m,
                 self.right_foot_position_m,
                 self.left_foot_position_m,
+                self.right_foot_linear_velocity_m_s,
+                self.left_foot_linear_velocity_m_s,
                 self.actuator_forces,
             )
         )

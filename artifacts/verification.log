@@ -1,4 +1,4 @@
-Verification date: 2026-08-12 (Europe/Moscow)
+Verification date: 2026-08-13 (Europe/Moscow)
 
 Environment
 -----------
@@ -11,7 +11,7 @@ websocket-client 1.9.0
 Automated checks
 ----------------
 python -m compileall -q src tests tools: PASS
-python -m pytest -q: 150 passed in 95.82s
+python -m pytest -q: 191 passed in 96.76s
 git diff --check: PASS
 
 Grounded physics and motor-control checks
@@ -24,9 +24,12 @@ No non-ground proxy self-contact is present in the home pose.
 
 The free-base controller writes only the canonical 20 motor position targets.
 It never writes the floating-base qpos, creates a weld, or applies external force.
-Support transitions are gated by measured sole loads, touchdown, base tilt and
-base angular speed. Opposite-leg requests use a bounded one-slot queue and are
-executed only after returning through DOUBLE_SUPPORT.
+The compiled acceptance model has neq=0 and a real base_free joint. A sagittal
+capture-point governor uses CoM/velocity and measured sole loads, while support
+transitions are gated by load, touchdown, base tilt and angular speed. The live,
+slew-limited capture residual remains active while camera leg targets are frozen
+during a support cycle. Opposite-leg requests use a bounded one-slot queue and
+are executed only after returning through DOUBLE_SUPPORT.
 
 Coordinate/retargeting checks
 -----------------------------
@@ -55,21 +58,25 @@ four external public-domain clips is stored in artifacts/pose-fidelity.json.
 
 End-to-end checks
 -----------------
-PowerShell wrapper, synthetic free base, 60 frames:
-teleop complete: source=synthetic frames=60 skeleton_frames=60 stale=0 base=free command_span_deg=18.631 safe_span_deg=18.631 base_z_m=0.9246 max_tilt_deg=2.217 sim_s=1.966 media_s=1.967 fell=0 robot_output=0 robot_sent=0/0 support_transitions=0 right_swing=0 left_swing=0 right_clearance_m=0.0007 left_clearance_m=0.0005
+The reproducible six-video report is artifacts/freebase-stability.json. Every
+clip passed every gate with the exact same criteria: base mode free, neq=0,
+base_free joint type, one HumanoidSimulation and one MjData through input and
+settling, zero falls, zero non-foot ground contacts, bounded stance-foot slip,
+material copied motion, and five quiet seconds after the final frame.
 
-Bundled slow-balance MP4, full file, free base:
-teleop complete: source=mp4 frames=1961 skeleton_frames=1960 stale=1 base=free safe_span_deg=136.857 base_z_m=0.8536 max_tilt_deg=16.157 sim_s=65.398 media_s=65.399 fell=0 support_transitions=20 right_swing=1 left_swing=1 right_clearance_m=0.0231 left_clearance_m=0.0301
+Bundled slow-balance MP4, full file plus same-simulation settling:
+frames=1961, skeleton=1960, stale=1, fell=0, min/final base z=0.8422/0.9292 m,
+max tilt=14.576 deg, right/left clearance=0.0366/0.0316 m, transitions=21,
+settling=5.000 s, media sync error=0.00073 s.
 
-External public-domain DVIDS clips, full files, free base:
-arm circles: fell=0, base_z_m=0.9223, max_tilt_deg=10.242, safe_span_deg=144.891
-frontal leg swing: fell=0, base_z_m=0.8507, max_tilt_deg=12.844, support_transitions=12, right_clearance_m=0.0342
-stationary squat: fell=0, base_z_m=0.9235, max_tilt_deg=9.959
-trunk circles: fell=0, base_z_m=0.9240, max_tilt_deg=2.785
+Other matrix clips, maximum tilt (all fell=0 and settled 5.000 s):
+jumping jacks 3.943 deg; arm circles 6.947 deg; frontal leg swing 11.719 deg;
+stationary squat 6.630 deg; trunk circles 2.482 deg.
 
-Across all five replay runs, every adjacent 2 ms motor target stayed within the
-configured slew bound: at most 0.286479 deg for upper-body drives and 0.137510
-deg for lower-body drives. The former 14.691 deg phase-transition jump is gone.
+Worst load-bearing stance-foot slip speed across the matrix was 0.131 m/s;
+accumulated slip for every foot stayed below 0.061 m. Swing-foot collision
+impulses are logged separately instead of being mislabeled as stance slip.
+Runtime input SHA-256 values were unchanged for the entire final matrix run.
 
 The automated WebSocket regression confirms that an unreachable endpoint is
 isolated from camera/physics completion and receives the same post-controller
