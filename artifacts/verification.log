@@ -1,4 +1,5 @@
-Verification date: 2026-08-13 (Europe/Moscow)
+Verification date: 2026-08-14 (Europe/Moscow)
+Git revision: d091d1e48c920a316f5823d2fd96e333d0aad7d6
 
 Environment
 -----------
@@ -6,87 +7,70 @@ Python 3.12.13
 MuJoCo 3.11.0
 MediaPipe 0.10.35
 OpenCV 5.0.0
-websocket-client 1.9.0
 
-Automated checks
-----------------
-python -m compileall -q src tests tools: PASS
-python -m pytest -q: 191 passed in 96.76s
+Automated code checks
+---------------------
+python -m pytest -q: 789 passed in 105.81s
+python -m compileall -q src tools tests: PASS
 git diff --check: PASS
 
-Grounded physics and motor-control checks
------------------------------------------
-Both foot collision geoms contact the ground in fixed and free scenes.
-Grounded-fixed normal force after settling: about 28.8 N.
-Robot source mass: 2.933134 kg; expected weight at 9.81 m/s^2: 28.77 N.
-Visual soles and collision soles remain within about 1 mm of the ground.
-No non-ground proxy self-contact is present in the home pose.
+Raw retargeting diagnostic
+--------------------------
+artifacts/pose-fidelity.json
+SHA-256: 6fcf387d1055cce57acfefb169e4d3d24a044001f572f8bc39b8f1735ee3a86e
+Schema 3; measurement_complete=true; coverage_passed=true.
+This report is diagnostic-only: fidelity_acceptance=not_defined and it has no
+overall_passed field. All 49 runtime-input hashes matched before and after.
 
-The free-base controller writes only the canonical 20 motor position targets.
-It never writes the floating-base qpos, creates a weld, or applies external force.
-The compiled acceptance model has neq=0 and a real base_free joint. A sagittal
-capture-point governor uses CoM/velocity and measured sole loads, while support
-transitions are gated by load, touchdown, base tilt and angular speed. The live,
-slew-limited capture residual remains active while camera leg targets are frozen
-during a support cycle. Opposite-leg requests use a bounded one-slot queue and
-are executed only after returning through DOUBLE_SUPPORT.
+Free-base stability acceptance
+------------------------------
+artifacts/freebase-stability.json
+SHA-256: 5bd22ee4e1d91b6ba1f9c7b2c4f43a83d63f7710aa252836d80e8971bdd3b525
+Result: FAIL; 4 of 6 clips passed; 343 of 349 clip gates passed.
+All six suite/provenance gates passed and 36/36 runtime hashes matched.
 
-Coordinate/retargeting checks
------------------------------
-MediaPipe camera axes are treated as +X image-right, +Y image-down, +Z away.
-Robot physical front is MuJoCo -X; robot left is +Y; robot up is +Z.
-Semantic FK tests verify that a human right-arm/right-leg forward motion moves
-only the matching robot limb toward physical robot front, rather than merely
-checking a motor-array sign. Angular deltas use shortest-path wrapping at +/-pi.
-The Unity FRONT camera/front_motor and converted long-toe geometry independently
-confirm the -X robot-front convention. Tasks hidden during explicit neutral
-calibration remain unavailable until recalibration; a moving pose cannot become
-a lazy per-task zero.
+slow-balance stayed upright and completed both requested leg cycles, but failed:
+  left loaded-foot slip distance 0.0780765 m > 0.075 m
+  landing impulse 9.30256 N*s > 9.0 N*s
+  normalized landing impulse 0.323297 weight*s > 0.30 weight*s
 
-Visual checks
--------------
-21 Unity FBX links converted to 21 visual-only Wavefront OBJ meshes.
-Meshes: 259,480 render vertices; 122,251 triangles.
-Both MJCF scenes compile with separate render groups:
-  group 0 = environment
-  group 1 = visual OBJ meshes
-  group 2 = physical collision proxies
-Offscreen visual and joints views rendered successfully. A synchronized
-human/MediaPipe versus actual grounded-fixed MuJoCo contact sheet was generated
-as artifacts/ik-pose-comparison.png. Raw IK fidelity over the bundled clip and
-four external public-domain clips is stored in artifacts/pose-fidelity.json.
+frontal-leg-swing stayed upright but failed closed with one
+stale_support_intent abort while a second support cycle was still in HOLD/return
+at end of file. jumping-jacks, arm-circles, stationary-squat and trunk-circles
+passed every stability gate.
 
-End-to-end checks
------------------
-The reproducible six-video report is artifacts/freebase-stability.json. Every
-clip passed every gate with the exact same criteria: base mode free, neq=0,
-base_free joint type, one HumanoidSimulation and one MjData through input and
-settling, zero falls, zero non-foot ground contacts, bounded stance-foot slip,
-material copied motion, and five quiet seconds after the final frame.
+Final safe-command pose fidelity
+--------------------------------
+artifacts/safe-pose-fidelity.json
+SHA-256: 7ffcb5ba12048e7767a3dc7bd2edd58910e7b76ee3117c5e931c74268ac0522e
+Result: FAIL; 3 of 6 clips passed. All eight suite/provenance gates passed and
+36/36 runtime hashes matched.
 
-Bundled slow-balance MP4, full file plus same-simulation settling:
-frames=1961, skeleton=1960, stale=1, fell=0, min/final base z=0.8422/0.9292 m,
-max tilt=14.576 deg, right/left clearance=0.0366/0.0316 m, transitions=21,
-settling=5.000 s, media sync error=0.00073 s.
+  slow-balance: PASS (2/2 required arm channels; right/left leg events complete)
+  jumping-jacks: FAIL (2/4 required channels; both leg channels fail)
+  arm-circles: PASS (4/4)
+  frontal-leg-swing: FAIL (stale_support_intent; extra cycle unfinished at EOF)
+  stationary-squat: FAIL (0/4 required leg channels)
+  trunk-circles: PASS (1/1 head/trunk-orientation proxy)
 
-Other matrix clips, maximum tilt (all fell=0 and settled 5.000 s):
-jumping jacks 3.943 deg; arm circles 6.947 deg; frontal leg swing 11.719 deg;
-stationary squat 6.630 deg; trunk circles 2.482 deg.
+Free-base robustness acceptance
+-------------------------------
+artifacts/freebase-robustness.json
+SHA-256: f7f3cebefcad62aa5dedb9ff09a10d2bbae9738524edfeb63025fa8de4f5c808
+Result: FAIL. All 10/10 mandatory nominal/perturbation scenarios passed, but
+only 16/20 deterministic randomized trials passed. Wilson 95% lower bound was
+0.583983, below the required 0.80. All four failures were one-leg trials: each
+exceeded the 9 N*s landing-impulse limit; one also exceeded the 0.065 m lateral
+CoM-to-stance limit.
 
-Worst load-bearing stance-foot slip speed across the matrix was 0.131 m/s;
-accumulated slip for every foot stayed below 0.061 m. Swing-foot collision
-impulses are logged separately instead of being mislabeled as stance slip.
-Runtime input SHA-256 values were unchanged for the entire final matrix run.
+Interpretation and hardware boundary
+------------------------------------
+The free scene has neq=0 and a real base_free joint. The live simulator is
+controlled only through the canonical 20 motor targets; the acceptance tools
+also prove one HumanoidSimulation/MjData instance across replay and settling.
+No-fall is not equivalent to passing contact safety or pose fidelity.
 
-The automated WebSocket regression confirms that an unreachable endpoint is
-isolated from camera/physics completion and receives the same post-controller
-safe command rather than the raw human target.
-
-Hardware limitation
--------------------
-No Windows camera device was visible in this tool session, so a physical webcam
-frame could not be verified. The bundled MediaPipe Full model and full MP4 path
-were executed through the real Tasks API. Real-robot feedback is not yet wired:
-the optional legacy WebSocket output is an experimental/shadow motor-command
-boundary and must not be powered without encoder/IMU/foot feedback, onboard slew
-limits/watchdog and a physical E-stop.
+The MuJoCo inertial/contact model remains provisional. The legacy WebSocket is
+a 10 Hz command-only output: there is no real encoder/IMU/foot-load feedback,
+execution acknowledgement, onboard watchdog or hardware E-stop in this repo.
+These simulation results are not a physical-robot safety certificate.

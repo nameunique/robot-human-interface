@@ -169,11 +169,12 @@ Grounded-fixed режим предназначен для отдельной п�
 .\scripts\run_camera_teleop.ps1 -Source mp4 -DemoVideo slow-balance -FixedBase
 ```
 
-На эталонном полном прогоне обе swing-стопы отрываются на `3.66/3.16 cm`
-(правая/левая), максимальный наклон корпуса остаётся около `14.58°`, падение
-не регистрируется, а время MuJoCo расходится с временем MP4 не более чем на
-один шаг `2 ms`. После последнего кадра робот возвращается к высоте корпуса
-`0.929 m` и выдерживает ещё 5 секунд устойчивой стойки в той же симуляции.
+На текущем полном прогоне slow-balance обе swing-стопы отрываются на
+`3.43/3.16 cm` (правая/левая), максимальный наклон корпуса равен `14.576°`,
+падение не регистрируется, а время MuJoCo расходится с временем MP4 меньше чем
+на один шаг `2 ms`. При этом строгий stability acceptance этого клипа
+**не пройден**: накопленное скольжение левой стопы `0.0781 m` выше лимита
+`0.075 m`, а контактный импульс `9.303 N*s` выше лимита `9 N*s`.
 
 Для строгой проверки конечной устойчивости можно потребовать, чтобы после
 последнего кадра робот на **той же** свободной симуляции плавно вернулся в
@@ -217,11 +218,35 @@ viewer с роботом. Источник, авторы, лицензии, пр
 .\scripts\run_camera_teleop.ps1
 ```
 
-Первые 30 уверенных кадров являются нейтральной калибровкой. Перед запуском
-встаньте прямо, держите обе стопы на полу и руки в обычном нижнем положении.
-Если запуск начался в движении или с уже поднятой рукой, нажмите `C` и повторите
-эту нейтральную позу: любая поза, принятая за calibration home, намеренно даёт
-нулевое относительное движение.
+Автокалибровка не усредняет безусловно первые 30 детекций. Она ищет скользящее
+окно из 30 полных уверенных кадров среди максимум 150 пригодных наблюдений.
+Окно принимается только при неподвижной позе, двух лодыжках примерно на одном
+уровне, опущенных руках без сильного сгиба локтей и выпрямленных ногах.
+Неполные или перекрытые кадры не расходуют лимит. До успешной калибровки робот
+удерживает neutral/home target. Пока приложение работает, нажмите `C`, чтобы
+начать калибровку заново. Если лимит исчерпан и процесс завершился с
+`NeutralCalibrationError`, запустите команду повторно и сразу удерживайте
+нейтральную позу.
+
+Для MP4, который начинается не с нейтральной стойки, можно вручную указать
+отдельный проверенный кадр. Номер кадра отсчитывается с нуля; параметры
+`-CalibrationVideo` и `-CalibrationFrame` обязательны вместе, разрешены только
+для `mp4`/`replay` и никогда не выбираются автоматически:
+
+```powershell
+.\scripts\run_camera_teleop.ps1 `
+  -Source replay `
+  -VideoPath ".\assets\videos\external\dvids_frontal_leg_swing.mp4" `
+  -CalibrationVideo ".\assets\videos\external\dvids_arm_circles.mp4" `
+  -CalibrationFrame 29
+```
+
+Calibration video проходит через MediaPipe до выбранного кадра. Приложение
+проверяет видимость, обе опорные стопы, положение рук/локтей и выпрямленность
+ног, записывает абсолютный путь, SHA-256 и номер кадра, затем сбрасывает
+MediaPipe tracking/filter перед основным роликом. Один кадр не доказывает
+временную неподвижность: ответственность за выбор действительно спокойного
+момента остаётся на операторе.
 
 Если нужна другая камера или backend Windows:
 
@@ -265,6 +290,12 @@ boundary: controller получает q/dq/IMU/foot loads из MuJoCo, а не �
 сервер может удержать последнюю команду. Поэтому до реализации real-feedback
 shutdown этот путь нельзя использовать с включённой мощностью без независимого
 watchdog, который сам переводит робота в заранее проверенное безопасное состояние.
+
+Все приведённые stability/fidelity/robustness результаты относятся только к
+provisional MuJoCo proxy. WebSocket не получает реальные encoder/IMU/foot-load
+измерения, подтверждение исполнения, feedback-based reconnect или гарантированный
+physical shutdown. Этот канал нельзя использовать с включённой мощностью без
+отдельного robot-side controller, watchdog и аппаратного E-stop.
 
 При активном `-RobotWebSocketUrl` клавиша `Space` намеренно отключена: заморозка
 приложения оставила бы физический робот на последней, возможно одноопорной,
@@ -421,10 +452,59 @@ settling) запускается отдельно и сохраняет маши
 .\scripts\run_checks.ps1 -FullFreeBaseAcceptance
 ```
 
-Результат: `artifacts/freebase-stability.json`. Проверка требует `neq=0`
-косвенно через выбранную free-сцену, отсутствие падения и не-стопных контактов,
-ограниченное проскальзывание нагруженных стоп, ожидаемую реальную амплитуду
-рук/ног/головы и успешный возврат в устойчивую стойку.
+Результат: `artifacts/freebase-stability.json`. Проверка прямо подтверждает
+`neq=0`, free-joint `base_free` и один экземпляр `HumanoidSimulation/MjData` на
+replay и settling. Для всех клипов действуют общие safety thresholds и заранее
+объявленные clip-specific ожидания движения: `min z >= 0.80 m`, final
+`z >= 0.88 m`, tilt `<=20°`, отсутствие падений, не-стопных контактов и любых
+support aborts, skeleton coverage `>=85%`, stale fraction `<=10%`, media sync
+error `<=3 ms`, loaded-foot slip `<=0.15 m/s` и `<=0.075 m` на стопу.
+
+Landing episode начинается только после реально наблюдавшегося airborne sample.
+Измеряются вертикальная скорость непосредственно перед контактом, пиковая сила
+и полный импульс до перевода стопы в stance, включая solver chatter. Пороги:
+`<=0.50 m/s`, `<=60 N`, `<=2.25 bodyweights`, `<=9 N*s` и
+`<=0.30 weight*s`. Ранний удар в `LIFT/HOLD` не теряется.
+
+`settled=1` означает непрерывный quiet interval на той же симуляции: double
+support, обе стопы `>=4 N`, суммарно `>=20 N`, tilt `<=12°`, angular speed
+`<=1 rad/s`, base speed `<=0.06 m/s`, max joint speed `<=0.40 rad/s`, tracking
+error `<=0.12 rad`, loaded-foot slip `<=0.03 m/s` и neutral-relative capture
+point error `<=0.07 m`. Любой support abort остаётся в статистике и даёт exit
+code `3`, даже если модель затем восстановилась.
+
+Touchdown timeout или длительная потеря контакта во время центрирования
+защёлкивает fault: контроллер сохраняет известный опорный перенос веса,
+продолжает опускать остаточный swing profile и блокирует новый подъём. Для
+повторного цикла нужны подтверждённый физический контакт и новое наблюдение
+double support.
+
+Итоговая safe-команда и фактическая поза свободной модели проверяются отдельно:
+
+```powershell
+.\.venv\Scripts\python.exe tools\evaluate_safe_pose_fidelity.py
+```
+
+Отчёт `artifacts/safe-pose-fidelity.json` сравнивает human pose с финальным
+`safe_command` после balance/support projection и с измеренным MuJoCo qpos.
+Settling-кадры исключены. Для односторонних подъёмов ног ненадёжная монокулярная
+3D-глубина остаётся описательной; acceptance использует FIFO camera intent ->
+правильную сторону FSM -> `LIFT/HOLD` -> отсутствие abort -> safe/actual
+clearance не менее `0.020 m`.
+
+Номинальные движения, возмущения обоих направлений и domain randomization
+запускаются без камеры:
+
+```powershell
+.\.venv\Scripts\python.exe tools\evaluate_freebase_robustness.py
+```
+
+Полный отчёт `artifacts/freebase-robustness.json` включает обязательные neutral,
+upper-body, crouch обоих знаков, sagittal/lateral push обоих направлений и
+single-support обеих ног, а также 20 детерминированных randomized trials. В
+provisional модели варьируются mass/inertia каждого тела, friction, actuator
+strength/kp/kv и joint damping. Push — явно объявленное тестовое внешнее
+возмущение; сам controller по-прежнему управляет только 20 motor targets.
 
 Проверка именно camera → MediaPipe → retargeter → MuJoCo без окон:
 
@@ -709,6 +789,18 @@ jerk, recovery from pushes и sim-to-sim/sim-to-real gap.
 оценку финальной одноопорной safe-команды. Результат сохраняется в
 `artifacts/pose-fidelity.json`.
 
+Production-path оценка находится в отдельном отчёте:
+
+```powershell
+.\.venv\Scripts\python.exe tools\evaluate_safe_pose_fidelity.py
+```
+
+Она записывает финальный `safe_command` и фактический free-base qpos на каждом
+входном кадре, проверяет coverage, task-space mean/p50/p90, амплитуду,
+корреляцию и лаг. Для unilateral leg clips вместо заведомо слабой глобальной
+3D-корреляции используется событийное соответствие стороны жеста и физического
+подъёма той же стопы.
+
 Визуальный контроль четырёх характерных поз из медленного ролика строится
 отдельной воспроизводимой командой:
 
@@ -731,41 +823,30 @@ jerk, recovery from pushes и sim-to-sim/sim-to-real gap.
 
 ## Проверенный статус этой сборки
 
-- Windows native Python `3.12.13`;
-- MuJoCo `3.11.0`, MediaPipe `0.10.35`, OpenCV `5.0.0`,
-  websocket-client `1.9.0`;
-- обе MJCF-сцены загружаются, 20 actuator mappings совпадают со схемой;
-- 1000 physics steps для fixed/free остаются finite;
-- grounded-fixed после усадки имеет контакты обеих стоп и передаёт на пол около
-  `28.8 N`, то есть практически полный вес робота;
-- visual sole и collision sole согласованы с плоскостью примерно до `1 mm`;
-- self-contact proxy в home pose устранён; максимальная tracking error под
-  собственным весом после 1000 шагов меньше `3°`;
-- semantic FK-регрессии подтверждают: движение человеческой руки/ноги вперёд
-  перемещает соответствующую конечность вдоль физического переда робота `-X`;
-- synthetic free-base end-to-end: 60/60 skeleton frames, 0 stale commands,
-  `max_tilt=2.217°`, `fell=0`;
-- полная матрица из шести роликов выполняется на `scene_free.xml`: каждый
-  прогон прямо подтверждает `neq=0`, тип `base_free`, один экземпляр
-  `HumanoidSimulation`/`MjData`, отсутствие падения и не-стопных контактов,
-  после чего робот устойчиво стоит ещё 5 секунд;
-- полный slow-balance MP4: 1961 frame, обе ноги отработали безопасный цикл,
-  clearance правой/левой стопы `3.66/3.16 cm`, минимальная/финальная высота
-  корпуса `0.842/0.929 m`, `max_tilt=14.576°`, `fell=0`, рассинхронизация
-  media/simulation меньше одного шага `2 ms`;
-- jumping jacks и четыре независимых public-domain DVIDS replay также
-  завершились с `fell=0`: jumping jacks `3.943°`, arm circles `6.947°`,
-  frontal leg swing `11.719°`, stationary squat `6.630°`, trunk circles
-  `2.482°` максимального наклона;
-- максимальная скорость скольжения реально нагруженной опорной стопы во всей
-  матрице `0.131 m/s`, а накопленное скольжение каждой стопы меньше `0.061 m`;
-- итоговая команда ограничена на каждом physics tick: не более `0.2865°`
-  для верхних приводов и `0.1375°` для ног за `2 ms`;
-- отказ локального WebSocket endpoint изолирован: camera/physics run завершается
-  штатно и отражает ошибку в итоговой статистике;
-- `191 passed` в полном pytest-наборе;
-- 21 FBX-копия сохранена, а 21 OBJ-меш компилируется в обеих MJCF-сценах;
-- Unity git status остался чистым.
+Проверка выполнена 14 августа 2026 года на ревизии
+`d091d1e48c920a316f5823d2fd96e333d0aad7d6`:
+
+- полный pytest-набор: **789 passed** за `105.81 s`;
+- `compileall` для `src`, `tests`, `tools` и `git diff --check`: успешно;
+- raw pose report schema 3 полностью измерен (`measurement_complete=true`),
+  но это только диагностика: пороги fidelity для него не заданы, поэтому он
+  не является pose-fidelity acceptance;
+- free-base stability: **FAIL, 4/6** клипов. Slow-balance не прошёл по
+  скольжению и контактному импульсу; frontal-leg-swing завершился с
+  `stale_support_intent`. Остальные четыре клипа прошли;
+- production SAFE fidelity: **FAIL, 3/6** клипов. Slow-balance, arm-circles и
+  trunk-circles прошли; jumping-jacks воспроизводит `2/4` требуемых каналов,
+  stationary-squat — `0/4`; frontal-leg-swing выполнил один подъём, но начал
+  лишний незавершённый цикл и получил abort;
+- robustness: все **10/10** обязательных nominal/perturbation сценариев прошли,
+  но randomized — только **16/20**; нижняя граница Wilson 95% равна `0.58398`
+  при требуемой `0.80`. Все четыре отказа относятся к одноопорным trials:
+  превышен контактный импульс, а в одном также lateral CoM-to-stance error.
+
+Таким образом, отсутствие падения само по себе не означает, что движение
+достаточно точно или что пройдены контактные пороги. Текущие JSON-отчёты:
+`artifacts/pose-fidelity.json`, `artifacts/freebase-stability.json`,
+`artifacts/safe-pose-fidelity.json` и `artifacts/freebase-robustness.json`.
 
 Лог: `artifacts/verification.log`. Проверенные offscreen-кадры обоих режимов:
 `artifacts/mujoco_fixed_home.png`, `artifacts/mujoco_joints_home.png` и
@@ -776,3 +857,7 @@ jerk, recovery from pushes и sim-to-sim/sim-to-real gap.
 MediaPipe Full bundle при этом был реально открыт через Tasks API и выполнил
 inference; полный camera-free pipeline проверен synthetic-источником. После
 подключения камеры используйте camera smoke command из раздела диагностики.
+Legacy WebSocket остаётся только 10 Hz command-only каналом: в этой сборке нет
+реальной обратной связи encoder/IMU/foot-load, подтверждения исполнения,
+локального watchdog и аппаратного E-stop. Подавать через него мощность на
+физический робот нельзя без отдельного robot-side safety controller.

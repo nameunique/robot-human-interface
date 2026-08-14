@@ -1,13 +1,233 @@
 {
-  "schema_version": 1,
-  "description": "Raw retargeter FK direction error before standing-balance and support projection; angles use anatomical forward/right/up coordinates.",
-  "command": "python tools/evaluate_pose_fidelity.py --stride 5",
+  "schema_version": 3,
+  "report_kind": "raw_pose_measurement_diagnostic",
+  "description": "Raw retargeter FK direction-error measurements before standing-balance and support projection. This is a diagnostic completeness report, not a pose-fidelity acceptance result.",
+  "measurement_contract": {
+    "angles": "anatomical forward/right/up direction error in degrees",
+    "sampling": "the calibration window is dense, then every configured stride frame",
+    "stale_policy": "a frame is evaluated only when a skeleton is detected and both geometric and IK commands are non-stale"
+  },
+  "command": "C:\\Users\\k_desktop\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe -u tools\\evaluate_pose_fidelity.py --stride 5",
+  "command_argv": [
+    "C:\\Users\\k_desktop\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+    "-u",
+    "tools\\evaluate_pose_fidelity.py",
+    "--stride",
+    "5"
+  ],
+  "generated_at_utc": "2026-08-14T19:35:05.929425+00:00",
+  "run_started_at_utc": "2026-08-14T19:34:19.983801+00:00",
+  "git_revision": "d091d1e48c920a316f5823d2fd96e333d0aad7d6",
+  "git_worktree": {
+    "dirty": true,
+    "status_porcelain": [
+      "M README.md",
+      " M artifacts/freebase-stability.json",
+      " M artifacts/pose-fidelity.json",
+      "?? artifacts/freebase-robustness.json",
+      "?? artifacts/safe-pose-fidelity.json"
+    ],
+    "tracked_diff_sha256": "802d6d725c4151f20a0a3dc1977d19e4e454c44a052a6af6b457939e09aac9b6",
+    "note": "Runtime input SHA-256 values identify the exact tested contents, including an uncommitted evaluator; git revision alone is not a complete identifier when dirty is true."
+  },
+  "runtime_input_sha256": {
+    "assets/models/pose_landmarker_full.task": "4eaa5eb7a98365221087693fcc286334cf0858e2eb6e15b506aa4a7ecdcec4ad",
+    "assets/videos/external/dvids_arm_circles.mp4": "b44f9ea5707c091863755a9c65231e06a3a790219bbaa41eb0be04c1b622a3e2",
+    "assets/videos/external/dvids_frontal_leg_swing.mp4": "a936684973411c674f86fb7cc1f8003137593c6aafa223df6b1b8ad46f60a967",
+    "assets/videos/external/dvids_stationary_squat.mp4": "3b82ead850f106e0691385008fa8af0fe48b1f973a68ac098b7f3acf49e6f340",
+    "assets/videos/external/dvids_trunk_circles.mp4": "5095be71e318228c0cc5686d1fc52696368ac71577bea5f032872635a39ceff6",
+    "assets/videos/slow_balance_demo.mp4": "5a91b2082043006920eb3d35d0799db5cf1d2657b6d3ec99b9b03e1daaeea222",
+    "config/joints.yaml": "47077ce5321b4c06e3a5eb32f0344034e3bc5aa4e90498c57c6f01b4b74a1000",
+    "config/retargeting.yaml": "1b064dfc217d3d477d755480a60c6e8fa710b1e16e843965c061c01aabeca378",
+    "models/humanoid/meshes/elbow_lh.obj": "0b5c721e8b76277944b2a6dc436539d30d33b64c9b4982528fb9c153f44e4395",
+    "models/humanoid/meshes/elbow_rh.obj": "27718c0f4ca8292679bb022a7236736c1392b8974deaa4927f8a1868e8e27c74",
+    "models/humanoid/meshes/foot_ll.obj": "92620333b4357bbb67f84ecad89f7dc56d121a1be6fc3a7d79924c804853a457",
+    "models/humanoid/meshes/foot_rl.obj": "7943ca23385ad9812af95bb6bd621e590b49c039f7d29858b777362eaae0c3f8",
+    "models/humanoid/meshes/head.obj": "649abd11982894f27de03ab029d195f2f15dd8bd36d81c24c740f507b6075d9e",
+    "models/humanoid/meshes/knee_ll.obj": "09add9d1f663978cbd858bb16d06ba7436617624935598f9f08308d27c33bff5",
+    "models/humanoid/meshes/knee_rl.obj": "a118d4979bde60d1dbd258e58c3c0f709a567a7b11ebc5ad080dadd70cbb2a5c",
+    "models/humanoid/meshes/motors_feet_ll.obj": "9e76057b0d5cfdafa51af9fceb9aa491cb2379b962d2c9dd0914e752665c0c70",
+    "models/humanoid/meshes/motors_feet_rl.obj": "4c486c9c0a154dd22c7351835c408826d01de1b483a6b1ec0be364e0273043df",
+    "models/humanoid/meshes/motors_thigh_ll.obj": "16647de71626ac45537fbc3adadaa9954ffc2cff8020dcc78b855ba0d08781a5",
+    "models/humanoid/meshes/motors_thigh_rl.obj": "127fa9d100996cf9e985875f59fea9e8188dc7b6c6f2d8ffedc00f66e19a0310",
+    "models/humanoid/meshes/neck.obj": "6d8808fd126aa2c9ee7dc30ad11874e5ab4d18b5a94aecce0831bd6822d989fc",
+    "models/humanoid/meshes/rotat_axis_ll.obj": "cc9f66c18997ffbaa5177018176eba6cd7ecf0a2417a36cc44f82669cc25ebcc",
+    "models/humanoid/meshes/rotat_axis_rl.obj": "843cc675550ea6d4d08ab3ce4d93d4edcd3e160b4e6ee482204945dfabc70ef8",
+    "models/humanoid/meshes/shin_ll.obj": "ab89407f8479b532fc87716ae58e5510399039a6ebd27c77f50fc98dccbe15ca",
+    "models/humanoid/meshes/shin_rl.obj": "2ef4a146891ac1fb88b73a3ffba3635f0dd47c8f09e8f71bf89fafc8d2481a60",
+    "models/humanoid/meshes/shoulder_lh.obj": "3888bdae3ba5f8aa9dd4192d84453408b0b703cc876899c5f6a4c0dc4bd92adf",
+    "models/humanoid/meshes/shoulder_rh.obj": "6021135292f260fdb34f7a7db02ca83c410e64d395b230c76c617bd859551f35",
+    "models/humanoid/meshes/torso.obj": "f93c1536171212e1f422b4720414ad2f0b99d21fa8fe3b05f3fa86b098c285ee",
+    "models/humanoid/meshes/wrist_lh.obj": "bcdda7d3112c9f11fa23934d894993fdd36ecfa7137daf3c149486e894ba21b7",
+    "models/humanoid/meshes/wrist_rh.obj": "89e488cc44bab31747d09c10b66239b3db392f46b3a2ec52123c4adbf80a3d1d",
+    "models/humanoid/robot.xml": "42493dc5d2455fa803ccffb84062e1de45ac08f89a473ddbe8ab793dd9532906",
+    "models/humanoid/scene_fixed.xml": "cfcd75eefd42000fc9df1a11d2ce6e37f2fee58aca77f6205ca2679c3db469c6",
+    "src/robot_human_interface/__init__.py": "b3a49c6406602ce9598d4602ae730fa207eb50e95870481636d8c464d43fe76d",
+    "src/robot_human_interface/camera/__init__.py": "367f7075cc2a9413987aa0cb3c544e3d8f42b78215b08b12e8de36ef3df1e34f",
+    "src/robot_human_interface/camera/sources.py": "cc628ec48a4e2753e7d240767964fd1ae08d23b93ed75d1f8a668b18a5b65a91",
+    "src/robot_human_interface/pose/__init__.py": "6eeabceb47b78017ab0e58d44e2a6b23692d7114a7eae139fc0f037e3b831ed2",
+    "src/robot_human_interface/pose/calibration.py": "94ff91faeaf36e013054649cd6a4532dc47a329c3d70d8b916b8a3a41e249d70",
+    "src/robot_human_interface/pose/mediapipe_tasks.py": "edbac17cdb122f49748b3ee659a09f989510f371ff6c166ef4a372db2813ed60",
+    "src/robot_human_interface/pose/overlay.py": "e3b95d1d5390747b01ca9bad2d0ef9460ca94fd4d12c44d2be840751fe9fdecc",
+    "src/robot_human_interface/pose/synthetic.py": "25354343a08ce9161e58287cba02c0f7e8e72d8f090f63cc8ae8bd8ef64ceb3d",
+    "src/robot_human_interface/retargeting/__init__.py": "34f6f778c89e2d9d4f7a3e4751060d7102ad98713a921d0cbd4c768dd717e625",
+    "src/robot_human_interface/retargeting/fidelity.py": "674cf5cd17a051098ed0dbf6841665e1ef1533f77a02e2fd06d1c3c5d1a5a0e4",
+    "src/robot_human_interface/retargeting/geometry.py": "ed8d866d1b64fbbc8d7b564ae20fc2bc02f99f2f38be59c03baf7f2751a8a86b",
+    "src/robot_human_interface/retargeting/mujoco_ik.py": "56e8ccc8aa36cb86880debcca49ada3e3c5a1233e6d9caa363d58f03332d0f4f",
+    "src/robot_human_interface/retargeting/retargeter.py": "85595c0f95c1a9739c5e26a569099e8fb2c8daa1ea89e4617cb0dbeee4b9a6b2",
+    "src/robot_human_interface/skeleton/__init__.py": "1cb5366159de453a25512cb27bfde7c7ebc4b7dfcb858325d65b49e176104854",
+    "src/robot_human_interface/skeleton/filtering.py": "6d3df0f1caba7494032556a619ec737d34dd9b87bc2843dfebd5e47e3fa06b71",
+    "src/robot_human_interface/skeleton/transforms.py": "f1ca9883df9492fb51151ceca48c7066eefb50fb4eec65b2ba81ea86155c113e",
+    "src/robot_human_interface/skeleton/types.py": "d8f82d86aa104c2eca683ddac98f8f28428df7c689eb567badbeb3a00f386eba",
+    "tools/evaluate_pose_fidelity.py": "78e79bad4bae6d5987230ba5260005aab9740a8a4a1286f5d3030f5c01110ba8"
+  },
+  "runtime_input_sha256_at_completion": {
+    "assets/models/pose_landmarker_full.task": "4eaa5eb7a98365221087693fcc286334cf0858e2eb6e15b506aa4a7ecdcec4ad",
+    "assets/videos/external/dvids_arm_circles.mp4": "b44f9ea5707c091863755a9c65231e06a3a790219bbaa41eb0be04c1b622a3e2",
+    "assets/videos/external/dvids_frontal_leg_swing.mp4": "a936684973411c674f86fb7cc1f8003137593c6aafa223df6b1b8ad46f60a967",
+    "assets/videos/external/dvids_stationary_squat.mp4": "3b82ead850f106e0691385008fa8af0fe48b1f973a68ac098b7f3acf49e6f340",
+    "assets/videos/external/dvids_trunk_circles.mp4": "5095be71e318228c0cc5686d1fc52696368ac71577bea5f032872635a39ceff6",
+    "assets/videos/slow_balance_demo.mp4": "5a91b2082043006920eb3d35d0799db5cf1d2657b6d3ec99b9b03e1daaeea222",
+    "config/joints.yaml": "47077ce5321b4c06e3a5eb32f0344034e3bc5aa4e90498c57c6f01b4b74a1000",
+    "config/retargeting.yaml": "1b064dfc217d3d477d755480a60c6e8fa710b1e16e843965c061c01aabeca378",
+    "models/humanoid/meshes/elbow_lh.obj": "0b5c721e8b76277944b2a6dc436539d30d33b64c9b4982528fb9c153f44e4395",
+    "models/humanoid/meshes/elbow_rh.obj": "27718c0f4ca8292679bb022a7236736c1392b8974deaa4927f8a1868e8e27c74",
+    "models/humanoid/meshes/foot_ll.obj": "92620333b4357bbb67f84ecad89f7dc56d121a1be6fc3a7d79924c804853a457",
+    "models/humanoid/meshes/foot_rl.obj": "7943ca23385ad9812af95bb6bd621e590b49c039f7d29858b777362eaae0c3f8",
+    "models/humanoid/meshes/head.obj": "649abd11982894f27de03ab029d195f2f15dd8bd36d81c24c740f507b6075d9e",
+    "models/humanoid/meshes/knee_ll.obj": "09add9d1f663978cbd858bb16d06ba7436617624935598f9f08308d27c33bff5",
+    "models/humanoid/meshes/knee_rl.obj": "a118d4979bde60d1dbd258e58c3c0f709a567a7b11ebc5ad080dadd70cbb2a5c",
+    "models/humanoid/meshes/motors_feet_ll.obj": "9e76057b0d5cfdafa51af9fceb9aa491cb2379b962d2c9dd0914e752665c0c70",
+    "models/humanoid/meshes/motors_feet_rl.obj": "4c486c9c0a154dd22c7351835c408826d01de1b483a6b1ec0be364e0273043df",
+    "models/humanoid/meshes/motors_thigh_ll.obj": "16647de71626ac45537fbc3adadaa9954ffc2cff8020dcc78b855ba0d08781a5",
+    "models/humanoid/meshes/motors_thigh_rl.obj": "127fa9d100996cf9e985875f59fea9e8188dc7b6c6f2d8ffedc00f66e19a0310",
+    "models/humanoid/meshes/neck.obj": "6d8808fd126aa2c9ee7dc30ad11874e5ab4d18b5a94aecce0831bd6822d989fc",
+    "models/humanoid/meshes/rotat_axis_ll.obj": "cc9f66c18997ffbaa5177018176eba6cd7ecf0a2417a36cc44f82669cc25ebcc",
+    "models/humanoid/meshes/rotat_axis_rl.obj": "843cc675550ea6d4d08ab3ce4d93d4edcd3e160b4e6ee482204945dfabc70ef8",
+    "models/humanoid/meshes/shin_ll.obj": "ab89407f8479b532fc87716ae58e5510399039a6ebd27c77f50fc98dccbe15ca",
+    "models/humanoid/meshes/shin_rl.obj": "2ef4a146891ac1fb88b73a3ffba3635f0dd47c8f09e8f71bf89fafc8d2481a60",
+    "models/humanoid/meshes/shoulder_lh.obj": "3888bdae3ba5f8aa9dd4192d84453408b0b703cc876899c5f6a4c0dc4bd92adf",
+    "models/humanoid/meshes/shoulder_rh.obj": "6021135292f260fdb34f7a7db02ca83c410e64d395b230c76c617bd859551f35",
+    "models/humanoid/meshes/torso.obj": "f93c1536171212e1f422b4720414ad2f0b99d21fa8fe3b05f3fa86b098c285ee",
+    "models/humanoid/meshes/wrist_lh.obj": "bcdda7d3112c9f11fa23934d894993fdd36ecfa7137daf3c149486e894ba21b7",
+    "models/humanoid/meshes/wrist_rh.obj": "89e488cc44bab31747d09c10b66239b3db392f46b3a2ec52123c4adbf80a3d1d",
+    "models/humanoid/robot.xml": "42493dc5d2455fa803ccffb84062e1de45ac08f89a473ddbe8ab793dd9532906",
+    "models/humanoid/scene_fixed.xml": "cfcd75eefd42000fc9df1a11d2ce6e37f2fee58aca77f6205ca2679c3db469c6",
+    "src/robot_human_interface/__init__.py": "b3a49c6406602ce9598d4602ae730fa207eb50e95870481636d8c464d43fe76d",
+    "src/robot_human_interface/camera/__init__.py": "367f7075cc2a9413987aa0cb3c544e3d8f42b78215b08b12e8de36ef3df1e34f",
+    "src/robot_human_interface/camera/sources.py": "cc628ec48a4e2753e7d240767964fd1ae08d23b93ed75d1f8a668b18a5b65a91",
+    "src/robot_human_interface/pose/__init__.py": "6eeabceb47b78017ab0e58d44e2a6b23692d7114a7eae139fc0f037e3b831ed2",
+    "src/robot_human_interface/pose/calibration.py": "94ff91faeaf36e013054649cd6a4532dc47a329c3d70d8b916b8a3a41e249d70",
+    "src/robot_human_interface/pose/mediapipe_tasks.py": "edbac17cdb122f49748b3ee659a09f989510f371ff6c166ef4a372db2813ed60",
+    "src/robot_human_interface/pose/overlay.py": "e3b95d1d5390747b01ca9bad2d0ef9460ca94fd4d12c44d2be840751fe9fdecc",
+    "src/robot_human_interface/pose/synthetic.py": "25354343a08ce9161e58287cba02c0f7e8e72d8f090f63cc8ae8bd8ef64ceb3d",
+    "src/robot_human_interface/retargeting/__init__.py": "34f6f778c89e2d9d4f7a3e4751060d7102ad98713a921d0cbd4c768dd717e625",
+    "src/robot_human_interface/retargeting/fidelity.py": "674cf5cd17a051098ed0dbf6841665e1ef1533f77a02e2fd06d1c3c5d1a5a0e4",
+    "src/robot_human_interface/retargeting/geometry.py": "ed8d866d1b64fbbc8d7b564ae20fc2bc02f99f2f38be59c03baf7f2751a8a86b",
+    "src/robot_human_interface/retargeting/mujoco_ik.py": "56e8ccc8aa36cb86880debcca49ada3e3c5a1233e6d9caa363d58f03332d0f4f",
+    "src/robot_human_interface/retargeting/retargeter.py": "85595c0f95c1a9739c5e26a569099e8fb2c8daa1ea89e4617cb0dbeee4b9a6b2",
+    "src/robot_human_interface/skeleton/__init__.py": "1cb5366159de453a25512cb27bfde7c7ebc4b7dfcb858325d65b49e176104854",
+    "src/robot_human_interface/skeleton/filtering.py": "6d3df0f1caba7494032556a619ec737d34dd9b87bc2843dfebd5e47e3fa06b71",
+    "src/robot_human_interface/skeleton/transforms.py": "f1ca9883df9492fb51151ceca48c7066eefb50fb4eec65b2ba81ea86155c113e",
+    "src/robot_human_interface/skeleton/types.py": "d8f82d86aa104c2eca683ddac98f8f28428df7c689eb567badbeb3a00f386eba",
+    "tools/evaluate_pose_fidelity.py": "78e79bad4bae6d5987230ba5260005aab9740a8a4a1286f5d3030f5c01110ba8"
+  },
+  "runtime_inputs_unchanged_during_run": true,
+  "provenance_gates": [
+    {
+      "name": "git_provenance_complete_and_valid",
+      "value": {
+        "git_revision": "d091d1e48c920a316f5823d2fd96e333d0aad7d6",
+        "git_worktree": {
+          "dirty": true,
+          "status_porcelain": [
+            "M README.md",
+            " M artifacts/freebase-stability.json",
+            " M artifacts/pose-fidelity.json",
+            "?? artifacts/freebase-robustness.json",
+            "?? artifacts/safe-pose-fidelity.json"
+          ],
+          "tracked_diff_sha256": "802d6d725c4151f20a0a3dc1977d19e4e454c44a052a6af6b457939e09aac9b6",
+          "note": "Runtime input SHA-256 values identify the exact tested contents, including an uncommitted evaluator; git revision alone is not a complete identifier when dirty is true."
+        }
+      },
+      "threshold": "valid revision and worktree snapshot",
+      "requirement": "==",
+      "passed": true
+    },
+    {
+      "name": "runtime_snapshot_at_start_complete",
+      "value": {
+        "missing_keys": [],
+        "unexpected_keys": []
+      },
+      "threshold": {
+        "missing_keys": [],
+        "unexpected_keys": []
+      },
+      "requirement": "==",
+      "passed": true
+    },
+    {
+      "name": "runtime_snapshot_at_start_valid",
+      "value": [],
+      "threshold": [],
+      "requirement": "==",
+      "passed": true
+    },
+    {
+      "name": "runtime_snapshot_at_completion_complete",
+      "value": {
+        "missing_keys": [],
+        "unexpected_keys": []
+      },
+      "threshold": {
+        "missing_keys": [],
+        "unexpected_keys": []
+      },
+      "requirement": "==",
+      "passed": true
+    },
+    {
+      "name": "runtime_snapshot_at_completion_valid",
+      "value": [],
+      "threshold": [],
+      "requirement": "==",
+      "passed": true
+    },
+    {
+      "name": "runtime_inputs_unchanged_during_run",
+      "value": true,
+      "threshold": true,
+      "requirement": "==",
+      "passed": true
+    }
+  ],
+  "coverage_policy": {
+    "minimum_detected_sample_fraction": 0.7,
+    "minimum_evaluated_nonstale_sample_fraction": 0.7,
+    "minimum_valid_evaluated_fraction": 0.7,
+    "primary_groups": [
+      "arms",
+      "legs",
+      "end_effectors",
+      "head"
+    ]
+  },
   "configuration": {
     "stride": 5,
     "dense_calibration_frames": 30,
     "retargeting": {
       "mode": "whole_body",
       "auto_calibration_frames": 30,
+      "calibration_max_observations": 150,
+      "calibration_max_pose_spread_ratio": 0.06,
+      "calibration_max_ankle_offset_ratio": 0.08,
+      "calibration_max_ankle_spread_ratio": 0.035,
+      "calibration_max_arm_deviation_rad": 1.0471975511965976,
+      "calibration_max_upper_arm_deviation_rad": 1.0471975511965976,
+      "calibration_max_elbow_flexion_rad": 1.0471975511965976,
+      "calibration_max_knee_flexion_rad": 0.7853981633974483,
       "confidence_threshold": 0.55,
       "minimum_coverage": 0.75,
       "smoothing_time_constant_s": 0.1,
@@ -24,677 +244,1205 @@
     },
     "pose_model": "assets/models/pose_landmarker_full.task",
     "mujoco_model": "models/humanoid/scene_fixed.xml",
+    "clips": [
+      "slow-balance",
+      "arm-circles",
+      "frontal-leg-swing",
+      "stationary-squat",
+      "trunk-circles"
+    ],
+    "canonical_complete_matrix": true,
     "versions": {
+      "python": "3.12.13",
       "mediapipe": "0.10.35",
       "mujoco": "3.11.0",
-      "numpy": "2.5.2"
+      "numpy": "2.5.2",
+      "opencv-contrib-python": "5.0.0.93",
+      "PyYAML": "6.0.3",
+      "scipy": "1.18.0"
     }
   },
   "videos": [
     {
       "video": "assets/videos/slow_balance_demo.mp4",
+      "video_size_bytes": 13875839,
+      "video_sha256": "5a91b2082043006920eb3d35d0799db5cf1d2657b6d3ec99b9b03e1daaeea222",
+      "expected_frames": 1961,
+      "calibration": {
+        "mode": "automatic_window",
+        "source": null,
+        "source_size_bytes": null,
+        "source_sha256": null,
+        "frame_index": null,
+        "geometric_accepted": true,
+        "ik_accepted": true,
+        "status": "passed",
+        "failure_reason": null
+      },
       "source_frames": 1961,
       "sampled_frames": 417,
       "detected_frames": 416,
-      "evaluated_frames": 388,
+      "post_calibration_frames": 388,
+      "evaluated_frames": 387,
       "stale_commands": {
         "geometric": 1,
         "ik": 1
+      },
+      "stale_frames": 1,
+      "coverage": {
+        "detected_sample_fraction": 0.9976019184652278,
+        "evaluated_nonstale_frames": 387,
+        "evaluated_nonstale_sample_fraction": 0.9280575539568345,
+        "post_calibration_frames": 388,
+        "stale_frames": 1,
+        "stale_post_calibration_fraction": 0.002577319587628866,
+        "evaluation_population": "paired frames with a detected skeleton and non-stale geometric and IK commands",
+        "group_valid_evaluated_fraction": {
+          "arms": 1.0,
+          "legs": 1.0,
+          "end_effectors": 1.0,
+          "head": 1.0
+        },
+        "gates": [
+          {
+            "name": "calibration_completed",
+            "value": true,
+            "threshold": true,
+            "requirement": "==",
+            "passed": true
+          },
+          {
+            "name": "sampled_frames",
+            "value": 417,
+            "threshold": 1,
+            "requirement": ">=",
+            "passed": true
+          },
+          {
+            "name": "detected_sample_fraction",
+            "value": 0.9976019184652278,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
+          },
+          {
+            "name": "evaluated_nonstale_sample_fraction",
+            "value": 0.9280575539568345,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
+          },
+          {
+            "name": "source_frames",
+            "value": 1961,
+            "threshold": 1961,
+            "requirement": "==",
+            "passed": true
+          },
+          {
+            "name": "arms_valid_evaluated_fraction",
+            "value": 1.0,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
+          },
+          {
+            "name": "legs_valid_evaluated_fraction",
+            "value": 1.0,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
+          },
+          {
+            "name": "end_effectors_valid_evaluated_fraction",
+            "value": 1.0,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
+          },
+          {
+            "name": "head_valid_evaluated_fraction",
+            "value": 1.0,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
+          }
+        ],
+        "failure_reasons": [],
+        "coverage_passed": true
       },
       "metrics": {
         "arms": {
           "geometric": {
             "count": 387,
-            "mean_deg": 59.579939585109884,
-            "p50_deg": 60.87425865300007,
-            "p90_deg": 76.96941199509668
+            "mean_deg": 59.57993958514928,
+            "p50_deg": 60.87425865513244,
+            "p90_deg": 76.96941199414672
           },
           "ik": {
             "count": 387,
-            "mean_deg": 33.89363929777043,
-            "p50_deg": 33.338570287193726,
-            "p90_deg": 39.03266956021605
+            "mean_deg": 33.89363925441457,
+            "p50_deg": 33.33856870191481,
+            "p90_deg": 39.03266956133403
           },
-          "ik_mean_improvement_percent": 43.112330200749206
+          "ik_mean_improvement_percent": 43.11233027355603
         },
         "legs": {
           "geometric": {
             "count": 387,
-            "mean_deg": 15.524554498487797,
-            "p50_deg": 13.999363903046735,
-            "p90_deg": 22.049496789947813
+            "mean_deg": 15.52455449845865,
+            "p50_deg": 13.999363903010295,
+            "p90_deg": 22.049496789684966
           },
           "ik": {
             "count": 387,
-            "mean_deg": 16.446668504223,
-            "p50_deg": 14.09175390372939,
-            "p90_deg": 25.882349079719763
+            "mean_deg": 16.44666886441592,
+            "p50_deg": 14.09175390209392,
+            "p90_deg": 25.882348626321587
           },
-          "ik_mean_improvement_percent": -5.939713154570847
+          "ik_mean_improvement_percent": -5.93971547491956
         },
         "end_effectors": {
           "geometric": {
             "count": 387,
-            "mean_deg": 28.421670159307542,
-            "p50_deg": 28.009344961778236,
-            "p90_deg": 36.51790809651214
+            "mean_deg": 28.421670159313116,
+            "p50_deg": 28.00934496194518,
+            "p90_deg": 36.517908096512805
           },
           "ik": {
             "count": 387,
-            "mean_deg": 18.911548400988703,
-            "p50_deg": 18.315384948971904,
-            "p90_deg": 22.987217011161466
+            "mean_deg": 18.911548313195894,
+            "p50_deg": 18.31538494756628,
+            "p90_deg": 22.98721734315858
           },
-          "ik_mean_improvement_percent": 33.46081248924937
+          "ik_mean_improvement_percent": 33.46081279815634
         },
         "head": {
           "geometric": {
             "count": 387,
-            "mean_deg": 3.3215788513255444,
-            "p50_deg": 3.3252835257581554,
-            "p90_deg": 4.023508299437481
+            "mean_deg": 3.3215788512129234,
+            "p50_deg": 3.325283525609339,
+            "p90_deg": 4.023508299132305
           },
           "ik": {
             "count": 387,
-            "mean_deg": 3.2821932088288666,
-            "p50_deg": 3.2914579601847946,
-            "p90_deg": 3.9608061402906776
+            "mean_deg": 3.2821932085686316,
+            "p50_deg": 3.2914579599854807,
+            "p90_deg": 3.9608061399989936
           },
-          "ik_mean_improvement_percent": 1.1857506402703666
+          "ik_mean_improvement_percent": 1.1857506447546684
         },
         "right_arm": {
           "geometric": {
             "count": 387,
-            "mean_deg": 53.13555169062863,
-            "p50_deg": 55.765737686892216,
-            "p90_deg": 75.90078448753557
+            "mean_deg": 53.13555169080457,
+            "p50_deg": 55.76573768652434,
+            "p90_deg": 75.90078448742035
           },
           "ik": {
             "count": 387,
-            "mean_deg": 27.900259443140637,
-            "p50_deg": 28.469562889571627,
-            "p90_deg": 32.52455388140039
+            "mean_deg": 27.900258905719852,
+            "p50_deg": 28.469562871001983,
+            "p90_deg": 32.52455390815471
           },
-          "ik_mean_improvement_percent": 47.492293661342885
+          "ik_mean_improvement_percent": 47.49229467293146
         },
         "left_arm": {
           "geometric": {
             "count": 387,
-            "mean_deg": 58.68170937033544,
-            "p50_deg": 57.54881602138505,
-            "p90_deg": 80.67306439540019
+            "mean_deg": 58.68170937032955,
+            "p50_deg": 57.548816021208914,
+            "p90_deg": 80.67306439527796
           },
           "ik": {
             "count": 387,
-            "mean_deg": 35.65908782552774,
-            "p50_deg": 36.19374243874175,
-            "p90_deg": 39.23401724952486
+            "mean_deg": 35.659088046464085,
+            "p50_deg": 36.193742411360454,
+            "p90_deg": 39.23401722658304
           },
-          "ik_mean_improvement_percent": 39.23304517173116
+          "ik_mean_improvement_percent": 39.23304479522556
         },
         "right_leg": {
           "geometric": {
             "count": 387,
-            "mean_deg": 10.121256765926972,
-            "p50_deg": 9.047270517616715,
-            "p90_deg": 14.35535182085196
+            "mean_deg": 10.121256765904903,
+            "p50_deg": 9.047270517582817,
+            "p90_deg": 14.355351820777818
           },
           "ik": {
             "count": 387,
-            "mean_deg": 11.485594659551122,
-            "p50_deg": 9.625439423072695,
-            "p90_deg": 18.138130272472733
+            "mean_deg": 11.48559420201196,
+            "p50_deg": 9.62543941903138,
+            "p90_deg": 18.138130743414454
           },
-          "ik_mean_improvement_percent": -13.479925716509511
+          "ik_mean_improvement_percent": -13.479921196180399
         },
         "left_leg": {
           "geometric": {
             "count": 387,
-            "mean_deg": 16.848254118321112,
-            "p50_deg": 16.946778491461416,
-            "p90_deg": 19.242307532682787
+            "mean_deg": 16.84825411831364,
+            "p50_deg": 16.946778491523368,
+            "p90_deg": 19.2423075328024
           },
           "ik": {
             "count": 387,
-            "mean_deg": 16.230606867895155,
-            "p50_deg": 14.787871667799559,
-            "p90_deg": 23.811957859036834
+            "mean_deg": 16.23060720321493,
+            "p50_deg": 14.787871663900594,
+            "p90_deg": 23.81195662044709
           },
-          "ik_mean_improvement_percent": 3.6659421569046446
+          "ik_mean_improvement_percent": 3.6659401666273683
         }
-      }
+      },
+      "measurement_status": "complete",
+      "measurement_complete": true,
+      "coverage_passed": true,
+      "fidelity_acceptance": "not_defined"
     },
     {
       "video": "assets/videos/external/dvids_arm_circles.mp4",
+      "video_size_bytes": 6318191,
+      "video_sha256": "b44f9ea5707c091863755a9c65231e06a3a790219bbaa41eb0be04c1b622a3e2",
+      "expected_frames": 796,
+      "calibration": {
+        "mode": "automatic_window",
+        "source": null,
+        "source_size_bytes": null,
+        "source_sha256": null,
+        "frame_index": null,
+        "geometric_accepted": true,
+        "ik_accepted": true,
+        "status": "passed",
+        "failure_reason": null
+      },
       "source_frames": 796,
       "sampled_frames": 184,
       "detected_frames": 175,
+      "post_calibration_frames": 147,
+      "evaluated_frames": 144,
+      "stale_commands": {
+        "geometric": 3,
+        "ik": 3
+      },
+      "stale_frames": 3,
+      "coverage": {
+        "detected_sample_fraction": 0.9510869565217391,
+        "evaluated_nonstale_frames": 144,
+        "evaluated_nonstale_sample_fraction": 0.782608695652174,
+        "post_calibration_frames": 147,
+        "stale_frames": 3,
+        "stale_post_calibration_fraction": 0.02040816326530612,
+        "evaluation_population": "paired frames with a detected skeleton and non-stale geometric and IK commands",
+        "group_valid_evaluated_fraction": {
+          "arms": 1.0,
+          "legs": 1.0,
+          "end_effectors": 1.0,
+          "head": 1.0
+        },
+        "gates": [
+          {
+            "name": "calibration_completed",
+            "value": true,
+            "threshold": true,
+            "requirement": "==",
+            "passed": true
+          },
+          {
+            "name": "sampled_frames",
+            "value": 184,
+            "threshold": 1,
+            "requirement": ">=",
+            "passed": true
+          },
+          {
+            "name": "detected_sample_fraction",
+            "value": 0.9510869565217391,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
+          },
+          {
+            "name": "evaluated_nonstale_sample_fraction",
+            "value": 0.782608695652174,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
+          },
+          {
+            "name": "source_frames",
+            "value": 796,
+            "threshold": 796,
+            "requirement": "==",
+            "passed": true
+          },
+          {
+            "name": "arms_valid_evaluated_fraction",
+            "value": 1.0,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
+          },
+          {
+            "name": "legs_valid_evaluated_fraction",
+            "value": 1.0,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
+          },
+          {
+            "name": "end_effectors_valid_evaluated_fraction",
+            "value": 1.0,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
+          },
+          {
+            "name": "head_valid_evaluated_fraction",
+            "value": 1.0,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
+          }
+        ],
+        "failure_reasons": [],
+        "coverage_passed": true
+      },
+      "metrics": {
+        "arms": {
+          "geometric": {
+            "count": 144,
+            "mean_deg": 51.73105246361408,
+            "p50_deg": 46.417898063334135,
+            "p90_deg": 75.31392222318222
+          },
+          "ik": {
+            "count": 144,
+            "mean_deg": 34.22126595895649,
+            "p50_deg": 34.71327180248615,
+            "p90_deg": 38.880109286579824
+          },
+          "ik_mean_improvement_percent": 33.847729111974665
+        },
+        "legs": {
+          "geometric": {
+            "count": 144,
+            "mean_deg": 13.518367315969549,
+            "p50_deg": 13.501593678825644,
+            "p90_deg": 14.150732151398854
+          },
+          "ik": {
+            "count": 144,
+            "mean_deg": 13.6341032367382,
+            "p50_deg": 13.625540876660857,
+            "p90_deg": 13.778037848257439
+          },
+          "ik_mean_improvement_percent": -0.8561383047487547
+        },
+        "end_effectors": {
+          "geometric": {
+            "count": 144,
+            "mean_deg": 24.925957962725047,
+            "p50_deg": 22.815728993770833,
+            "p90_deg": 34.97097920017954
+          },
+          "ik": {
+            "count": 144,
+            "mean_deg": 18.07587767318007,
+            "p50_deg": 18.640622690900102,
+            "p90_deg": 19.63773059983097
+          },
+          "ik_mean_improvement_percent": 27.481713239622618
+        },
+        "head": {
+          "geometric": {
+            "count": 144,
+            "mean_deg": 3.486416203098755,
+            "p50_deg": 3.4764497942560295,
+            "p90_deg": 4.058549060948141
+          },
+          "ik": {
+            "count": 144,
+            "mean_deg": 3.469076773840582,
+            "p50_deg": 3.477422483221277,
+            "p90_deg": 4.036081286658171
+          },
+          "ik_mean_improvement_percent": 0.4973424929232917
+        },
+        "right_arm": {
+          "geometric": {
+            "count": 144,
+            "mean_deg": 47.09092678262722,
+            "p50_deg": 49.33572548899469,
+            "p90_deg": 71.26697756830995
+          },
+          "ik": {
+            "count": 144,
+            "mean_deg": 28.060433833171285,
+            "p50_deg": 29.635912268017627,
+            "p90_deg": 33.563005603320214
+          },
+          "ik_mean_improvement_percent": 40.41222853247531
+        },
+        "left_arm": {
+          "geometric": {
+            "count": 144,
+            "mean_deg": 49.516688875541384,
+            "p50_deg": 40.94495091136338,
+            "p90_deg": 75.7161747387578
+          },
+          "ik": {
+            "count": 144,
+            "mean_deg": 35.86682954198122,
+            "p50_deg": 36.929690034952735,
+            "p90_deg": 37.970405459133815
+          },
+          "ik_mean_improvement_percent": 27.5661794912593
+        },
+        "right_leg": {
+          "geometric": {
+            "count": 144,
+            "mean_deg": 8.33851983877569,
+            "p50_deg": 8.336203546230402,
+            "p90_deg": 8.896257829105968
+          },
+          "ik": {
+            "count": 144,
+            "mean_deg": 8.87392878819142,
+            "p50_deg": 8.87065017069092,
+            "p90_deg": 9.323661909422203
+          },
+          "ik_mean_improvement_percent": -6.420911142118735
+        },
+        "left_leg": {
+          "geometric": {
+            "count": 144,
+            "mean_deg": 16.19723811358218,
+            "p50_deg": 16.4491276583574,
+            "p90_deg": 17.422478186278376
+          },
+          "ik": {
+            "count": 144,
+            "mean_deg": 14.109119428715843,
+            "p50_deg": 14.175654095039949,
+            "p90_deg": 14.290046266352952
+          },
+          "ik_mean_improvement_percent": 12.891819396760907
+        }
+      },
+      "measurement_status": "complete",
+      "measurement_complete": true,
+      "coverage_passed": true,
+      "fidelity_acceptance": "not_defined"
+    },
+    {
+      "video": "assets/videos/external/dvids_frontal_leg_swing.mp4",
+      "video_size_bytes": 6634218,
+      "video_sha256": "a936684973411c674f86fb7cc1f8003137593c6aafa223df6b1b8ad46f60a967",
+      "expected_frames": 836,
+      "calibration": {
+        "mode": "explicit_replay_frame",
+        "source": "assets/videos/external/dvids_arm_circles.mp4",
+        "source_size_bytes": 6318191,
+        "source_sha256": "b44f9ea5707c091863755a9c65231e06a3a790219bbaa41eb0be04c1b622a3e2",
+        "frame_index": 29,
+        "geometric_accepted": true,
+        "ik_accepted": true,
+        "status": "passed",
+        "failure_reason": null
+      },
+      "source_frames": 836,
+      "sampled_frames": 192,
+      "detected_frames": 184,
+      "post_calibration_frames": 192,
+      "evaluated_frames": 184,
+      "stale_commands": {
+        "geometric": 8,
+        "ik": 8
+      },
+      "stale_frames": 8,
+      "coverage": {
+        "detected_sample_fraction": 0.9583333333333334,
+        "evaluated_nonstale_frames": 184,
+        "evaluated_nonstale_sample_fraction": 0.9583333333333334,
+        "post_calibration_frames": 192,
+        "stale_frames": 8,
+        "stale_post_calibration_fraction": 0.041666666666666664,
+        "evaluation_population": "paired frames with a detected skeleton and non-stale geometric and IK commands",
+        "group_valid_evaluated_fraction": {
+          "arms": 1.0,
+          "legs": 1.0,
+          "end_effectors": 1.0,
+          "head": 1.0
+        },
+        "gates": [
+          {
+            "name": "calibration_completed",
+            "value": true,
+            "threshold": true,
+            "requirement": "==",
+            "passed": true
+          },
+          {
+            "name": "sampled_frames",
+            "value": 192,
+            "threshold": 1,
+            "requirement": ">=",
+            "passed": true
+          },
+          {
+            "name": "detected_sample_fraction",
+            "value": 0.9583333333333334,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
+          },
+          {
+            "name": "evaluated_nonstale_sample_fraction",
+            "value": 0.9583333333333334,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
+          },
+          {
+            "name": "source_frames",
+            "value": 836,
+            "threshold": 836,
+            "requirement": "==",
+            "passed": true
+          },
+          {
+            "name": "arms_valid_evaluated_fraction",
+            "value": 1.0,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
+          },
+          {
+            "name": "legs_valid_evaluated_fraction",
+            "value": 1.0,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
+          },
+          {
+            "name": "end_effectors_valid_evaluated_fraction",
+            "value": 1.0,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
+          },
+          {
+            "name": "head_valid_evaluated_fraction",
+            "value": 1.0,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
+          }
+        ],
+        "failure_reasons": [],
+        "coverage_passed": true
+      },
+      "metrics": {
+        "arms": {
+          "geometric": {
+            "count": 184,
+            "mean_deg": 59.00780037254912,
+            "p50_deg": 54.495764523158,
+            "p90_deg": 72.60891813903103
+          },
+          "ik": {
+            "count": 184,
+            "mean_deg": 43.62852312822277,
+            "p50_deg": 41.67268846929819,
+            "p90_deg": 49.78733006957849
+          },
+          "ik_mean_improvement_percent": 26.0631258023997
+        },
+        "legs": {
+          "geometric": {
+            "count": 184,
+            "mean_deg": 15.437866186901953,
+            "p50_deg": 13.475459662891843,
+            "p90_deg": 20.002655889301938
+          },
+          "ik": {
+            "count": 184,
+            "mean_deg": 13.176768764678261,
+            "p50_deg": 13.049482678862303,
+            "p90_deg": 16.58805590336025
+          },
+          "ik_mean_improvement_percent": 14.646437498869435
+        },
+        "end_effectors": {
+          "geometric": {
+            "count": 184,
+            "mean_deg": 22.11030501512975,
+            "p50_deg": 20.59329580108593,
+            "p90_deg": 28.001428856349836
+          },
+          "ik": {
+            "count": 184,
+            "mean_deg": 14.806929675196432,
+            "p50_deg": 15.138892220326667,
+            "p90_deg": 16.865850550002346
+          },
+          "ik_mean_improvement_percent": 33.03154495126018
+        },
+        "head": {
+          "geometric": {
+            "count": 184,
+            "mean_deg": 4.439452928054335,
+            "p50_deg": 4.206171675043864,
+            "p90_deg": 5.387220843304326
+          },
+          "ik": {
+            "count": 184,
+            "mean_deg": 4.301019592462837,
+            "p50_deg": 4.106373082828281,
+            "p90_deg": 5.326069145113405
+          },
+          "ik_mean_improvement_percent": 3.118252132299748
+        },
+        "right_arm": {
+          "geometric": {
+            "count": 184,
+            "mean_deg": 60.67088582241444,
+            "p50_deg": 58.808703288273094,
+            "p90_deg": 75.73019106620242
+          },
+          "ik": {
+            "count": 184,
+            "mean_deg": 17.708400986425865,
+            "p50_deg": 16.428754497131614,
+            "p90_deg": 21.566576320941092
+          },
+          "ik_mean_improvement_percent": 70.81235794338177
+        },
+        "left_arm": {
+          "geometric": {
+            "count": 184,
+            "mean_deg": 23.26437373411088,
+            "p50_deg": 17.734446552366954,
+            "p90_deg": 40.53240066919258
+          },
+          "ik": {
+            "count": 184,
+            "mean_deg": 31.341036125315,
+            "p50_deg": 34.201054301813045,
+            "p90_deg": 35.58652157552514
+          },
+          "ik_mean_improvement_percent": -34.71687002415151
+        },
+        "right_leg": {
+          "geometric": {
+            "count": 184,
+            "mean_deg": 10.749777952045028,
+            "p50_deg": 9.262454332389265,
+            "p90_deg": 15.422807842564186
+          },
+          "ik": {
+            "count": 184,
+            "mean_deg": 9.595562652792466,
+            "p50_deg": 8.835824582455732,
+            "p90_deg": 16.795511752116678
+          },
+          "ik_mean_improvement_percent": 10.737108286343577
+        },
+        "left_leg": {
+          "geometric": {
+            "count": 184,
+            "mean_deg": 11.427034639024074,
+            "p50_deg": 12.50203179104183,
+            "p90_deg": 14.739532986434698
+          },
+          "ik": {
+            "count": 184,
+            "mean_deg": 11.088629018985989,
+            "p50_deg": 12.30723764452814,
+            "p90_deg": 13.992216099249394
+          },
+          "ik_mean_improvement_percent": 2.9614473984563516
+        }
+      },
+      "measurement_status": "complete",
+      "measurement_complete": true,
+      "coverage_passed": true,
+      "fidelity_acceptance": "not_defined"
+    },
+    {
+      "video": "assets/videos/external/dvids_stationary_squat.mp4",
+      "video_size_bytes": 6471387,
+      "video_sha256": "3b82ead850f106e0691385008fa8af0fe48b1f973a68ac098b7f3acf49e6f340",
+      "expected_frames": 817,
+      "calibration": {
+        "mode": "automatic_window",
+        "source": null,
+        "source_size_bytes": null,
+        "source_sha256": null,
+        "frame_index": null,
+        "geometric_accepted": true,
+        "ik_accepted": true,
+        "status": "passed",
+        "failure_reason": null
+      },
+      "source_frames": 817,
+      "sampled_frames": 188,
+      "detected_frames": 179,
+      "post_calibration_frames": 152,
       "evaluated_frames": 149,
       "stale_commands": {
         "geometric": 3,
         "ik": 3
       },
-      "metrics": {
-        "arms": {
-          "geometric": {
-            "count": 146,
-            "mean_deg": 51.53702400691688,
-            "p50_deg": 46.23117129335073,
-            "p90_deg": 75.13011532250047
-          },
-          "ik": {
-            "count": 146,
-            "mean_deg": 34.212515640244526,
-            "p50_deg": 34.71464485490489,
-            "p90_deg": 38.80194656924517
-          },
-          "ik_mean_improvement_percent": 33.61565534778881
+      "stale_frames": 3,
+      "coverage": {
+        "detected_sample_fraction": 0.9521276595744681,
+        "evaluated_nonstale_frames": 149,
+        "evaluated_nonstale_sample_fraction": 0.7925531914893617,
+        "post_calibration_frames": 152,
+        "stale_frames": 3,
+        "stale_post_calibration_fraction": 0.019736842105263157,
+        "evaluation_population": "paired frames with a detected skeleton and non-stale geometric and IK commands",
+        "group_valid_evaluated_fraction": {
+          "arms": 1.0,
+          "legs": 1.0,
+          "end_effectors": 1.0,
+          "head": 1.0
         },
-        "legs": {
-          "geometric": {
-            "count": 146,
-            "mean_deg": 13.798884268601416,
-            "p50_deg": 13.811445516045215,
-            "p90_deg": 14.43753121528966
+        "gates": [
+          {
+            "name": "calibration_completed",
+            "value": true,
+            "threshold": true,
+            "requirement": "==",
+            "passed": true
           },
-          "ik": {
-            "count": 146,
-            "mean_deg": 13.666096333339212,
-            "p50_deg": 13.66577893396995,
-            "p90_deg": 13.795799033271617
+          {
+            "name": "sampled_frames",
+            "value": 188,
+            "threshold": 1,
+            "requirement": ">=",
+            "passed": true
           },
-          "ik_mean_improvement_percent": 0.9623092177412862
-        },
-        "end_effectors": {
-          "geometric": {
-            "count": 146,
-            "mean_deg": 24.92856270491859,
-            "p50_deg": 22.605663803363992,
-            "p90_deg": 34.92580079579109
+          {
+            "name": "detected_sample_fraction",
+            "value": 0.9521276595744681,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
           },
-          "ik": {
-            "count": 146,
-            "mean_deg": 18.126999356866953,
-            "p50_deg": 18.689706653765185,
-            "p90_deg": 19.653040310731036
+          {
+            "name": "evaluated_nonstale_sample_fraction",
+            "value": 0.7925531914893617,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
           },
-          "ik_mean_improvement_percent": 27.28421782098829
-        },
-        "head": {
-          "geometric": {
-            "count": 146,
-            "mean_deg": 3.2161091689728756,
-            "p50_deg": 3.1896187134008875,
-            "p90_deg": 3.694857605886293
+          {
+            "name": "source_frames",
+            "value": 817,
+            "threshold": 817,
+            "requirement": "==",
+            "passed": true
           },
-          "ik": {
-            "count": 146,
-            "mean_deg": 3.200502623574348,
-            "p50_deg": 3.1793165873484956,
-            "p90_deg": 3.6599461777212094
+          {
+            "name": "arms_valid_evaluated_fraction",
+            "value": 1.0,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
           },
-          "ik_mean_improvement_percent": 0.48526168045197604
-        },
-        "right_arm": {
-          "geometric": {
-            "count": 146,
-            "mean_deg": 46.817835206499126,
-            "p50_deg": 47.41529793096862,
-            "p90_deg": 71.13127219643212
+          {
+            "name": "legs_valid_evaluated_fraction",
+            "value": 1.0,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
           },
-          "ik": {
-            "count": 146,
-            "mean_deg": 28.360152321113002,
-            "p50_deg": 29.954695055018846,
-            "p90_deg": 33.824076402584026
+          {
+            "name": "end_effectors_valid_evaluated_fraction",
+            "value": 1.0,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
           },
-          "ik_mean_improvement_percent": 39.4244689101385
-        },
-        "left_arm": {
-          "geometric": {
-            "count": 146,
-            "mean_deg": 49.354573193639254,
-            "p50_deg": 40.17229487051404,
-            "p90_deg": 75.51040345842739
-          },
-          "ik": {
-            "count": 146,
-            "mean_deg": 35.585159781061535,
-            "p50_deg": 36.59310544435999,
-            "p90_deg": 37.73299878920676
-          },
-          "ik_mean_improvement_percent": 27.89896157860464
-        },
-        "right_leg": {
-          "geometric": {
-            "count": 146,
-            "mean_deg": 8.563101744163857,
-            "p50_deg": 8.594815726477384,
-            "p90_deg": 9.077621835214742
-          },
-          "ik": {
-            "count": 146,
-            "mean_deg": 9.086532090981507,
-            "p50_deg": 9.087534008751057,
-            "p90_deg": 9.537426545008342
-          },
-          "ik_mean_improvement_percent": -6.112625570219232
-        },
-        "left_leg": {
-          "geometric": {
-            "count": 146,
-            "mean_deg": 16.691194211317825,
-            "p50_deg": 16.93270407433761,
-            "p90_deg": 17.919766887802034
-          },
-          "ik": {
-            "count": 146,
-            "mean_deg": 14.402649967604379,
-            "p50_deg": 14.470933139883282,
-            "p90_deg": 14.580003872081242
-          },
-          "ik_mean_improvement_percent": 13.711087503623009
-        }
-      }
-    },
-    {
-      "video": "assets/videos/external/dvids_frontal_leg_swing.mp4",
-      "source_frames": 836,
-      "sampled_frames": 192,
-      "detected_frames": 184,
-      "evaluated_frames": 159,
-      "stale_commands": {
-        "geometric": 4,
-        "ik": 4
+          {
+            "name": "head_valid_evaluated_fraction",
+            "value": 1.0,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
+          }
+        ],
+        "failure_reasons": [],
+        "coverage_passed": true
       },
       "metrics": {
         "arms": {
           "geometric": {
-            "count": 155,
-            "mean_deg": 75.07907997338292,
-            "p50_deg": 70.6833266846811,
-            "p90_deg": 87.80624749154805
+            "count": 149,
+            "mean_deg": 40.97184117149776,
+            "p50_deg": 36.84742640849613,
+            "p90_deg": 51.830167787809415
           },
           "ik": {
-            "count": 155,
-            "mean_deg": 68.42534393914487,
-            "p50_deg": 68.0580447065778,
-            "p90_deg": 71.6445390904481
+            "count": 149,
+            "mean_deg": 34.81471601589619,
+            "p50_deg": 36.66134685525742,
+            "p90_deg": 39.07207784378622
           },
-          "ik_mean_improvement_percent": 8.862303635842284
+          "ik_mean_improvement_percent": 15.027699462734423
         },
         "legs": {
           "geometric": {
-            "count": 155,
-            "mean_deg": 15.95749529314409,
-            "p50_deg": 14.070079752431749,
-            "p90_deg": 21.129826902328585
+            "count": 149,
+            "mean_deg": 20.898687499793912,
+            "p50_deg": 15.189722032700283,
+            "p90_deg": 41.41455821933068
           },
           "ik": {
-            "count": 155,
-            "mean_deg": 13.73028638891215,
-            "p50_deg": 13.402404984114352,
-            "p90_deg": 17.560399782905563
+            "count": 149,
+            "mean_deg": 18.72203405630016,
+            "p50_deg": 13.714847832974401,
+            "p90_deg": 35.87449461554209
           },
-          "ik_mean_improvement_percent": 13.957133392913034
+          "ik_mean_improvement_percent": 10.41526384618755
         },
         "end_effectors": {
           "geometric": {
-            "count": 155,
-            "mean_deg": 28.76925063547366,
-            "p50_deg": 26.90514923254782,
-            "p90_deg": 34.548369284213365
+            "count": 149,
+            "mean_deg": 22.561852117713695,
+            "p50_deg": 19.562919555686957,
+            "p90_deg": 36.67256590706218
           },
           "ik": {
-            "count": 155,
-            "mean_deg": 24.60563617261496,
-            "p50_deg": 25.352813005724133,
-            "p90_deg": 25.91766381272719
+            "count": 149,
+            "mean_deg": 19.242188918445244,
+            "p50_deg": 18.259039288058048,
+            "p90_deg": 24.485133093830843
           },
-          "ik_mean_improvement_percent": 14.472446695308749
+          "ik_mean_improvement_percent": 14.713611196228548
         },
         "head": {
           "geometric": {
-            "count": 155,
-            "mean_deg": 17.429708715794867,
-            "p50_deg": 17.406859784387294,
-            "p90_deg": 18.77818490875744
+            "count": 149,
+            "mean_deg": 5.309363957035602,
+            "p50_deg": 5.141728128640047,
+            "p90_deg": 6.904199635261611
           },
           "ik": {
-            "count": 155,
-            "mean_deg": 17.410840668095403,
-            "p50_deg": 17.400791882670898,
-            "p90_deg": 18.760766216764885
+            "count": 149,
+            "mean_deg": 5.18504643090381,
+            "p50_deg": 5.075375703215286,
+            "p90_deg": 6.810942972490559
           },
-          "ik_mean_improvement_percent": 0.10825222616810404
+          "ik_mean_improvement_percent": 2.3414768160139987
         },
         "right_arm": {
           "geometric": {
-            "count": 155,
-            "mean_deg": 71.15328841554677,
-            "p50_deg": 68.4475976937228,
-            "p90_deg": 84.34978020611508
+            "count": 149,
+            "mean_deg": 37.82280872858396,
+            "p50_deg": 32.981432256310704,
+            "p90_deg": 57.78540096563203
           },
           "ik": {
-            "count": 155,
-            "mean_deg": 61.65117879355089,
-            "p50_deg": 63.45171964680455,
-            "p90_deg": 64.80490610599006
+            "count": 149,
+            "mean_deg": 24.85575726513532,
+            "p50_deg": 28.907647388274988,
+            "p90_deg": 29.42665128116782
           },
-          "ik_mean_improvement_percent": 13.35442090392508
+          "ik_mean_improvement_percent": 34.28368198803015
         },
         "left_arm": {
           "geometric": {
-            "count": 155,
-            "mean_deg": 36.23451913343469,
-            "p50_deg": 29.86694693500667,
-            "p90_deg": 50.70385769666071
+            "count": 147,
+            "mean_deg": 37.059924796535135,
+            "p50_deg": 37.552372831031704,
+            "p90_deg": 48.31951591017976
           },
           "ik": {
-            "count": 155,
-            "mean_deg": 25.2806382428996,
-            "p50_deg": 26.932818933801606,
-            "p90_deg": 28.449560567436265
+            "count": 147,
+            "mean_deg": 36.20258891895028,
+            "p50_deg": 38.37535604922537,
+            "p90_deg": 42.68283305824716
           },
-          "ik_mean_improvement_percent": 30.23051265064978
+          "ik_mean_improvement_percent": 2.313377272867556
         },
         "right_leg": {
           "geometric": {
-            "count": 155,
-            "mean_deg": 6.845760508647046,
-            "p50_deg": 3.945245562221698,
-            "p90_deg": 12.057490674102278
+            "count": 149,
+            "mean_deg": 16.496260317869577,
+            "p50_deg": 7.141182757019723,
+            "p90_deg": 48.078976033057266
           },
           "ik": {
-            "count": 155,
-            "mean_deg": 6.002137430402314,
-            "p50_deg": 3.752266058092614,
-            "p90_deg": 14.276678383021968
+            "count": 149,
+            "mean_deg": 14.465243741589887,
+            "p50_deg": 7.292074891948815,
+            "p90_deg": 37.48470275735979
           },
-          "ik_mean_improvement_percent": 12.32329230885496
+          "ik_mean_improvement_percent": 12.311981850089925
         },
         "left_leg": {
           "geometric": {
-            "count": 155,
-            "mean_deg": 12.182976403944926,
-            "p50_deg": 13.601254197737163,
-            "p90_deg": 15.095096339407027
+            "count": 149,
+            "mean_deg": 16.43599337248035,
+            "p50_deg": 10.3663470278247,
+            "p90_deg": 36.62289050230246
           },
           "ik": {
-            "count": 155,
-            "mean_deg": 12.6833857281266,
-            "p50_deg": 14.505768292207259,
-            "p90_deg": 15.504271563464911
+            "count": 149,
+            "mean_deg": 15.82264664035761,
+            "p50_deg": 10.13063105289894,
+            "p90_deg": 36.77358562361393
           },
-          "ik_mean_improvement_percent": -4.1074472082178515
+          "ik_mean_improvement_percent": 3.7317290061074093
         }
-      }
-    },
-    {
-      "video": "assets/videos/external/dvids_stationary_squat.mp4",
-      "source_frames": 817,
-      "sampled_frames": 188,
-      "detected_frames": 179,
-      "evaluated_frames": 153,
-      "stale_commands": {
-        "geometric": 3,
-        "ik": 3
       },
-      "metrics": {
-        "arms": {
-          "geometric": {
-            "count": 150,
-            "mean_deg": 40.86181376800476,
-            "p50_deg": 36.75731733685832,
-            "p90_deg": 51.62109133339023
-          },
-          "ik": {
-            "count": 150,
-            "mean_deg": 34.82720844524836,
-            "p50_deg": 36.67663893447801,
-            "p90_deg": 39.08252327634638
-          },
-          "ik_mean_improvement_percent": 14.768324668645915
-        },
-        "legs": {
-          "geometric": {
-            "count": 150,
-            "mean_deg": 20.915317289932624,
-            "p50_deg": 15.26890252564958,
-            "p90_deg": 41.38872692798328
-          },
-          "ik": {
-            "count": 150,
-            "mean_deg": 18.716671499684395,
-            "p50_deg": 13.743851647137792,
-            "p90_deg": 35.825777899056675
-          },
-          "ik_mean_improvement_percent": 10.512132136319652
-        },
-        "end_effectors": {
-          "geometric": {
-            "count": 150,
-            "mean_deg": 22.667960855122303,
-            "p50_deg": 19.542396823905527,
-            "p90_deg": 36.73640885224027
-          },
-          "ik": {
-            "count": 150,
-            "mean_deg": 19.39973197630002,
-            "p50_deg": 18.44949064302345,
-            "p90_deg": 24.57441637969262
-          },
-          "ik_mean_improvement_percent": 14.417833609783015
-        },
-        "head": {
-          "geometric": {
-            "count": 150,
-            "mean_deg": 6.123560161004037,
-            "p50_deg": 6.037202874739998,
-            "p90_deg": 7.615356231509493
-          },
-          "ik": {
-            "count": 150,
-            "mean_deg": 5.990319102373615,
-            "p50_deg": 5.931462221137894,
-            "p90_deg": 7.531392312514618
-          },
-          "ik_mean_improvement_percent": 2.1758757181635224
-        },
-        "right_arm": {
-          "geometric": {
-            "count": 150,
-            "mean_deg": 37.51327410451983,
-            "p50_deg": 32.66424696825564,
-            "p90_deg": 57.43300804363719
-          },
-          "ik": {
-            "count": 150,
-            "mean_deg": 24.873198194801173,
-            "p50_deg": 28.911408391368013,
-            "p90_deg": 29.456259477245727
-          },
-          "ik_mean_improvement_percent": 33.69494188777221
-        },
-        "left_arm": {
-          "geometric": {
-            "count": 148,
-            "mean_deg": 36.97354695130493,
-            "p50_deg": 37.45837925756912,
-            "p90_deg": 48.21610935806329
-          },
-          "ik": {
-            "count": 148,
-            "mean_deg": 36.13820038679967,
-            "p50_deg": 38.30594663628284,
-            "p90_deg": 42.60478262250007
-          },
-          "ik_mean_improvement_percent": 2.259308704153906
-        },
-        "right_leg": {
-          "geometric": {
-            "count": 150,
-            "mean_deg": 16.573119982315585,
-            "p50_deg": 7.350383261471585,
-            "p90_deg": 48.05835986903781
-          },
-          "ik": {
-            "count": 150,
-            "mean_deg": 14.494928753738035,
-            "p50_deg": 7.425980755775058,
-            "p90_deg": 37.47696497678196
-          },
-          "ik_mean_improvement_percent": 12.539529254570613
-        },
-        "left_leg": {
-          "geometric": {
-            "count": 150,
-            "mean_deg": 16.464681372200374,
-            "p50_deg": 10.459151420222707,
-            "p90_deg": 36.58313165414623
-          },
-          "ik": {
-            "count": 150,
-            "mean_deg": 15.815773336935251,
-            "p50_deg": 10.17529577303003,
-            "p90_deg": 36.77695080336619
-          },
-          "ik_mean_improvement_percent": 3.9412122263159266
-        }
-      }
+      "measurement_status": "complete",
+      "measurement_complete": true,
+      "coverage_passed": true,
+      "fidelity_acceptance": "not_defined"
     },
     {
       "video": "assets/videos/external/dvids_trunk_circles.mp4",
+      "video_size_bytes": 6871249,
+      "video_sha256": "5095be71e318228c0cc5686d1fc52696368ac71577bea5f032872635a39ceff6",
+      "expected_frames": 867,
+      "calibration": {
+        "mode": "explicit_replay_frame",
+        "source": "assets/videos/external/dvids_arm_circles.mp4",
+        "source_size_bytes": 6318191,
+        "source_sha256": "b44f9ea5707c091863755a9c65231e06a3a790219bbaa41eb0be04c1b622a3e2",
+        "frame_index": 29,
+        "geometric_accepted": true,
+        "ik_accepted": true,
+        "status": "passed",
+        "failure_reason": null
+      },
       "source_frames": 867,
       "sampled_frames": 198,
       "detected_frames": 190,
-      "evaluated_frames": 164,
+      "post_calibration_frames": 198,
+      "evaluated_frames": 190,
       "stale_commands": {
-        "geometric": 3,
-        "ik": 3
+        "geometric": 8,
+        "ik": 8
+      },
+      "stale_frames": 8,
+      "coverage": {
+        "detected_sample_fraction": 0.9595959595959596,
+        "evaluated_nonstale_frames": 190,
+        "evaluated_nonstale_sample_fraction": 0.9595959595959596,
+        "post_calibration_frames": 198,
+        "stale_frames": 8,
+        "stale_post_calibration_fraction": 0.04040404040404041,
+        "evaluation_population": "paired frames with a detected skeleton and non-stale geometric and IK commands",
+        "group_valid_evaluated_fraction": {
+          "arms": 1.0,
+          "legs": 1.0,
+          "end_effectors": 1.0,
+          "head": 1.0
+        },
+        "gates": [
+          {
+            "name": "calibration_completed",
+            "value": true,
+            "threshold": true,
+            "requirement": "==",
+            "passed": true
+          },
+          {
+            "name": "sampled_frames",
+            "value": 198,
+            "threshold": 1,
+            "requirement": ">=",
+            "passed": true
+          },
+          {
+            "name": "detected_sample_fraction",
+            "value": 0.9595959595959596,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
+          },
+          {
+            "name": "evaluated_nonstale_sample_fraction",
+            "value": 0.9595959595959596,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
+          },
+          {
+            "name": "source_frames",
+            "value": 867,
+            "threshold": 867,
+            "requirement": "==",
+            "passed": true
+          },
+          {
+            "name": "arms_valid_evaluated_fraction",
+            "value": 1.0,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
+          },
+          {
+            "name": "legs_valid_evaluated_fraction",
+            "value": 1.0,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
+          },
+          {
+            "name": "end_effectors_valid_evaluated_fraction",
+            "value": 1.0,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
+          },
+          {
+            "name": "head_valid_evaluated_fraction",
+            "value": 1.0,
+            "threshold": 0.7,
+            "requirement": ">=",
+            "passed": true
+          }
+        ],
+        "failure_reasons": [],
+        "coverage_passed": true
       },
       "metrics": {
         "arms": {
           "geometric": {
-            "count": 161,
-            "mean_deg": 53.447730375048636,
-            "p50_deg": 48.42389382317445,
-            "p90_deg": 74.04539625381429
+            "count": 190,
+            "mean_deg": 66.12392026381951,
+            "p50_deg": 66.92250415704396,
+            "p90_deg": 74.31746749696772
           },
           "ik": {
-            "count": 161,
-            "mean_deg": 45.125420302568074,
-            "p50_deg": 45.23059643892101,
-            "p90_deg": 48.914962754239404
+            "count": 190,
+            "mean_deg": 41.94708895692104,
+            "p50_deg": 41.95374978582688,
+            "p90_deg": 45.848252696177006
           },
-          "ik_mean_improvement_percent": 15.570932599161825
+          "ik_mean_improvement_percent": 36.562912801355964
         },
         "legs": {
           "geometric": {
-            "count": 161,
-            "mean_deg": 20.60229923058527,
-            "p50_deg": 18.307970015022928,
-            "p90_deg": 29.184674341628472
+            "count": 190,
+            "mean_deg": 17.098204445250026,
+            "p50_deg": 14.569058558431319,
+            "p90_deg": 24.438046883932827
           },
           "ik": {
-            "count": 161,
-            "mean_deg": 15.393443878187401,
-            "p50_deg": 15.450050225516529,
-            "p90_deg": 16.367123969403195
+            "count": 190,
+            "mean_deg": 14.411093808725147,
+            "p50_deg": 13.455014420963712,
+            "p90_deg": 20.650222323540525
           },
-          "ik_mean_improvement_percent": 25.282883692248436
+          "ik_mean_improvement_percent": 15.715747493423926
         },
         "end_effectors": {
           "geometric": {
-            "count": 161,
-            "mean_deg": 22.468075766368937,
-            "p50_deg": 18.240247262470405,
-            "p90_deg": 33.6869271222711
+            "count": 190,
+            "mean_deg": 18.66264839851537,
+            "p50_deg": 16.74491602799044,
+            "p90_deg": 24.80304376502059
           },
           "ik": {
-            "count": 161,
-            "mean_deg": 17.349276778035655,
-            "p50_deg": 16.753384615048063,
-            "p90_deg": 20.92377222294852
+            "count": 190,
+            "mean_deg": 16.094725555317535,
+            "p50_deg": 14.938306912720876,
+            "p90_deg": 20.7079161110057
           },
-          "ik_mean_improvement_percent": 22.782542846839128
+          "ik_mean_improvement_percent": 13.759691488385517
         },
         "head": {
           "geometric": {
-            "count": 161,
-            "mean_deg": 9.429926154155899,
-            "p50_deg": 9.333658043629914,
-            "p90_deg": 10.496360792106941
+            "count": 190,
+            "mean_deg": 4.508964174737827,
+            "p50_deg": 4.189224552992591,
+            "p90_deg": 5.653524559891806
           },
           "ik": {
-            "count": 161,
-            "mean_deg": 9.49867094749523,
-            "p50_deg": 9.39494341762478,
-            "p90_deg": 10.564661050409677
+            "count": 190,
+            "mean_deg": 4.371519307629783,
+            "p50_deg": 4.062288687000027,
+            "p90_deg": 5.486320706690273
           },
-          "ik_mean_improvement_percent": -0.729006698626522
+          "ik_mean_improvement_percent": 3.0482581316147894
         },
         "right_arm": {
           "geometric": {
-            "count": 161,
-            "mean_deg": 47.60464497722156,
-            "p50_deg": 37.00917956909196,
-            "p90_deg": 86.93734381502279
+            "count": 190,
+            "mean_deg": 43.190623344502846,
+            "p50_deg": 42.29594277387099,
+            "p90_deg": 52.041116310711075
           },
           "ik": {
-            "count": 161,
-            "mean_deg": 36.2076704353867,
-            "p50_deg": 36.6328179521494,
-            "p90_deg": 38.55812827015987
+            "count": 190,
+            "mean_deg": 33.494071623117186,
+            "p50_deg": 33.15027034906208,
+            "p90_deg": 36.17942465459216
           },
-          "ik_mean_improvement_percent": 23.940887590461436
+          "ik_mean_improvement_percent": 22.450594528452903
         },
         "left_arm": {
           "geometric": {
             "count": 29,
-            "mean_deg": 74.25660590877504,
-            "p50_deg": 72.22667844180053,
-            "p90_deg": 88.65535953665261
+            "mean_deg": 53.70511513203047,
+            "p50_deg": 49.47189624588802,
+            "p90_deg": 69.81192638714427
           },
           "ik": {
             "count": 29,
-            "mean_deg": 37.95260319303724,
-            "p50_deg": 36.806161352522594,
-            "p90_deg": 48.36153347619206
+            "mean_deg": 33.20597327384566,
+            "p50_deg": 35.0100025292847,
+            "p90_deg": 43.68407166452478
           },
-          "ik_mean_improvement_percent": 48.88993008963758
+          "ik_mean_improvement_percent": 38.169812703667105
         },
         "right_leg": {
           "geometric": {
-            "count": 161,
-            "mean_deg": 9.39746741824134,
-            "p50_deg": 7.990582151055638,
-            "p90_deg": 15.129626178845049
+            "count": 190,
+            "mean_deg": 8.485760685034087,
+            "p50_deg": 7.665369906423858,
+            "p90_deg": 11.71048351558519
           },
           "ik": {
-            "count": 161,
-            "mean_deg": 7.199123107962163,
-            "p50_deg": 7.08815589968468,
-            "p90_deg": 8.610505106351878
+            "count": 190,
+            "mean_deg": 10.004353376955565,
+            "p50_deg": 8.497471017192781,
+            "p90_deg": 18.853273422273602
           },
-          "ik_mean_improvement_percent": 23.392944209755807
+          "ik_mean_improvement_percent": -17.895775620914513
         },
         "left_leg": {
           "geometric": {
-            "count": 161,
-            "mean_deg": 16.074706603178406,
-            "p50_deg": 14.599827653889138,
-            "p90_deg": 20.565339115394934
+            "count": 190,
+            "mean_deg": 14.349364544031971,
+            "p50_deg": 12.261298213101686,
+            "p90_deg": 21.09422873144505
           },
           "ik": {
-            "count": 161,
-            "mean_deg": 13.411039427092303,
-            "p50_deg": 13.633540384991498,
-            "p90_deg": 15.231856217139418
+            "count": 190,
+            "mean_deg": 14.34513768990168,
+            "p50_deg": 13.90995071698266,
+            "p90_deg": 19.32965834118339
           },
-          "ik_mean_improvement_percent": 16.570549260037026
+          "ik_mean_improvement_percent": 0.02945673390150061
         }
-      }
+      },
+      "measurement_status": "complete",
+      "measurement_complete": true,
+      "coverage_passed": true,
+      "fidelity_acceptance": "not_defined"
     }
-  ]
+  ],
+  "coverage_passed": true,
+  "provenance_complete": true,
+  "measurement_status": "complete",
+  "measurement_complete": true,
+  "fidelity_acceptance": "not_defined",
+  "fidelity_acceptance_reason": "No pose-error thresholds are declared by this raw diagnostic; coverage alone cannot establish acceptable imitation fidelity."
 }
