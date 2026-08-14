@@ -36,6 +36,35 @@ FOOT_CONTACT_DETECTION_THRESHOLD_N = 1e-3
 FOOT_LOAD_TELEMETRY_THRESHOLD_N = 4.0
 
 
+def _stale_support_force_return_reason(
+    *,
+    support_estimate_stale: bool,
+    reference_stale: bool,
+    prior_phase: object | None,
+) -> str | None:
+    """Abort only when stale perception invalidates an active lift request.
+
+    The support latch still receives every stale observation and requests
+    double support immediately.  A requested return is not yet a physical
+    return while the FSM remains in SHIFT/VERIFY/LIFT/HOLD, so stale perception
+    must still bypass any HOLD dwell and force the lower-and-center recovery.
+    Suppression is safe only after the FSM has actually entered that recovery.
+    An active or unknown phase remains fail-closed.
+    """
+
+    if not support_estimate_stale or reference_stale:
+        return None
+    phase_value = getattr(prior_phase, "value", prior_phase)
+    if phase_value in {
+        "lower_swing",
+        "verify_touchdown",
+        "center_weight",
+        "double_support",
+    }:
+        return None
+    return "stale_support_intent"
+
+
 @dataclass(frozen=True, slots=True)
 class TeleopStats:
     """Small immutable run summary used by smoke tests and experiment logs."""
@@ -1174,10 +1203,10 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
                             state,
                             dt_s=float(simulation.model.opt.timestep),
                             intent=requested_support,
-                            force_return_reason=(
-                                "stale_support_intent"
-                                if support_estimate.stale and not command.stale
-                                else None
+                            force_return_reason=_stale_support_force_return_reason(
+                                support_estimate_stale=support_estimate.stale,
+                                reference_stale=command.stale,
+                                prior_phase=support_machine.phase,
                             ),
                         )
                     else:

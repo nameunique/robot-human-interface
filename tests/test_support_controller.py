@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from robot_human_interface.app.teleop import _stale_support_force_return_reason
 from robot_human_interface.control import (
     StandingBalanceController,
     SupportControlConfig,
@@ -769,6 +770,42 @@ def test_upstream_forced_return_uses_explicit_abort_reason() -> None:
     assert machine.last_diagnostics is not None
     assert machine.last_diagnostics.abort_reason == "stale_support_intent"
     assert machine.last_diagnostics.blocked_intent is SupportIntent.LEFT_SWING
+
+
+def test_stale_support_in_hold_forces_return_after_double_support_was_requested() -> None:
+    config = replace(_fast_config(), minimum_hold_duration_s=1.0)
+    machine = SupportStateMachine(LOWER, UPPER, config)
+    one_foot = _loads(right_n=1.0, left_n=27.0)
+    _admit_from_double_support(machine, SupportIntent.RIGHT_SWING)
+    for _ in range(100):
+        machine.update(_reference(), one_foot, dt_s=0.01)
+        if machine.phase is SupportPhase.HOLD_SWING:
+            break
+    assert machine.phase is SupportPhase.HOLD_SWING
+
+    # A valid camera-side release has changed the requested intent, but the
+    # lifted foot has not physically begun returning and the ordinary path
+    # would remain in the configured HOLD dwell.
+    machine.set_intent(SupportIntent.DOUBLE_SUPPORT)
+    assert machine.intent is SupportIntent.DOUBLE_SUPPORT
+    reason = _stale_support_force_return_reason(
+        support_estimate_stale=True,
+        reference_stale=False,
+        prior_phase=machine.phase,
+    )
+    assert reason == "stale_support_intent"
+
+    machine.update(
+        _reference(),
+        one_foot,
+        dt_s=0.01,
+        force_return_reason=reason,
+    )
+
+    assert machine.phase is SupportPhase.LOWER_SWING
+    assert machine.last_diagnostics is not None
+    assert machine.last_diagnostics.abort_reason == "stale_support_intent"
+    assert machine.last_diagnostics.blocked_intent is SupportIntent.RIGHT_SWING
 
 
 @pytest.mark.parametrize("reason", ("", "   ", 3))

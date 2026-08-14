@@ -20,6 +20,7 @@ from robot_human_interface.app.teleop import (
     _FootContactTelemetry,
     _SupportAbortTelemetry,
     _handle_key,
+    _stale_support_force_return_reason,
     _video_path,
     build_parser,
     main,
@@ -255,6 +256,49 @@ def test_support_abort_telemetry_counts_fault_edges_not_repeated_ticks() -> None
         "touchdown_timeout",
         "active_tilt_limit",
     ]
+
+
+@pytest.mark.parametrize(
+    "phase",
+    ("shift_weight", "verify_stance", "lift_swing", "hold_swing", None),
+)
+def test_stale_support_perception_aborts_until_physical_return_begins(
+    phase: str | None,
+) -> None:
+    assert (
+        _stale_support_force_return_reason(
+            support_estimate_stale=True,
+            reference_stale=False,
+            prior_phase=phase,
+        )
+        == "stale_support_intent"
+    )
+
+
+@pytest.mark.parametrize(
+    "phase",
+    ("lower_swing", "verify_touchdown", "center_weight", "double_support"),
+)
+def test_stale_support_perception_preserves_an_active_safe_return(phase: str) -> None:
+    assert (
+        _stale_support_force_return_reason(
+            support_estimate_stale=True,
+            reference_stale=False,
+            prior_phase=phase,
+        )
+        is None
+    )
+
+
+def test_stale_full_pose_reference_uses_the_controller_fail_closed_path() -> None:
+    assert (
+        _stale_support_force_return_reason(
+            support_estimate_stale=True,
+            reference_stale=True,
+            prior_phase="hold_swing",
+        )
+        is None
+    )
 
 
 def test_parser_selects_slow_bundled_demo() -> None:
