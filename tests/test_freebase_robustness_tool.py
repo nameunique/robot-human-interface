@@ -301,6 +301,16 @@ def test_canonical_matrix_adds_independent_twenty_per_side_holdout() -> None:
     )
     assert len({trial.seed for trial in trials}) == len(trials)
 
+    for invalid in (True, 1.0, "1"):
+        with pytest.raises(ValueError, match="randomized_trials"):
+            robustness.build_trial_specs(randomized_trials=invalid)
+        with pytest.raises(ValueError, match="holdout"):
+            robustness.build_trial_specs(
+                single_support_holdout_trials_per_side=invalid
+            )
+        with pytest.raises(ValueError, match="seed"):
+            robustness.build_trial_specs(seed=invalid)
+
 
 def test_each_single_support_holdout_side_requires_twenty_of_twenty() -> None:
     thresholds = robustness.RobustnessThresholds()
@@ -351,6 +361,75 @@ def test_each_single_support_holdout_side_requires_twenty_of_twenty() -> None:
         "passed"
     ] is False
     assert report["overall_passed"] is False
+
+
+def test_report_recomputes_trial_pass_from_nested_gates() -> None:
+    thresholds = robustness.RobustnessThresholds()
+    trials = robustness.build_trial_specs(
+        randomized_trials=robustness.DEFAULT_RANDOMIZED_TRIALS,
+        seed=robustness.CANONICAL_SEED,
+        scenarios=robustness.SCENARIOS,
+    )
+    results = robustness.evaluate_suite(
+        trials, thresholds=thresholds, evaluator=_passing_evaluation
+    )
+    tampered = next(
+        result
+        for result in results
+        if result["cohort"] == "single_support_holdout"
+        and result["scenario"] == "right_single_support"
+    )
+    assert tampered["passed"] is True
+    tampered["gates"][0]["passed"] = False
+
+    report = robustness.build_report(
+        results,
+        thresholds=thresholds,
+        selected_scenarios=robustness.SCENARIOS,
+        randomized_trials_requested=robustness.DEFAULT_RANDOMIZED_TRIALS,
+        seed=robustness.CANONICAL_SEED,
+        provenance=_provenance(),
+    )
+    gates = {gate["name"]: gate for gate in report["aggregate"]["gates"]}
+
+    assert gates["trial_assessments_consistent"]["passed"] is False
+    assert tampered["trial_id"] in gates["trial_assessments_consistent"]["observed"]
+    assert (
+        report["aggregate"]["single_support_holdout"]["by_side"]
+        ["right_single_support"]["successes"]
+        == 19
+    )
+    assert report["overall_passed"] is False
+
+    for invalid in (True, 20.0, "20"):
+        with pytest.raises(ValueError, match="randomized_trials_requested"):
+            robustness.build_report(
+                results,
+                thresholds=thresholds,
+                selected_scenarios=robustness.SCENARIOS,
+                randomized_trials_requested=invalid,
+                seed=robustness.CANONICAL_SEED,
+                provenance=_provenance(),
+            )
+        with pytest.raises(ValueError, match="holdout"):
+            robustness.build_report(
+                results,
+                thresholds=thresholds,
+                selected_scenarios=robustness.SCENARIOS,
+                randomized_trials_requested=robustness.DEFAULT_RANDOMIZED_TRIALS,
+                single_support_holdout_trials_per_side_requested=invalid,
+                seed=robustness.CANONICAL_SEED,
+                provenance=_provenance(),
+            )
+        with pytest.raises(ValueError, match="seed"):
+            robustness.build_report(
+                results,
+                thresholds=thresholds,
+                selected_scenarios=robustness.SCENARIOS,
+                randomized_trials_requested=robustness.DEFAULT_RANDOMIZED_TRIALS,
+                seed=invalid,
+                provenance=_provenance(),
+            )
 
 
 def test_model_variation_is_seeded_bounded_and_keeps_mass_inertia_scaling_physical() -> None:

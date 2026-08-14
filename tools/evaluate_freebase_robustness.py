@@ -446,16 +446,27 @@ def build_trial_specs(
 ) -> list[TrialSpec]:
     """Build critical, broad-randomized, then single-support holdout trials."""
 
-    if isinstance(randomized_trials, bool) or randomized_trials < 0:
+    if (
+        isinstance(randomized_trials, bool)
+        or not isinstance(randomized_trials, (int, np.integer))
+        or randomized_trials < 0
+    ):
         raise ValueError("randomized_trials must be a non-negative integer")
     if (
         isinstance(single_support_holdout_trials_per_side, bool)
+        or not isinstance(
+            single_support_holdout_trials_per_side, (int, np.integer)
+        )
         or single_support_holdout_trials_per_side < 0
     ):
         raise ValueError(
             "single_support_holdout_trials_per_side must be a non-negative integer"
         )
-    if isinstance(seed, bool) or int(seed) != seed or seed < 0:
+    if (
+        isinstance(seed, bool)
+        or not isinstance(seed, (int, np.integer))
+        or seed < 0
+    ):
         raise ValueError("seed must be a non-negative integer")
     selected = tuple(scenarios or default_scenarios())
     if not selected:
@@ -2815,6 +2826,23 @@ def _provenance() -> dict[str, object]:
     }
 
 
+def _trial_assessment_passed(result: Mapping[str, object]) -> tuple[bool, bool]:
+    """Return conservative pass and whether the summary matches its gates."""
+
+    gates = result.get("gates")
+    if not isinstance(gates, list) or not gates:
+        return False, False
+    gate_values: list[bool] = []
+    for gate in gates:
+        if not isinstance(gate, Mapping) or type(gate.get("passed")) is not bool:
+            return False, False
+        gate_values.append(bool(gate["passed"]))
+    gates_passed = all(gate_values)
+    reported = result.get("passed")
+    consistent = type(reported) is bool and reported is gates_passed
+    return bool(consistent and gates_passed), consistent
+
+
 def build_report(
     results: Sequence[Mapping[str, object]],
     *,
@@ -2829,12 +2857,39 @@ def build_report(
 ) -> dict[str, object]:
     """Build aggregate coverage/rate gates without hiding failed trials."""
 
+    for name, value in (
+        ("randomized_trials_requested", randomized_trials_requested),
+        (
+            "single_support_holdout_trials_per_side_requested",
+            single_support_holdout_trials_per_side_requested,
+        ),
+        ("seed", seed),
+    ):
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, np.integer))
+            or value < 0
+        ):
+            raise ValueError(f"{name} must be a non-negative integer")
+
     captured = dict(provenance or _provenance())
     final_hashes = _runtime_input_hashes()
     initial_hashes = captured.get("runtime_input_sha256")
     inputs_unchanged = initial_hashes == final_hashes
     selected_scenario_contracts_exact = tuple(selected_scenarios) == SCENARIOS
     threshold_violations = _threshold_policy_violations(thresholds)
+    assessment_status = {
+        str(result.get("trial_id")): _trial_assessment_passed(result)
+        for result in results
+    }
+    inconsistent_assessments = sorted(
+        trial_id
+        for trial_id, (_, consistent) in assessment_status.items()
+        if not consistent
+    )
+
+    def trial_passed(result: Mapping[str, object]) -> bool:
+        return assessment_status.get(str(result.get("trial_id")), (False, False))[0]
 
     critical_results = [result for result in results if bool(result.get("critical"))]
     randomized_results = [
@@ -2845,7 +2900,7 @@ def build_report(
         for result in results
         if result.get("cohort") == "single_support_holdout"
     ]
-    randomized_successes = sum(bool(result.get("passed")) for result in randomized_results)
+    randomized_successes = sum(trial_passed(result) for result in randomized_results)
     randomized_count = len(randomized_results)
     randomized_rate = (
         randomized_successes / randomized_count if randomized_count else None
@@ -2862,7 +2917,7 @@ def build_report(
     failed_critical = sorted(
         str(result.get("scenario"))
         for result in critical_results
-        if not bool(result.get("passed"))
+        if not trial_passed(result)
     )
     expected_randomized_specs = [
         trial
@@ -2985,7 +3040,7 @@ def build_report(
             for result in holdout_results
             if result.get("scenario") == scenario_name
         ]
-        side_successes = sum(bool(result.get("passed")) for result in side_results)
+        side_successes = sum(trial_passed(result) for result in side_results)
         side_count = len(side_results)
         side_ci_low, side_ci_high = wilson_interval(side_successes, side_count)
         holdout_by_side[scenario_name] = {
@@ -3026,6 +3081,12 @@ def build_report(
             observed_trial_signature == expected_trial_signature,
             observed_trial_signature,
             expected_trial_signature,
+        ),
+        _gate(
+            "trial_assessments_consistent",
+            not inconsistent_assessments,
+            inconsistent_assessments,
+            [],
         ),
         _gate(
             "canonical_or_stricter_thresholds",
@@ -3191,7 +3252,7 @@ def build_report(
             "single_support_holdout": {
                 "trials": len(holdout_results),
                 "successes": sum(
-                    bool(result.get("passed")) for result in holdout_results
+                    trial_passed(result) for result in holdout_results
                 ),
                 "scenario_counts": dict(sorted(observed_holdout_counts.items())),
                 "by_side": holdout_by_side,
@@ -3230,8 +3291,8 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=DEFAULT_SINGLE_SUPPORT_HOLDOUT_TRIALS_PER_SIDE,
         help=(
-            "Independent randomized one-leg trials per side. Values below the "
-            "canonical count remain diagnostic and cannot pass acceptance."
+            "Independent randomized one-leg trials per side. Any noncanonical "
+            "count remains diagnostic and cannot pass acceptance."
         ),
     )
     parser.add_argument(
