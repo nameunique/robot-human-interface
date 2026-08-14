@@ -267,6 +267,92 @@ def test_trial_matrix_has_nominal_critical_coverage_and_reproducible_random_seed
     )
 
 
+def test_canonical_matrix_adds_independent_twenty_per_side_holdout() -> None:
+    trials = robustness.build_trial_specs(
+        randomized_trials=robustness.DEFAULT_RANDOMIZED_TRIALS,
+        seed=robustness.CANONICAL_SEED,
+        scenarios=robustness.SCENARIOS,
+    )
+
+    critical = [trial for trial in trials if trial.cohort == "critical"]
+    broad = [trial for trial in trials if trial.cohort == "broad_randomized"]
+    holdout = [
+        trial for trial in trials if trial.cohort == "single_support_holdout"
+    ]
+    assert len(critical) == len(robustness.SCENARIOS)
+    assert len(broad) == robustness.DEFAULT_RANDOMIZED_TRIALS
+    assert len(holdout) == (
+        2 * robustness.DEFAULT_SINGLE_SUPPORT_HOLDOUT_TRIALS_PER_SIDE
+    )
+    assert [trial.scenario.name for trial in holdout[:4]] == [
+        "right_single_support",
+        "left_single_support",
+        "right_single_support",
+        "left_single_support",
+    ]
+    assert [trial.seed for trial in holdout] == list(
+        range(
+            robustness.CANONICAL_SEED
+            + robustness.SINGLE_SUPPORT_HOLDOUT_SEED_OFFSET,
+            robustness.CANONICAL_SEED
+            + robustness.SINGLE_SUPPORT_HOLDOUT_SEED_OFFSET
+            + len(holdout),
+        )
+    )
+    assert len({trial.seed for trial in trials}) == len(trials)
+
+
+def test_each_single_support_holdout_side_requires_twenty_of_twenty() -> None:
+    thresholds = robustness.RobustnessThresholds()
+    trials = robustness.build_trial_specs(
+        randomized_trials=robustness.DEFAULT_RANDOMIZED_TRIALS,
+        seed=robustness.CANONICAL_SEED,
+        scenarios=robustness.SCENARIOS,
+    )
+    results = robustness.evaluate_suite(
+        trials, thresholds=thresholds, evaluator=_passing_evaluation
+    )
+    left_holdout = [
+        result
+        for result in results
+        if result["cohort"] == "single_support_holdout"
+        and result["scenario"] == "left_single_support"
+    ]
+    left_holdout[0]["passed"] = False
+
+    report = robustness.build_report(
+        results,
+        thresholds=thresholds,
+        selected_scenarios=robustness.SCENARIOS,
+        randomized_trials_requested=robustness.DEFAULT_RANDOMIZED_TRIALS,
+        single_support_holdout_trials_per_side_requested=(
+            robustness.DEFAULT_SINGLE_SUPPORT_HOLDOUT_TRIALS_PER_SIDE
+        ),
+        seed=robustness.CANONICAL_SEED,
+        provenance=_provenance(),
+    )
+    gates = {gate["name"]: gate for gate in report["aggregate"]["gates"]}
+
+    assert report["aggregate"]["randomized"]["pass_rate"] == 1.0
+    assert (
+        report["aggregate"]["single_support_holdout"]["by_side"]
+        ["right_single_support"]["successes"]
+        == 20
+    )
+    assert (
+        report["aggregate"]["single_support_holdout"]["by_side"]
+        ["left_single_support"]["successes"]
+        == 19
+    )
+    assert gates["right_single_support_holdout_wilson_95_lower_bound"][
+        "passed"
+    ] is True
+    assert gates["left_single_support_holdout_wilson_95_lower_bound"][
+        "passed"
+    ] is False
+    assert report["overall_passed"] is False
+
+
 def test_model_variation_is_seeded_bounded_and_keeps_mass_inertia_scaling_physical() -> None:
     with HumanoidSimulation("free") as simulation:
         first = robustness.sample_model_variation(
@@ -580,6 +666,33 @@ def test_one_random_trial_and_reordered_matrix_cannot_claim_canonical_acceptance
     assert reordered_gates["randomized_scenario_coverage"]["passed"] is True
     assert reordered_gates["randomized_matrix_exact"]["passed"] is False
     assert reordered_report["overall_passed"] is False
+
+
+def test_reduced_single_support_holdout_cannot_claim_acceptance() -> None:
+    thresholds = robustness.RobustnessThresholds()
+    trials = robustness.build_trial_specs(
+        randomized_trials=robustness.DEFAULT_RANDOMIZED_TRIALS,
+        single_support_holdout_trials_per_side=19,
+        seed=robustness.CANONICAL_SEED,
+        scenarios=robustness.SCENARIOS,
+    )
+    results = robustness.evaluate_suite(
+        trials, thresholds=thresholds, evaluator=_passing_evaluation
+    )
+    report = robustness.build_report(
+        results,
+        thresholds=thresholds,
+        selected_scenarios=robustness.SCENARIOS,
+        randomized_trials_requested=robustness.DEFAULT_RANDOMIZED_TRIALS,
+        single_support_holdout_trials_per_side_requested=19,
+        seed=robustness.CANONICAL_SEED,
+        provenance=_provenance(),
+    )
+    gates = {gate["name"]: gate for gate in report["aggregate"]["gates"]}
+
+    assert gates["single_support_holdout_trial_count"]["passed"] is False
+    assert gates["single_support_holdout_matrix_exact"]["passed"] is False
+    assert report["overall_passed"] is False
 
 
 def test_incomplete_scenario_selection_cannot_create_passing_acceptance() -> None:
@@ -1155,6 +1268,8 @@ def test_main_writes_strict_json_with_fake_evaluator(tmp_path: Path) -> None:
     assert report["overall_passed"] is True
     assert report["configuration"]["qpos_or_base_repair_after_initial_reset"] is False
     assert report["aggregate"]["randomized"]["trials"] == 20
+    assert report["aggregate"]["single_support_holdout"]["trials"] == 40
+    assert report["schema_version"] == 3
     assert "tools/evaluate_freebase_robustness.py" in report["runtime_input_sha256"]
     assert "config/balance.yaml" in report["runtime_input_sha256"]
     assert "models/humanoid/robot.xml" in report["runtime_input_sha256"]

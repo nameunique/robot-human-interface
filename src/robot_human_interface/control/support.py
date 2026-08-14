@@ -1243,12 +1243,21 @@ class SupportIntentLatch:
             elif self._intent is SupportIntent.DOUBLE_SUPPORT:
                 if (
                     active_phase is SupportPhase.DOUBLE_SUPPORT
+                    and self._cycle_intent is not None
+                ):
+                    # A completed physical cycle does not turn a still-held or
+                    # reasserted camera observation into another lift.  Rearm
+                    # only from a measured two-foot observation made after the
+                    # FSM itself is back in DOUBLE_SUPPORT.  This separates a
+                    # fresh gesture from same-gesture chatter near touchdown.
+                    if observed_intent is SupportIntent.DOUBLE_SUPPORT:
+                        self._cycle_intent = None
+                elif (
+                    active_phase is SupportPhase.DOUBLE_SUPPORT
                     and observed_intent is not SupportIntent.DOUBLE_SUPPORT
                 ):
                     self._intent = observed_intent
                     self._cycle_intent = observed_intent
-                elif active_phase is SupportPhase.DOUBLE_SUPPORT:
-                    self._cycle_intent = None
             elif (
                 active_phase is SupportPhase.DOUBLE_SUPPORT
                 and observed_intent is SupportIntent.DOUBLE_SUPPORT

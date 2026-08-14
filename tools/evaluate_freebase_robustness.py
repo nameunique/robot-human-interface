@@ -54,7 +54,9 @@ from robot_human_interface.skeleton import JOINT_NAMES, RobotJointCommand
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = PROJECT_ROOT / "artifacts" / "freebase-robustness.json"
 DEFAULT_RANDOMIZED_TRIALS = 20
+DEFAULT_SINGLE_SUPPORT_HOLDOUT_TRIALS_PER_SIDE = 20
 CANONICAL_SEED = 20260813
+SINGLE_SUPPORT_HOLDOUT_SEED_OFFSET = 39_187
 BALANCE_CONFIG = PROJECT_ROOT / "config" / "balance.yaml"
 RUNTIME_INPUTS = (
     Path(__file__).resolve(),
@@ -261,10 +263,17 @@ class TrialSpec:
     randomized: bool
     critical: bool
     ordinal: int
+    cohort: str = "diagnostic"
 
     @property
     def trial_id(self) -> str:
-        mode = "random" if self.randomized else "nominal"
+        mode = (
+            "holdout"
+            if self.cohort == "single_support_holdout"
+            else "random"
+            if self.randomized
+            else "nominal"
+        )
         return f"{mode}-{self.ordinal:03d}-{self.scenario.name}-seed-{self.seed}"
 
 
@@ -429,13 +438,23 @@ def default_scenarios(*, include_one_leg: bool = True) -> tuple[ScenarioSpec, ..
 def build_trial_specs(
     *,
     randomized_trials: int = 20,
+    single_support_holdout_trials_per_side: int = (
+        DEFAULT_SINGLE_SUPPORT_HOLDOUT_TRIALS_PER_SIDE
+    ),
     seed: int = 20260813,
     scenarios: Sequence[ScenarioSpec] | None = None,
 ) -> list[TrialSpec]:
-    """Build nominal critical coverage followed by deterministic random trials."""
+    """Build critical, broad-randomized, then single-support holdout trials."""
 
     if isinstance(randomized_trials, bool) or randomized_trials < 0:
         raise ValueError("randomized_trials must be a non-negative integer")
+    if (
+        isinstance(single_support_holdout_trials_per_side, bool)
+        or single_support_holdout_trials_per_side < 0
+    ):
+        raise ValueError(
+            "single_support_holdout_trials_per_side must be a non-negative integer"
+        )
     if isinstance(seed, bool) or int(seed) != seed or seed < 0:
         raise ValueError("seed must be a non-negative integer")
     selected = tuple(scenarios or default_scenarios())
@@ -456,6 +475,7 @@ def build_trial_specs(
                 randomized=False,
                 critical=True,
                 ordinal=ordinal,
+                cohort="critical",
             )
         )
         ordinal += 1
@@ -468,6 +488,28 @@ def build_trial_specs(
                 randomized=True,
                 critical=False,
                 ordinal=ordinal,
+                cohort="broad_randomized",
+            )
+        )
+        ordinal += 1
+    holdout_scenarios = tuple(
+        scenario
+        for name in ("right_single_support", "left_single_support")
+        for scenario in selected
+        if scenario.name == name
+    )
+    for holdout_index in range(
+        int(single_support_holdout_trials_per_side) * len(holdout_scenarios)
+    ):
+        scenario = holdout_scenarios[holdout_index % len(holdout_scenarios)]
+        trials.append(
+            TrialSpec(
+                scenario=scenario,
+                seed=int(seed) + SINGLE_SUPPORT_HOLDOUT_SEED_OFFSET + holdout_index,
+                randomized=True,
+                critical=False,
+                ordinal=ordinal,
+                cohort="single_support_holdout",
             )
         )
         ordinal += 1
@@ -1312,6 +1354,7 @@ def run_trial(
             "seed": trial.seed,
             "randomized": trial.randomized,
             "critical": trial.critical,
+            "cohort": trial.cohort,
             "parameters": parameters,
             "model": model,
             "metrics": metrics,
@@ -1490,6 +1533,7 @@ def assess_trial(
             "seed": trial.seed,
             "randomized": trial.randomized,
             "critical": trial.critical,
+            "cohort": trial.cohort,
             "gates": [_gate("evaluation_completed", False, False, True)],
             "passed": False,
         }
@@ -2540,6 +2584,7 @@ def assess_trial(
         "seed": trial.seed,
         "randomized": trial.randomized,
         "critical": trial.critical,
+        "cohort": trial.cohort,
         "scenario_contract": asdict(trial.scenario),
         "gates": gates,
         "passed": all(bool(gate["passed"]) for gate in gates),
@@ -2586,6 +2631,7 @@ def evaluate_suite(
                 "seed": trial.seed,
                 "randomized": trial.randomized,
                 "critical": trial.critical,
+                "cohort": trial.cohort,
                 "parameters": None,
                 "model": None,
                 "metrics": None,
@@ -2776,6 +2822,9 @@ def build_report(
     selected_scenarios: Sequence[ScenarioSpec],
     randomized_trials_requested: int,
     seed: int,
+    single_support_holdout_trials_per_side_requested: int = (
+        DEFAULT_SINGLE_SUPPORT_HOLDOUT_TRIALS_PER_SIDE
+    ),
     provenance: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """Build aggregate coverage/rate gates without hiding failed trials."""
@@ -2788,7 +2837,14 @@ def build_report(
     threshold_violations = _threshold_policy_violations(thresholds)
 
     critical_results = [result for result in results if bool(result.get("critical"))]
-    randomized_results = [result for result in results if bool(result.get("randomized"))]
+    randomized_results = [
+        result for result in results if result.get("cohort") == "broad_randomized"
+    ]
+    holdout_results = [
+        result
+        for result in results
+        if result.get("cohort") == "single_support_holdout"
+    ]
     randomized_successes = sum(bool(result.get("passed")) for result in randomized_results)
     randomized_count = len(randomized_results)
     randomized_rate = (
@@ -2812,13 +2868,31 @@ def build_report(
         trial
         for trial in build_trial_specs(
             randomized_trials=DEFAULT_RANDOMIZED_TRIALS,
+            single_support_holdout_trials_per_side=(
+                DEFAULT_SINGLE_SUPPORT_HOLDOUT_TRIALS_PER_SIDE
+            ),
             seed=CANONICAL_SEED,
             scenarios=SCENARIOS,
         )
-        if trial.randomized
+        if trial.cohort == "broad_randomized"
+    ]
+    expected_holdout_specs = [
+        trial
+        for trial in build_trial_specs(
+            randomized_trials=DEFAULT_RANDOMIZED_TRIALS,
+            single_support_holdout_trials_per_side=(
+                DEFAULT_SINGLE_SUPPORT_HOLDOUT_TRIALS_PER_SIDE
+            ),
+            seed=CANONICAL_SEED,
+            scenarios=SCENARIOS,
+        )
+        if trial.cohort == "single_support_holdout"
     ]
     expected_all_specs = build_trial_specs(
         randomized_trials=DEFAULT_RANDOMIZED_TRIALS,
+        single_support_holdout_trials_per_side=(
+            DEFAULT_SINGLE_SUPPORT_HOLDOUT_TRIALS_PER_SIDE
+        ),
         seed=CANONICAL_SEED,
         scenarios=SCENARIOS,
     )
@@ -2829,6 +2903,7 @@ def build_report(
             "seed": trial.seed,
             "randomized": trial.randomized,
             "critical": trial.critical,
+            "cohort": trial.cohort,
             "scenario_contract": asdict(trial.scenario),
         }
         for trial in expected_all_specs
@@ -2840,6 +2915,7 @@ def build_report(
             "seed": result.get("seed"),
             "randomized": result.get("randomized"),
             "critical": result.get("critical"),
+            "cohort": result.get("cohort"),
             "scenario_contract": result.get("scenario_contract"),
         }
         for result in results
@@ -2851,6 +2927,13 @@ def build_report(
         (str(result.get("scenario")), result.get("seed"))
         for result in randomized_results
     ]
+    expected_holdout_signature = [
+        (trial.scenario.name, trial.seed) for trial in expected_holdout_specs
+    ]
+    observed_holdout_signature = [
+        (str(result.get("scenario")), result.get("seed"))
+        for result in holdout_results
+    ]
     expected_randomized_counts = Counter(
         scenario.name
         for scenario in SCENARIOS
@@ -2859,6 +2942,12 @@ def build_report(
     observed_randomized_counts = Counter(
         str(result.get("scenario")) for result in randomized_results
     )
+    expected_holdout_counts = Counter(
+        trial.scenario.name for trial in expected_holdout_specs
+    )
+    observed_holdout_counts = Counter(
+        str(result.get("scenario")) for result in holdout_results
+    )
     canonical_randomized_count = bool(
         randomized_trials_requested == DEFAULT_RANDOMIZED_TRIALS
         and randomized_count == DEFAULT_RANDOMIZED_TRIALS
@@ -2866,6 +2955,16 @@ def build_report(
     randomized_matrix_exact = bool(
         canonical_randomized_count
         and observed_randomized_signature == expected_randomized_signature
+    )
+    canonical_holdout_count = bool(
+        single_support_holdout_trials_per_side_requested
+        == DEFAULT_SINGLE_SUPPORT_HOLDOUT_TRIALS_PER_SIDE
+        and len(holdout_results)
+        == 2 * DEFAULT_SINGLE_SUPPORT_HOLDOUT_TRIALS_PER_SIDE
+    )
+    holdout_matrix_exact = bool(
+        canonical_holdout_count
+        and observed_holdout_signature == expected_holdout_signature
     )
     randomized_rate_passed = bool(
         canonical_randomized_count
@@ -2878,6 +2977,30 @@ def build_report(
         and ci_low + 1e-12
         >= thresholds.minimum_randomized_wilson_lower_bound
     )
+    holdout_by_side: dict[str, dict[str, object]] = {}
+    holdout_side_wilson_passed: dict[str, bool] = {}
+    for scenario_name in ("right_single_support", "left_single_support"):
+        side_results = [
+            result
+            for result in holdout_results
+            if result.get("scenario") == scenario_name
+        ]
+        side_successes = sum(bool(result.get("passed")) for result in side_results)
+        side_count = len(side_results)
+        side_ci_low, side_ci_high = wilson_interval(side_successes, side_count)
+        holdout_by_side[scenario_name] = {
+            "trials": side_count,
+            "successes": side_successes,
+            "pass_rate": side_successes / side_count if side_count else None,
+            "wilson_95_ci": [side_ci_low, side_ci_high],
+        }
+        holdout_side_wilson_passed[scenario_name] = bool(
+            canonical_holdout_count
+            and side_count == DEFAULT_SINGLE_SUPPORT_HOLDOUT_TRIALS_PER_SIDE
+            and side_ci_low is not None
+            and side_ci_low + 1e-12
+            >= thresholds.minimum_randomized_wilson_lower_bound
+        )
     critical_passed = bool(
         expected_critical
         and not missing_critical
@@ -2959,6 +3082,46 @@ def build_report(
             {"minimum": thresholds.minimum_randomized_wilson_lower_bound},
         ),
         _gate(
+            "single_support_holdout_trial_count",
+            canonical_holdout_count,
+            {
+                "requested_per_side": (
+                    single_support_holdout_trials_per_side_requested
+                ),
+                "evaluated": len(holdout_results),
+            },
+            {
+                "requested_per_side": (
+                    DEFAULT_SINGLE_SUPPORT_HOLDOUT_TRIALS_PER_SIDE
+                ),
+                "evaluated": 2 * DEFAULT_SINGLE_SUPPORT_HOLDOUT_TRIALS_PER_SIDE,
+            },
+        ),
+        _gate(
+            "single_support_holdout_side_coverage",
+            observed_holdout_counts == expected_holdout_counts,
+            dict(sorted(observed_holdout_counts.items())),
+            dict(sorted(expected_holdout_counts.items())),
+        ),
+        _gate(
+            "single_support_holdout_matrix_exact",
+            holdout_matrix_exact,
+            observed_holdout_signature,
+            expected_holdout_signature,
+        ),
+        *(
+            _gate(
+                f"{scenario_name}_holdout_wilson_95_lower_bound",
+                holdout_side_wilson_passed[scenario_name],
+                holdout_by_side[scenario_name]["wilson_95_ci"][0],
+                {"minimum": thresholds.minimum_randomized_wilson_lower_bound},
+            )
+            for scenario_name in (
+                "right_single_support",
+                "left_single_support",
+            )
+        ),
+        _gate(
             "runtime_inputs_unchanged",
             inputs_unchanged,
             inputs_unchanged,
@@ -2966,7 +3129,7 @@ def build_report(
         ),
     ]
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "description": (
             "Controller-level free-base domain randomization and finite-perturbation "
             "acceptance on the provisional MuJoCo proxy; no camera/video input."
@@ -2992,6 +3155,15 @@ def build_report(
             "seed": seed,
             "randomized_trials_requested": randomized_trials_requested,
             "canonical_randomized_trials_required": DEFAULT_RANDOMIZED_TRIALS,
+            "single_support_holdout_trials_per_side_requested": (
+                single_support_holdout_trials_per_side_requested
+            ),
+            "canonical_single_support_holdout_trials_per_side_required": (
+                DEFAULT_SINGLE_SUPPORT_HOLDOUT_TRIALS_PER_SIDE
+            ),
+            "single_support_holdout_seed_offset": (
+                SINGLE_SUPPORT_HOLDOUT_SEED_OFFSET
+            ),
             "selected_scenarios": [scenario.name for scenario in selected_scenarios],
             "thresholds": asdict(thresholds),
             "randomization_bounds": {
@@ -3015,6 +3187,14 @@ def build_report(
                 "pass_rate": randomized_rate,
                 "wilson_95_ci": [ci_low, ci_high],
                 "scenario_counts": dict(sorted(observed_randomized_counts.items())),
+            },
+            "single_support_holdout": {
+                "trials": len(holdout_results),
+                "successes": sum(
+                    bool(result.get("passed")) for result in holdout_results
+                ),
+                "scenario_counts": dict(sorted(observed_holdout_counts.items())),
+                "by_side": holdout_by_side,
             },
             "gates": aggregate_gates,
         },
@@ -3046,6 +3226,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--randomized-trials", type=int, default=DEFAULT_RANDOMIZED_TRIALS
     )
     parser.add_argument(
+        "--single-support-holdout-trials-per-side",
+        type=int,
+        default=DEFAULT_SINGLE_SUPPORT_HOLDOUT_TRIALS_PER_SIDE,
+        help=(
+            "Independent randomized one-leg trials per side. Values below the "
+            "canonical count remain diagnostic and cannot pass acceptance."
+        ),
+    )
+    parser.add_argument(
         "--scenario",
         action="append",
         choices=tuple(SCENARIO_BY_NAME),
@@ -3069,6 +3258,10 @@ def main(
     args = build_parser().parse_args(argv)
     if args.randomized_trials < 0:
         raise ValueError("--randomized-trials must be non-negative")
+    if args.single_support_holdout_trials_per_side < 0:
+        raise ValueError(
+            "--single-support-holdout-trials-per-side must be non-negative"
+        )
     if args.seed < 0:
         raise ValueError("--seed must be non-negative")
     available = default_scenarios(include_one_leg=args.one_leg)
@@ -3087,6 +3280,9 @@ def main(
     provenance = _provenance()
     trials = build_trial_specs(
         randomized_trials=args.randomized_trials,
+        single_support_holdout_trials_per_side=(
+            args.single_support_holdout_trials_per_side
+        ),
         seed=args.seed,
         scenarios=selected,
     )
@@ -3096,6 +3292,9 @@ def main(
         thresholds=thresholds,
         selected_scenarios=selected,
         randomized_trials_requested=args.randomized_trials,
+        single_support_holdout_trials_per_side_requested=(
+            args.single_support_holdout_trials_per_side
+        ),
         seed=args.seed,
         provenance=provenance,
     )
