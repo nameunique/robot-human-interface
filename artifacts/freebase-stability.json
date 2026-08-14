@@ -2,19 +2,15 @@
   "schema_version": 2,
   "description": "End-to-end MediaPipe -> constrained IK -> balance/support -> free-base MuJoCo replay acceptance. No floating-base constraint is enabled.",
   "command": "python tools/evaluate_freebase_stability.py",
-  "generated_at_utc": "2026-08-14T19:38:09.373991+00:00",
-  "run_started_at_utc": "2026-08-14T19:34:35.646129+00:00",
-  "git_revision": "d091d1e48c920a316f5823d2fd96e333d0aad7d6",
+  "generated_at_utc": "2026-08-14T21:39:33.165707+00:00",
+  "run_started_at_utc": "2026-08-14T21:36:38.251604+00:00",
+  "git_revision": "8349fcdcb2d51f43d963077ed624d01a9b894695",
   "git_worktree": {
     "dirty": true,
     "status_porcelain": [
-      "M README.md",
-      " M artifacts/freebase-stability.json",
-      " M artifacts/pose-fidelity.json",
-      "?? artifacts/freebase-robustness.json",
-      "?? artifacts/safe-pose-fidelity.json"
+      "M artifacts/freebase-robustness.json"
     ],
-    "tracked_diff_sha256": "802d6d725c4151f20a0a3dc1977d19e4e454c44a052a6af6b457939e09aac9b6",
+    "tracked_diff_sha256": "4cf898b293f950243e123546f889811740981630532f6a8372251f44c3da2372",
     "note": "Runtime input SHA-256 values below identify tested file contents, including untracked evaluator code; git revision alone is insufficient when dirty is true."
   },
   "runtime_input_sha256": {

@@ -501,10 +501,14 @@ clearance не менее `0.020 m`.
 
 Полный отчёт `artifacts/freebase-robustness.json` включает обязательные neutral,
 upper-body, crouch обоих знаков, sagittal/lateral push обоих направлений и
-single-support обеих ног, а также 20 детерминированных randomized trials. В
-provisional модели варьируются mass/inertia каждого тела, friction, actuator
-strength/kp/kv и joint damping. Push — явно объявленное тестовое внешнее
-возмущение; сам controller по-прежнему управляет только 20 motor targets.
+single-support обеих ног. Каноническая матрица состоит из 10 critical nominal,
+20 broad randomized и отдельного holdout из 40 single-support trials — по 20
+на каждую сторону. Broad и обе стороны holdout оцениваются независимо по
+нижней границе Wilson 95%; неполная или переупорядоченная матрица не может
+получить acceptance. В provisional модели варьируются mass/inertia каждого
+тела, friction, actuator strength/kp/kv и joint damping. Push — явно
+объявленное тестовое внешнее возмущение; сам controller по-прежнему управляет
+только 20 motor targets.
 
 Проверка именно camera → MediaPipe → retargeter → MuJoCo без окон:
 
@@ -823,10 +827,10 @@ Production-path оценка находится в отдельном отчёт
 
 ## Проверенный статус этой сборки
 
-Проверка выполнена 14 августа 2026 года на ревизии
-`d091d1e48c920a316f5823d2fd96e333d0aad7d6`:
+Проверка выполнена 15 августа 2026 года на ревизии
+`8349fcdcb2d51f43d963077ed624d01a9b894695`:
 
-- полный pytest-набор: **789 passed** за `105.81 s`;
+- полный pytest-набор: **793 passed** за `103.20 s`;
 - `compileall` для `src`, `tests`, `tools` и `git diff --check`: успешно;
 - raw pose report schema 3 полностью измерен (`measurement_complete=true`),
   но это только диагностика: пороги fidelity для него не заданы, поэтому он
@@ -838,10 +842,21 @@ Production-path оценка находится в отдельном отчёт
   trunk-circles прошли; jumping-jacks воспроизводит `2/4` требуемых каналов,
   stationary-squat — `0/4`; frontal-leg-swing выполнил один подъём, но начал
   лишний незавершённый цикл и получил abort;
-- robustness: все **10/10** обязательных nominal/perturbation сценариев прошли,
-  но randomized — только **16/20**; нижняя граница Wilson 95% равна `0.58398`
-  при требуемой `0.80`. Все четыре отказа относятся к одноопорным trials:
-  превышен контактный импульс, а в одном также lateral CoM-to-stance error.
+- robustness schema 3: critical **10/10**, broad randomized **16/20**,
+  независимый one-leg holdout только **14/40** — справа `9/20`, слева `5/20`.
+  Нижние границы Wilson 95% равны `0.58398`, `0.25820` и `0.11186` при
+  требуемой `0.80`; восемь holdout trials закончились реальным падением.
+
+Попытки локально исправить оставшиеся дефекты не были перенесены в production:
+high-authority движение ног для jumping-jacks проходило исходный клип, но
+падало на непериодических входах; устойчивый вариант не достигал требуемой
+амплитуды. Планировщик приседа давал `4/4` лишь в узкой, зависящей от истории
+области и не прошёл clean-entry/holdout. Несколько force/CoP landing overlays
+также не обобщились на независимые trials. Следующий технически обоснованный
+шаг для одноопорной динамики — связанный constrained `(shift, lift)` planner
+или MPC с predictive braking и terminal set, а не дальнейшая подстройка
+порогов. Эти ограничения считаются открытыми дефектами, а не пройденными
+возможностями.
 
 Таким образом, отсутствие падения само по себе не означает, что движение
 достаточно точно или что пройдены контактные пороги. Текущие JSON-отчёты:

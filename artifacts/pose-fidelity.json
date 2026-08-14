@@ -15,19 +15,17 @@
     "--stride",
     "5"
   ],
-  "generated_at_utc": "2026-08-14T19:35:05.929425+00:00",
-  "run_started_at_utc": "2026-08-14T19:34:19.983801+00:00",
-  "git_revision": "d091d1e48c920a316f5823d2fd96e333d0aad7d6",
+  "generated_at_utc": "2026-08-14T21:47:40.707967+00:00",
+  "run_started_at_utc": "2026-08-14T21:47:03.889677+00:00",
+  "git_revision": "8349fcdcb2d51f43d963077ed624d01a9b894695",
   "git_worktree": {
     "dirty": true,
     "status_porcelain": [
-      "M README.md",
+      "M artifacts/freebase-robustness.json",
       " M artifacts/freebase-stability.json",
-      " M artifacts/pose-fidelity.json",
-      "?? artifacts/freebase-robustness.json",
-      "?? artifacts/safe-pose-fidelity.json"
+      " M artifacts/safe-pose-fidelity.json"
     ],
-    "tracked_diff_sha256": "802d6d725c4151f20a0a3dc1977d19e4e454c44a052a6af6b457939e09aac9b6",
+    "tracked_diff_sha256": "3ce62ee7b90365aa5b100bc7d8925b4411c9c7e858d32febcb382345f271180d",
     "note": "Runtime input SHA-256 values identify the exact tested contents, including an uncommitted evaluator; git revision alone is not a complete identifier when dirty is true."
   },
   "runtime_input_sha256": {
@@ -137,17 +135,15 @@
     {
       "name": "git_provenance_complete_and_valid",
       "value": {
-        "git_revision": "d091d1e48c920a316f5823d2fd96e333d0aad7d6",
+        "git_revision": "8349fcdcb2d51f43d963077ed624d01a9b894695",
         "git_worktree": {
           "dirty": true,
           "status_porcelain": [
-            "M README.md",
+            "M artifacts/freebase-robustness.json",
             " M artifacts/freebase-stability.json",
-            " M artifacts/pose-fidelity.json",
-            "?? artifacts/freebase-robustness.json",
-            "?? artifacts/safe-pose-fidelity.json"
+            " M artifacts/safe-pose-fidelity.json"
           ],
-          "tracked_diff_sha256": "802d6d725c4151f20a0a3dc1977d19e4e454c44a052a6af6b457939e09aac9b6",
+          "tracked_diff_sha256": "3ce62ee7b90365aa5b100bc7d8925b4411c9c7e858d32febcb382345f271180d",
           "note": "Runtime input SHA-256 values identify the exact tested contents, including an uncommitted evaluator; git revision alone is not a complete identifier when dirty is true."
         }
       },
