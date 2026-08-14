@@ -16,9 +16,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from math import pi
+from numbers import Real
 from pathlib import Path
 from time import monotonic
-from typing import Callable, Mapping, Sequence
+from typing import Callable, Iterable, Mapping, Sequence
 
 import numpy as np
 import yaml
@@ -32,6 +33,11 @@ UPPER_BODY_INDICES = np.asarray((0, 1, 2, 3, 4, 5, 18, 19), dtype=np.int64)
 LOWER_BODY_INDICES = np.arange(6, 18, dtype=np.int64)
 RIGHT_LEG_INDICES = np.asarray((6, 8, 10, 12, 14, 16), dtype=np.int64)
 LEFT_LEG_INDICES = np.asarray((7, 9, 11, 13, 15, 17), dtype=np.int64)
+_BALANCE_SECTIONS = {
+    "standing_balance",
+    "human_support_intent",
+    "support_control",
+}
 
 
 class SupportIntent(str, Enum):
@@ -74,6 +80,7 @@ class SupportControlConfig:
     min_stance_load_fraction: float = 0.65
     max_swing_load_fraction: float = 0.35
     min_touchdown_force_n: float = 4.0
+    min_touchdown_contact_force_n: float = 1.5
     min_touchdown_total_force_n: float = 20.0
     early_touchdown_max_swing_progress: float = 0.45
     start_max_tilt_rad: float = 12.0 * pi / 180.0
@@ -88,6 +95,19 @@ class SupportControlConfig:
     cancel_on_stale_reference: bool = True
 
     def __post_init__(self) -> None:
+        if type(self.cancel_on_stale_reference) is not bool:
+            raise ValueError(
+                "support_control.cancel_on_stale_reference must be a boolean"
+            )
+        _require_real_config_fields(
+            self,
+            (
+                name
+                for name in type(self).__dataclass_fields__
+                if name != "cancel_on_stale_reference"
+            ),
+            section="support_control",
+        )
         durations = (
             self.shift_duration_s,
             self.load_confirm_duration_s,
@@ -113,6 +133,15 @@ class SupportControlConfig:
             raise ValueError("min_stance_force_n must be finite and positive")
         if not np.isfinite(self.min_touchdown_force_n) or self.min_touchdown_force_n <= 0.0:
             raise ValueError("min_touchdown_force_n must be finite and positive")
+        if (
+            not np.isfinite(self.min_touchdown_contact_force_n)
+            or self.min_touchdown_contact_force_n <= 0.0
+            or self.min_touchdown_contact_force_n > self.min_touchdown_force_n
+        ):
+            raise ValueError(
+                "min_touchdown_contact_force_n must be finite, positive, and "
+                "no greater than min_touchdown_force_n"
+            )
         if (
             not np.isfinite(self.min_touchdown_total_force_n)
             or self.min_touchdown_total_force_n <= 0.0
@@ -166,6 +195,21 @@ class SupportControlConfig:
             raise ValueError("min_stance_load_fraction must be within (0.5, 1]")
         if not 0.0 <= self.max_swing_load_fraction < 0.5:
             raise ValueError("max_swing_load_fraction must be within [0, 0.5)")
+
+
+def _require_real_config_fields(
+    config: object,
+    field_names: Iterable[str],
+    *,
+    section: str,
+) -> None:
+    for name in field_names:
+        value = getattr(config, name)
+        if isinstance(value, bool) or not isinstance(value, Real):
+            raise ValueError(
+                f"{section}.{name} must be a real number "
+                "(booleans are not accepted)"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,11 +290,22 @@ def load_support_control_config(path: str | Path | None) -> SupportControlConfig
         document = yaml.safe_load(stream) or {}
     if not isinstance(document, Mapping):
         raise ValueError("balance YAML root must be a mapping")
+    unknown_sections = set(document) - _BALANCE_SECTIONS
+    if unknown_sections:
+        raise ValueError(
+            "balance YAML contains unknown section(s): "
+            f"{sorted(unknown_sections)}"
+        )
     settings = document.get("support_control", {})
     if not isinstance(settings, Mapping):
         raise ValueError("support_control settings must be a mapping")
     allowed = set(SupportControlConfig.__dataclass_fields__)
-    return SupportControlConfig(**{key: value for key, value in settings.items() if key in allowed})
+    unknown = set(settings) - allowed
+    if unknown:
+        raise ValueError(
+            "support_control contains unknown key(s): " f"{sorted(unknown)}"
+        )
+    return SupportControlConfig(**dict(settings))
 
 
 def _smoothstep(progress: float) -> float:
@@ -335,6 +390,9 @@ class SupportStateMachine:
         self._center_start_shift_progress = 1.0
         self._blocked_intent: SupportIntent | None = None
         self._abort_reason: str | None = None
+        self._touchdown_fault_active = False
+        self._touchdown_fault_contact_recovered = False
+        self._touchdown_fault_rearmed = False
         self._last_diagnostics: SupportDiagnostics | None = None
         self._cycle_reference_rad: FloatArray | None = None
         self._cycle_capture_recovery_rad: FloatArray | None = None
@@ -363,9 +421,44 @@ class SupportStateMachine:
         accepted = SupportIntent(intent)
         self._requested_intent = accepted
         if accepted is SupportIntent.DOUBLE_SUPPORT:
-            # Explicitly returning to two feet acknowledges any aborted lift.
-            self._blocked_intent = None
+            if self._touchdown_fault_active:
+                # A touchdown fault needs two independent facts before another
+                # lift may start: an explicit two-foot acknowledgement and a
+                # physically confirmed returning sole.  Keep the failed side
+                # visible in diagnostics until both have happened safely.
+                self._touchdown_fault_rearmed = True
+                self._maybe_clear_touchdown_fault()
+            else:
+                # Explicitly returning to two feet acknowledges any other
+                # aborted lift.
+                self._blocked_intent = None
         return accepted
+
+    def _maybe_clear_touchdown_fault(self) -> None:
+        if (
+            self._touchdown_fault_active
+            and self._touchdown_fault_contact_recovered
+            and self._touchdown_fault_rearmed
+            and self._phase is SupportPhase.DOUBLE_SUPPORT
+        ):
+            self._touchdown_fault_active = False
+            self._touchdown_fault_contact_recovered = False
+            self._touchdown_fault_rearmed = False
+            self._blocked_intent = None
+
+    def _begin_touchdown_fault(self) -> None:
+        """Latch a failed return while preserving the known-good stance."""
+
+        self._abort_reason = "touchdown_timeout"
+        self._blocked_intent = self._active_intent
+        self._touchdown_fault_active = True
+        self._touchdown_fault_contact_recovered = False
+        self._touchdown_fault_rearmed = False
+        # CENTER_WEIGHT is deliberately used as the externally observable
+        # recovery phase: the application already treats an abort in this
+        # phase as a latch-breaking safety event.  While the fault is active,
+        # its normal centering motion is suspended below until contact returns.
+        self._transition(SupportPhase.CENTER_WEIGHT)
 
     def _transition(self, phase: SupportPhase) -> None:
         self._phase = phase
@@ -374,6 +467,7 @@ class SupportStateMachine:
             self._cycle_reference_rad = None
             self._cycle_capture_recovery_rad = None
             self._admitted_pose_rad = None
+            self._maybe_clear_touchdown_fault()
         elif phase is SupportPhase.VERIFY_STANCE:
             self._load_confirm_elapsed_s = 0.0
         elif phase is SupportPhase.VERIFY_TOUCHDOWN:
@@ -382,6 +476,7 @@ class SupportStateMachine:
             self._touchdown_confirm_elapsed_s = 0.0
         elif phase is SupportPhase.CENTER_WEIGHT:
             self._center_start_shift_progress = max(self._shift_progress, 1e-9)
+            self._touchdown_confirm_elapsed_s = 0.0
 
     @staticmethod
     def _validated_force(state: object, name: str) -> float:
@@ -470,6 +565,9 @@ class SupportStateMachine:
         dt_s: float,
         support_ready: bool,
         touchdown_ready: bool,
+        touchdown_contact_present: bool,
+        start_contact_ready: bool,
+        bilateral_contact_ready: bool,
         start_stability_reason: str | None,
         active_stability_reason: str | None,
         *,
@@ -484,14 +582,42 @@ class SupportStateMachine:
             if (
                 self._requested_intent is not SupportIntent.DOUBLE_SUPPORT
                 and self._requested_intent is not self._blocked_intent
+                and not self._touchdown_fault_active
             ):
-                if start_stability_reason is None:
+                if not start_contact_ready:
+                    # A one-leg request is only admissible from measured
+                    # double support.  Starting the lateral shift while one
+                    # sole is unloaded would spend the controller's only
+                    # known support before the stance side is established.
+                    self._abort_reason = "start_contact_missing"
+                elif start_stability_reason is None:
                     self._active_intent = self._requested_intent
                     self._abort_reason = None
                     self._transition(SupportPhase.SHIFT_WEIGHT)
                 else:
                     self._abort_reason = start_stability_reason
             return
+
+        if self._phase in {
+            SupportPhase.SHIFT_WEIGHT,
+            SupportPhase.VERIFY_STANCE,
+        }:
+            # The future swing sole is still planted throughout weight shift
+            # and stance verification.  Losing either measured sole contact,
+            # or the minimum combined support load, means the lateral shift
+            # must stop before the controller spends any more of the only
+            # support it can still prove.  Tolerate only bounded solver
+            # chatter; a sustained loss is an explicit, latched abort.
+            if bilateral_contact_ready:
+                self._support_unsafe_elapsed_s = 0.0
+            else:
+                self._support_unsafe_elapsed_s += dt_s
+                if (
+                    self._support_unsafe_elapsed_s
+                    >= self.config.support_loss_grace_s
+                ):
+                    self._abort("support_contact_lost")
+                    return
 
         requested_changed = self._requested_intent is not self._active_intent
         hold_dwell_pending = bool(
@@ -584,15 +710,15 @@ class SupportStateMachine:
             if self._swing_progress <= 0.0:
                 self._transition(SupportPhase.VERIFY_TOUCHDOWN)
         elif self._phase is SupportPhase.VERIFY_TOUCHDOWN:
-            # Preload the returning sole by reducing the lateral shift much
-            # more slowly than the normal center phase.  Do not fully remove
-            # the known-good stance until both feet physically carry load.
-            self._shift_progress = max(
-                0.0,
-                self._shift_progress
-                - dt_s / self.config.touchdown_preload_duration_s,
-            )
             if touchdown_ready:
+                # Preload only after both soles actually carry load.  With no
+                # returning-foot contact, reducing the lateral shift would
+                # discard the sole support that is still known to be valid.
+                self._shift_progress = max(
+                    0.0,
+                    self._shift_progress
+                    - dt_s / self.config.touchdown_preload_duration_s,
+                )
                 self._touchdown_confirm_elapsed_s += dt_s
                 if (
                     self._touchdown_confirm_elapsed_s
@@ -602,13 +728,61 @@ class SupportStateMachine:
             else:
                 self._touchdown_confirm_elapsed_s = 0.0
             if self._phase_elapsed_s >= self.config.touchdown_timeout_s:
-                self._abort_reason = "touchdown_timeout"
+                self._begin_touchdown_fault()
         elif self._phase is SupportPhase.CENTER_WEIGHT:
-            self._shift_progress = max(
-                0.0, self._shift_progress - dt_s / self.config.center_duration_s
-            )
+            # Returning the swing leg is always safe and must remain live even
+            # when bilateral contact disappears.  Only the lateral weight
+            # shift is frozen by contact loss.  Otherwise an early touchdown
+            # followed by unloading can deadlock with a residual lift command:
+            # the controller waits for contact while still commanding the sole
+            # above the floor.
             self._swing_progress = max(
                 0.0, self._swing_progress - dt_s / self.config.lower_duration_s
+            )
+            if (
+                self._touchdown_fault_active
+                and not self._touchdown_fault_contact_recovered
+            ):
+                # Fault hold: command the returned leg at ground level but
+                # retain the known-good stance shift.  Contact confirmation,
+                # not elapsed time, is the only exit from this hold.
+                if touchdown_ready:
+                    self._touchdown_confirm_elapsed_s += dt_s
+                    if (
+                        self._touchdown_confirm_elapsed_s
+                        >= self.config.touchdown_confirm_duration_s
+                    ):
+                        self._touchdown_fault_contact_recovered = True
+                        self._touchdown_confirm_elapsed_s = 0.0
+                else:
+                    self._touchdown_confirm_elapsed_s = 0.0
+                return
+            if not touchdown_contact_present:
+                # A confirmed touchdown is not a permanent fact: the sole can
+                # unload again while the lateral shift is being removed.  Do
+                # not spend any more of the known-good stance until bilateral
+                # load is continuously re-established.  A normal cycle goes
+                # back through the timed verifier; a latched touchdown fault
+                # remains externally visible in CENTER_WEIGHT and re-enters
+                # its contact-confirmation hold.
+                if self._touchdown_fault_active:
+                    self._touchdown_confirm_elapsed_s = 0.0
+                    self._touchdown_fault_contact_recovered = False
+                else:
+                    # Solver chatter must not restart the whole preload
+                    # trajectory, but a sustained loss is a real touchdown
+                    # fault.  Reuse the timer as a continuous loss duration
+                    # while CENTER_WEIGHT itself remains externally visible.
+                    self._touchdown_confirm_elapsed_s += dt_s
+                    if (
+                        self._touchdown_confirm_elapsed_s
+                        >= self.config.touchdown_timeout_s
+                    ):
+                        self._begin_touchdown_fault()
+                return
+            self._touchdown_confirm_elapsed_s = 0.0
+            self._shift_progress = max(
+                0.0, self._shift_progress - dt_s / self.config.center_duration_s
             )
             if self._shift_progress <= 0.0 and self._swing_progress <= 0.0:
                 self._active_intent = SupportIntent.DOUBLE_SUPPORT
@@ -621,12 +795,24 @@ class SupportStateMachine:
         *,
         dt_s: float,
         intent: SupportIntent | str | None = None,
+        force_return_reason: str | None = None,
     ) -> RobotJointCommand:
-        """Overlay a contact-gated support motion on a balanced motor command."""
+        """Overlay a contact-gated support motion on a balanced motor command.
+
+        ``force_return_reason`` lets an upstream safety layer make a stale or
+        otherwise invalid support request observable while using the same
+        lower-then-center recovery as an internal abort.  It must be a
+        non-empty reason string when supplied.
+        """
 
         dt_s = float(dt_s)
         if not np.isfinite(dt_s) or dt_s <= 0.0:
             raise ValueError("dt_s must be finite and positive")
+        if force_return_reason is not None and (
+            not isinstance(force_return_reason, str)
+            or not force_return_reason.strip()
+        ):
+            raise ValueError("force_return_reason must be a non-empty string")
         if tuple(reference.joint_names) != JOINT_NAMES:
             raise ValueError("reference must use canonical motor order")
         positions = self._vector(reference.positions_rad, "reference.positions_rad")
@@ -648,7 +834,13 @@ class SupportStateMachine:
             self._home = positions.copy()
         if intent is not None:
             self.set_intent(intent)
-        if reference.stale and self.config.cancel_on_stale_reference:
+        stale_reference_return = bool(
+            reference.stale and self.config.cancel_on_stale_reference
+        )
+        forced_return_reason = (
+            "stale_reference" if stale_reference_return else force_return_reason
+        )
+        if forced_return_reason is not None:
             self.set_intent(SupportIntent.DOUBLE_SUPPORT)
 
         base_tilt_rad, base_angular_speed_rad_s = self._base_motion(state)
@@ -662,6 +854,24 @@ class SupportStateMachine:
             base_angular_speed_rad_s,
             active=True,
         )
+        right_force = self._validated_force(
+            state, "right_foot_normal_force_n"
+        )
+        left_force = self._validated_force(
+            state, "left_foot_normal_force_n"
+        )
+        start_contact_ready = bool(
+            right_force >= self.config.min_touchdown_force_n
+            and left_force >= self.config.min_touchdown_force_n
+            and right_force + left_force
+            >= self.config.min_touchdown_total_force_n
+        )
+        bilateral_contact_ready = bool(
+            right_force >= self.config.min_touchdown_contact_force_n
+            and left_force >= self.config.min_touchdown_contact_force_n
+            and right_force + left_force
+            >= self.config.min_touchdown_total_force_n
+        )
         stance_force, swing_force, stance_fraction, support_ready = self._loads(state)
         touchdown_ready = bool(
             stance_force >= self.config.min_touchdown_force_n
@@ -669,14 +879,40 @@ class SupportStateMachine:
             and stance_force + swing_force
             >= self.config.min_touchdown_total_force_n
         )
-        self._advance(
-            dt_s,
-            support_ready,
-            touchdown_ready,
-            start_stability_reason,
-            active_stability_reason,
-            force_return=reference.stale,
+        touchdown_contact_present = bool(
+            stance_force >= self.config.min_touchdown_contact_force_n
+            and swing_force >= self.config.min_touchdown_contact_force_n
         )
+        forced_abort_started = bool(
+            forced_return_reason is not None
+            and self._phase
+            in {
+                SupportPhase.SHIFT_WEIGHT,
+                SupportPhase.VERIFY_STANCE,
+                SupportPhase.LIFT_SWING,
+                SupportPhase.HOLD_SWING,
+            }
+        )
+        if forced_abort_started:
+            # Do not let the ordinary requested-intent transition erase the
+            # fact that stale safety data ended the support cycle.  Preserve
+            # the selected recovery phase for at least this controller tick;
+            # advancing it immediately can otherwise collapse a just-started
+            # LOWER/CENTER transition straight into the next phase.
+            assert forced_return_reason is not None
+            self._abort(forced_return_reason)
+        else:
+            self._advance(
+                dt_s,
+                support_ready,
+                touchdown_ready,
+                touchdown_contact_present,
+                start_contact_ready,
+                bilateral_contact_ready,
+                start_stability_reason,
+                active_stability_reason,
+                force_return=forced_return_reason is not None,
+            )
         if self._phase is SupportPhase.SHIFT_WEIGHT and self._cycle_reference_rad is None:
             # Capture the already safe, continuous double-support pose.  Never
             # reset it to home at phase admission: the final slew limiter is a

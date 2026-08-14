@@ -10,13 +10,18 @@ the retargeter, then measures foot-height difference in leg-length units.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import exp
+from math import exp, pi
+from numbers import Real
 from pathlib import Path
-from typing import Mapping
+from typing import Iterable, Mapping
 
 import numpy as np
 import yaml
 
+from robot_human_interface.pose.calibration import (
+    NeutralCalibrationError,
+    NeutralCalibrationGate,
+)
 from robot_human_interface.retargeting.geometry import body_basis
 from robot_human_interface.skeleton import PoseLandmark as L, SkeletonFrame
 
@@ -26,6 +31,11 @@ from .support import SupportIntent
 _CORE = (L.LEFT_SHOULDER, L.RIGHT_SHOULDER, L.LEFT_HIP, L.RIGHT_HIP)
 _LEGS = (L.LEFT_KNEE, L.RIGHT_KNEE, L.LEFT_ANKLE, L.RIGHT_ANKLE)
 _MEASUREMENT = _CORE + _LEGS
+_BALANCE_SECTIONS = {
+    "standing_balance",
+    "human_support_intent",
+    "support_control",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +43,14 @@ class HumanSupportIntentConfig:
     """Thresholds for scale-normalized foot-lift intent estimation."""
 
     calibration_frames: int = 30
+    calibration_max_observations: int = 150
+    calibration_max_pose_spread_ratio: float = 0.06
+    calibration_max_ankle_offset_ratio: float = 0.08
+    calibration_max_ankle_spread_ratio: float = 0.035
+    calibration_max_arm_deviation_rad: float = pi / 3.0
+    calibration_max_upper_arm_deviation_rad: float = pi / 3.0
+    calibration_max_elbow_flexion_rad: float = pi / 3.0
+    calibration_max_knee_flexion_rad: float = pi / 4.0
     confidence_threshold: float = 0.5
     activate_height_ratio: float = 0.15
     release_height_ratio: float = 0.08
@@ -44,8 +62,53 @@ class HumanSupportIntentConfig:
     maintain_confidence: float = 0.50
 
     def __post_init__(self) -> None:
-        if self.calibration_frames <= 0:
-            raise ValueError("calibration_frames must be positive")
+        _require_real_config_fields(
+            self,
+            type(self).__dataclass_fields__,
+            section="human_support_intent",
+        )
+        if (
+            not np.isfinite(float(self.calibration_frames))
+            or int(self.calibration_frames) != self.calibration_frames
+            or self.calibration_frames <= 0
+        ):
+            raise ValueError("calibration_frames must be a positive integer")
+        object.__setattr__(self, "calibration_frames", int(self.calibration_frames))
+        if (
+            not np.isfinite(float(self.calibration_max_observations))
+            or int(self.calibration_max_observations)
+            != self.calibration_max_observations
+            or self.calibration_max_observations < self.calibration_frames
+        ):
+            raise ValueError(
+                "calibration_max_observations must be an integer covering "
+                "calibration_frames"
+            )
+        object.__setattr__(
+            self,
+            "calibration_max_observations",
+            int(self.calibration_max_observations),
+        )
+        calibration_limits = (
+            self.calibration_max_pose_spread_ratio,
+            self.calibration_max_ankle_offset_ratio,
+            self.calibration_max_ankle_spread_ratio,
+            self.calibration_max_arm_deviation_rad,
+            self.calibration_max_upper_arm_deviation_rad,
+            self.calibration_max_elbow_flexion_rad,
+            self.calibration_max_knee_flexion_rad,
+        )
+        if not np.isfinite(calibration_limits).all() or any(
+            value <= 0.0 for value in calibration_limits
+        ):
+            raise ValueError("calibration stillness/neutral limits must be finite and positive")
+        if (
+            self.calibration_max_arm_deviation_rad >= pi
+            or self.calibration_max_upper_arm_deviation_rad >= pi
+            or self.calibration_max_elbow_flexion_rad >= pi
+            or self.calibration_max_knee_flexion_rad >= pi
+        ):
+            raise ValueError("calibration posture angle limits must be below pi")
         if not 0.0 <= self.confidence_threshold <= 1.0:
             raise ValueError("confidence_threshold must be within [0, 1]")
         values = (
@@ -65,6 +128,21 @@ class HumanSupportIntentConfig:
         if not 0.0 <= self.maintain_confidence <= self.activation_confidence <= 1.0:
             raise ValueError(
                 "confidence gates must satisfy 0 <= maintain <= activation <= 1"
+            )
+
+
+def _require_real_config_fields(
+    config: object,
+    field_names: Iterable[str],
+    *,
+    section: str,
+) -> None:
+    for name in field_names:
+        value = getattr(config, name)
+        if isinstance(value, bool) or not isinstance(value, Real):
+            raise ValueError(
+                f"{section}.{name} must be a real number "
+                "(booleans are not accepted)"
             )
 
 
@@ -108,9 +186,64 @@ class HumanSupportIntentEstimator:
         self._last_timestamp_s: float | None = None
         self._last_valid_timestamp_s: float | None = None
         self._last_confidence = 0.0
+        self._calibration_gate: NeutralCalibrationGate | None = (
+            self._new_calibration_gate(self.config.calibration_frames)
+        )
+
+    def _new_calibration_gate(
+        self,
+        sample_count: int,
+        *,
+        max_observations: int | None = None,
+    ) -> NeutralCalibrationGate:
+        return NeutralCalibrationGate(
+            sample_count=sample_count,
+            max_observations=(
+                self.config.calibration_max_observations
+                if max_observations is None
+                else max_observations
+            ),
+            landmark_indices=_MEASUREMENT,
+            confidence_threshold=self.config.confidence_threshold,
+            max_pose_spread_ratio=self.config.calibration_max_pose_spread_ratio,
+            require_double_support=True,
+            max_ankle_offset_ratio=self.config.calibration_max_ankle_offset_ratio,
+            max_ankle_spread_ratio=self.config.calibration_max_ankle_spread_ratio,
+            max_arm_deviation_rad=self.config.calibration_max_arm_deviation_rad,
+            max_upper_arm_deviation_rad=(
+                self.config.calibration_max_upper_arm_deviation_rad
+            ),
+            max_elbow_flexion_rad=self.config.calibration_max_elbow_flexion_rad,
+            max_knee_flexion_rad=self.config.calibration_max_knee_flexion_rad,
+            require_extended_legs=True,
+            label="human support-intent neutral-pose",
+        )
 
     def start_calibration(self) -> None:
         self.reset()
+
+    def calibrate(self, frame: SkeletonFrame) -> bool:
+        """Install one explicitly selected, posture-validated neutral frame."""
+
+        measurement = self._measurement(frame)
+        if measurement is None or measurement[3] < self.config.activation_confidence:
+            return False
+        gate = self._new_calibration_gate(1, max_observations=1)
+        if not gate.accepts_explicit(frame):
+            return False
+        up, difference, scale, confidence = measurement
+        self.reset()
+        self._up_samples = [up.copy()]
+        self._difference_samples = [difference.copy()]
+        self._scale_samples = [scale]
+        # The selected frame can come from a separate replay whose media clock
+        # is unrelated to the main source. Install geometry only; let the
+        # first operational frame establish the debounce/filter timeline.
+        self._last_timestamp_s = None
+        self._last_valid_timestamp_s = None
+        self._last_confidence = confidence
+        self._finish_calibration_if_ready(force=True)
+        return not self.is_calibrating
 
     @property
     def is_calibrating(self) -> bool:
@@ -118,7 +251,10 @@ class HumanSupportIntentEstimator:
 
     @property
     def calibration_progress(self) -> float:
-        return min(1.0, len(self._up_samples) / self.config.calibration_frames)
+        if not self.is_calibrating:
+            return 1.0
+        assert self._calibration_gate is not None
+        return self._calibration_gate.progress
 
     @property
     def intent(self) -> SupportIntent:
@@ -159,8 +295,8 @@ class HumanSupportIntentEstimator:
         difference = points[int(L.RIGHT_ANKLE)] - points[int(L.LEFT_ANKLE)]
         return up, difference, scale, confidence
 
-    def _finish_calibration_if_ready(self) -> None:
-        if len(self._up_samples) < self.config.calibration_frames:
+    def _finish_calibration_if_ready(self, *, force: bool = False) -> None:
+        if not force and len(self._up_samples) < self.config.calibration_frames:
             return
         fixed_up = np.median(np.asarray(self._up_samples), axis=0)
         # MediaPipe Z is learned monocular depth.  Retaining the torso's depth
@@ -170,19 +306,24 @@ class HumanSupportIntentEstimator:
         fixed_up[2] = 0.0
         norm = float(np.linalg.norm(fixed_up))
         if not np.isfinite(norm) or norm < 1e-6:
-            self.reset()
-            return
+            raise NeutralCalibrationError(
+                "human support-intent neutral-pose calibration produced an "
+                "invalid vertical reference; explicitly restart calibration"
+            )
         self._fixed_up = fixed_up / norm
         self._fixed_scale = float(np.median(self._scale_samples))
         if not np.isfinite(self._fixed_scale) or self._fixed_scale < 1e-4:
-            self.reset()
-            return
+            raise NeutralCalibrationError(
+                "human support-intent neutral-pose calibration produced an "
+                "invalid leg scale; explicitly restart calibration"
+            )
         ratios = [
             float(np.dot(difference, self._fixed_up) / self._fixed_scale)
             for difference in self._difference_samples
         ]
         self._baseline_ratio = float(np.median(ratios))
         self._filtered_ratio = 0.0
+        self._calibration_gate = None
 
     def _raw_candidate(self, ratio: float) -> SupportIntent:
         # A side change must pass through a confirmed two-foot state.  This is
@@ -279,10 +420,26 @@ class HumanSupportIntentEstimator:
         self._last_valid_timestamp_s = timestamp
         self._last_confidence = confidence
         if self.is_calibrating:
-            self._up_samples.append(up.copy())
-            self._difference_samples.append(difference.copy())
-            self._scale_samples.append(scale)
-            self._finish_calibration_if_ready()
+            assert self._calibration_gate is not None
+            accepted = self._calibration_gate.observe(frame)
+            if accepted is not None:
+                accepted_measurements = [
+                    self._measurement(sample) for sample in accepted
+                ]
+                if any(item is None for item in accepted_measurements):
+                    raise NeutralCalibrationError(
+                        "accepted support-intent neutral window became "
+                        "unobservable; explicitly restart calibration"
+                    )
+                measurements = [
+                    item for item in accepted_measurements if item is not None
+                ]
+                self._up_samples = [item[0].copy() for item in measurements]
+                self._difference_samples = [
+                    item[1].copy() for item in measurements
+                ]
+                self._scale_samples = [item[2] for item in measurements]
+                self._finish_calibration_if_ready()
             return HumanSupportEstimate(
                 SupportIntent.DOUBLE_SUPPORT,
                 0.0,
@@ -320,10 +477,19 @@ def load_human_support_intent_config(
         document = yaml.safe_load(stream) or {}
     if not isinstance(document, Mapping):
         raise ValueError("balance YAML root must be a mapping")
+    unknown_sections = set(document) - _BALANCE_SECTIONS
+    if unknown_sections:
+        raise ValueError(
+            "balance YAML contains unknown section(s): "
+            f"{sorted(unknown_sections)}"
+        )
     settings = document.get("human_support_intent", {})
     if not isinstance(settings, Mapping):
         raise ValueError("human_support_intent settings must be a mapping")
     allowed = set(HumanSupportIntentConfig.__dataclass_fields__)
-    return HumanSupportIntentConfig(
-        **{key: value for key, value in settings.items() if key in allowed}
-    )
+    unknown = set(settings) - allowed
+    if unknown:
+        raise ValueError(
+            "human_support_intent contains unknown key(s): " f"{sorted(unknown)}"
+        )
+    return HumanSupportIntentConfig(**dict(settings))

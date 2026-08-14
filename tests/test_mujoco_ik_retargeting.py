@@ -322,6 +322,128 @@ def test_task_missing_from_neutral_window_cannot_lazy_calibrate_while_moving() -
     ) > np.radians(5.0)
 
 
+def test_explicit_recalibration_replaces_all_optional_task_references() -> None:
+    neutral = make_synthetic_skeleton(1.0)
+    retargeter = _retargeter()
+    assert retargeter.calibrate(neutral)
+    optional_tasks = {
+        "face",
+        "right_hand",
+        "left_hand",
+        "right_foot",
+        "left_foot",
+    }
+    assert optional_tasks.issubset(retargeter._references)
+    assert optional_tasks.issubset(retargeter._alignments)
+
+    visibility = neutral.visibility.copy()
+    presence = neutral.presence.copy()
+    hidden = np.asarray(
+        [
+            int(landmark)
+            for landmark in (
+                L.NOSE,
+                L.LEFT_EAR,
+                L.RIGHT_EAR,
+                L.LEFT_INDEX,
+                L.LEFT_PINKY,
+                L.RIGHT_INDEX,
+                L.RIGHT_PINKY,
+                L.LEFT_HEEL,
+                L.RIGHT_HEEL,
+                L.LEFT_FOOT_INDEX,
+                L.RIGHT_FOOT_INDEX,
+            )
+        ]
+    )
+    visibility[hidden] = 0.0
+    presence[hidden] = 0.0
+    partial = replace(neutral, visibility=visibility, presence=presence)
+
+    assert retargeter.calibrate(partial)
+    assert optional_tasks.isdisjoint(retargeter._references)
+    assert optional_tasks.isdisjoint(retargeter._alignments)
+    assert "right_upper" in retargeter._alignments
+
+    turned = _with_face_direction(
+        make_synthetic_skeleton(2.0, phase_rad=0.9),
+        np.asarray((0.5, 0.0, -1.0)),
+    )
+    command = retargeter.retarget(turned)
+    np.testing.assert_allclose(
+        command.positions_rad[18:20],
+        retargeter.neutral_positions_rad[18:20],
+        atol=1e-9,
+    )
+
+
+def test_explicit_ik_recalibration_clears_precalibration_stale_fallback() -> None:
+    neutral = make_synthetic_skeleton(1.0)
+    moved = make_synthetic_skeleton(2.0, phase_rad=0.9)
+    retargeter = _retargeter()
+    assert retargeter.calibrate(neutral)
+    old_command = retargeter.retarget(moved)
+    assert np.max(
+        np.abs(old_command.positions_rad - retargeter.neutral_positions_rad)
+    ) > np.radians(5.0)
+
+    recalibration = replace(neutral, timestamp_s=2.05, sequence=2)
+    assert retargeter.calibrate(recalibration)
+    missing = retargeter.retarget(None, timestamp_s=2.1)
+
+    assert missing.stale
+    np.testing.assert_allclose(
+        missing.positions_rad,
+        retargeter.neutral_positions_rad,
+        atol=1e-12,
+    )
+
+
+def test_optional_task_must_be_visible_throughout_auto_calibration_window() -> None:
+    neutral = make_synthetic_skeleton(1.0)
+    hidden_visibility = neutral.visibility.copy()
+    hidden_presence = neutral.presence.copy()
+    optional = np.asarray(
+        (
+            int(L.NOSE),
+            int(L.LEFT_EAR),
+            int(L.RIGHT_EAR),
+            int(L.RIGHT_INDEX),
+            int(L.RIGHT_PINKY),
+        )
+    )
+    hidden_visibility[optional] = 0.0
+    hidden_presence[optional] = 0.0
+    incomplete = replace(
+        neutral,
+        visibility=hidden_visibility,
+        presence=hidden_presence,
+    )
+    retargeter = _retargeter(calibration_frames=3)
+
+    for sequence, frame in enumerate((neutral, incomplete, incomplete)):
+        command = retargeter.retarget(
+            replace(frame, timestamp_s=sequence / 30.0, sequence=sequence)
+        )
+        np.testing.assert_allclose(
+            command.positions_rad, retargeter.neutral_positions_rad
+        )
+
+    assert not retargeter.is_calibrating
+    assert "face" not in retargeter._alignments
+    assert "right_hand" not in retargeter._alignments
+    moved = _with_face_direction(
+        make_synthetic_skeleton(1.0, phase_rad=0.9),
+        np.asarray((0.5, 0.0, -1.0)),
+    )
+    command = retargeter.retarget(moved)
+    np.testing.assert_allclose(
+        command.positions_rad[18:20],
+        retargeter.neutral_positions_rad[18:20],
+        atol=1e-9,
+    )
+
+
 def test_ik_forward_leg_moves_matching_ankle_toward_robot_front() -> None:
     neutral = make_synthetic_skeleton(1.0)
     moved = _with_right_leg_forward(neutral)

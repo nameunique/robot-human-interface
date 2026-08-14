@@ -71,6 +71,14 @@ standing_balance:
 # separate all four one-leg episodes in the bundled slow-balance MP4.
 human_support_intent:
   calibration_frames: 30
+  calibration_max_observations: 150
+  calibration_max_pose_spread_ratio: 0.06
+  calibration_max_ankle_offset_ratio: 0.08
+  calibration_max_ankle_spread_ratio: 0.035
+  calibration_max_arm_deviation_rad: 1.0471975511965976 # 60 deg
+  calibration_max_upper_arm_deviation_rad: 1.0471975511965976 # 60 deg
+  calibration_max_elbow_flexion_rad: 1.0471975511965976 # 60 deg
+  calibration_max_knee_flexion_rad: 0.7853981633974483 # 45 deg
   confidence_threshold: 0.5
   activate_height_ratio: 0.15
   release_height_ratio: 0.08
@@ -108,6 +116,9 @@ support_control:
   min_stance_load_fraction: 0.65
   max_swing_load_fraction: 0.35
   min_touchdown_force_n: 4.0
+  # Once a landing has passed the stricter timed 4 N confirmation, retain
+  # centering only while both solver contacts remain physically present.
+  min_touchdown_contact_force_n: 2.0
   min_touchdown_total_force_n: 20.0
   # Once the verified lift is nearly lowered, accept sustained physical sole
   # contact without driving the nominal profile through that contact first.

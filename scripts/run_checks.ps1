@@ -44,6 +44,18 @@ if ($FullFreeBaseAcceptance) {
     if ($LASTEXITCODE -ne 0) {
         throw "Free-base stability acceptance failed with exit code $LASTEXITCODE."
     }
+
+    Write-Host "Running final safe-command pose fidelity acceptance..."
+    & $venvPython (Join-Path $projectRoot "tools\evaluate_safe_pose_fidelity.py")
+    if ($LASTEXITCODE -ne 0) {
+        throw "Safe pose fidelity acceptance failed with exit code $LASTEXITCODE."
+    }
+
+    Write-Host "Running free-base perturbation/domain-randomization acceptance..."
+    & $venvPython (Join-Path $projectRoot "tools\evaluate_freebase_robustness.py")
+    if ($LASTEXITCODE -ne 0) {
+        throw "Free-base robustness acceptance failed with exit code $LASTEXITCODE."
+    }
 }
 
 Write-Host "All checks passed."

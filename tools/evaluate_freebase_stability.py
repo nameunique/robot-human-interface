@@ -29,6 +29,11 @@ import numpy as np
 
 from robot_human_interface.app.teleop import (
     BUNDLED_VIDEO_PATHS,
+    SETTLING_MAX_BASE_LINEAR_SPEED_M_S,
+    SETTLING_MAX_CAPTURE_POINT_ERROR_M,
+    SETTLING_MAX_JOINT_SPEED_RAD_S,
+    SETTLING_MAX_JOINT_TRACKING_ERROR_RAD,
+    SETTLING_MAX_LOADED_FOOT_SLIP_SPEED_M_S,
     TeleopStats,
     build_parser as build_teleop_parser,
     run_teleop,
@@ -48,12 +53,27 @@ RUNTIME_INPUTS = (
     PROJECT_ROOT / "models" / "humanoid" / "scene_free.xml",
     PROJECT_ROOT / "assets" / "models" / "pose_landmarker_full.task",
     PROJECT_ROOT / "src" / "robot_human_interface" / "app" / "teleop.py",
+    PROJECT_ROOT / "src" / "robot_human_interface" / "camera" / "__init__.py",
+    PROJECT_ROOT / "src" / "robot_human_interface" / "camera" / "sources.py",
+    PROJECT_ROOT / "src" / "robot_human_interface" / "control" / "__init__.py",
     PROJECT_ROOT / "src" / "robot_human_interface" / "control" / "human_intent.py",
     PROJECT_ROOT / "src" / "robot_human_interface" / "control" / "standing.py",
     PROJECT_ROOT / "src" / "robot_human_interface" / "control" / "support.py",
+    PROJECT_ROOT / "src" / "robot_human_interface" / "pose" / "__init__.py",
+    PROJECT_ROOT / "src" / "robot_human_interface" / "pose" / "calibration.py",
+    PROJECT_ROOT / "src" / "robot_human_interface" / "pose" / "mediapipe_tasks.py",
+    PROJECT_ROOT / "src" / "robot_human_interface" / "retargeting" / "__init__.py",
+    PROJECT_ROOT / "src" / "robot_human_interface" / "retargeting" / "fidelity.py",
+    PROJECT_ROOT / "src" / "robot_human_interface" / "retargeting" / "geometry.py",
     PROJECT_ROOT / "src" / "robot_human_interface" / "retargeting" / "mujoco_ik.py",
+    PROJECT_ROOT / "src" / "robot_human_interface" / "retargeting" / "retargeter.py",
+    PROJECT_ROOT / "src" / "robot_human_interface" / "simulation" / "__init__.py",
     PROJECT_ROOT / "src" / "robot_human_interface" / "simulation" / "humanoid.py",
     PROJECT_ROOT / "src" / "robot_human_interface" / "simulation" / "types.py",
+    PROJECT_ROOT / "src" / "robot_human_interface" / "skeleton" / "__init__.py",
+    PROJECT_ROOT / "src" / "robot_human_interface" / "skeleton" / "filtering.py",
+    PROJECT_ROOT / "src" / "robot_human_interface" / "skeleton" / "transforms.py",
+    PROJECT_ROOT / "src" / "robot_human_interface" / "skeleton" / "types.py",
 )
 
 ARM_INDICES = np.arange(0, 6, dtype=np.int64)
@@ -95,20 +115,71 @@ class ClipSpec:
     demo_video: str | None
     expected_frames: int
     expectation: MotionExpectation
+    calibration_video: Path | None = None
+    calibration_frame: int | None = None
+
+    def __post_init__(self) -> None:
+        if (self.calibration_video is None) != (self.calibration_frame is None):
+            raise ValueError("calibration_video and calibration_frame must be paired")
+        if self.calibration_frame is not None and self.calibration_frame < 0:
+            raise ValueError("calibration_frame must be non-negative")
 
 
 @dataclass(frozen=True, slots=True)
 class StabilityThresholds:
     """Suite-wide safety and synchronization gates."""
 
-    minimum_base_height_m: float = 0.70
-    minimum_final_base_height_m: float = 0.70
-    maximum_tilt_deg: float = 30.0
+    minimum_base_height_m: float = 0.80
+    minimum_final_base_height_m: float = 0.88
+    maximum_tilt_deg: float = 20.0
     maximum_media_sync_error_s: float = 0.003
     maximum_stale_fraction: float = 0.10
     minimum_skeleton_fraction: float = 0.85
-    maximum_loaded_foot_slip_speed_m_s: float = 0.25
-    maximum_foot_slip_distance_m: float = 0.15
+    maximum_loaded_foot_slip_speed_m_s: float = 0.15
+    maximum_foot_slip_distance_m: float = 0.075
+    maximum_swing_precontact_vertical_speed_m_s: float = 0.50
+    maximum_swing_impact_force_n: float = 60.0
+    maximum_swing_contact_impulse_n_s: float = 9.0
+    maximum_swing_peak_force_bodyweights: float = 2.25
+    maximum_swing_contact_impulse_weight_s: float = 0.30
+    settling_maximum_base_linear_speed_m_s: float = (
+        SETTLING_MAX_BASE_LINEAR_SPEED_M_S
+    )
+    settling_maximum_joint_speed_rad_s: float = SETTLING_MAX_JOINT_SPEED_RAD_S
+    settling_maximum_joint_tracking_error_rad: float = (
+        SETTLING_MAX_JOINT_TRACKING_ERROR_RAD
+    )
+    settling_maximum_loaded_foot_slip_speed_m_s: float = (
+        SETTLING_MAX_LOADED_FOOT_SLIP_SPEED_M_S
+    )
+    settling_maximum_capture_point_error_m: float = (
+        SETTLING_MAX_CAPTURE_POINT_ERROR_M
+    )
+
+
+CANONICAL_SETTLING_SECONDS = 5.0
+_MINIMUM_THRESHOLD_FIELDS = (
+    "minimum_base_height_m",
+    "minimum_final_base_height_m",
+    "minimum_skeleton_fraction",
+)
+_MAXIMUM_THRESHOLD_FIELDS = (
+    "maximum_tilt_deg",
+    "maximum_media_sync_error_s",
+    "maximum_stale_fraction",
+    "maximum_loaded_foot_slip_speed_m_s",
+    "maximum_foot_slip_distance_m",
+    "maximum_swing_precontact_vertical_speed_m_s",
+    "maximum_swing_impact_force_n",
+    "maximum_swing_contact_impulse_n_s",
+    "maximum_swing_peak_force_bodyweights",
+    "maximum_swing_contact_impulse_weight_s",
+    "settling_maximum_base_linear_speed_m_s",
+    "settling_maximum_joint_speed_rad_s",
+    "settling_maximum_joint_tracking_error_rad",
+    "settling_maximum_loaded_foot_slip_speed_m_s",
+    "settling_maximum_capture_point_error_m",
+)
 
 
 @dataclass(slots=True)
@@ -118,6 +189,7 @@ class _SimulationRecorder:
     timestep_s: float | None = None
     equality_constraint_count: int | None = None
     base_joint_type: str | None = None
+    robot_weight_n: float | None = None
     simulation_instances: list[object] = field(default_factory=list, repr=False)
     data_instances: list[object] = field(default_factory=list, repr=False)
 
@@ -141,6 +213,7 @@ class _SimulationRecorder:
         import mujoco
 
         self.equality_constraint_count = int(simulation.model.neq)
+        self.robot_weight_n = float(np.sum(simulation.model.body_mass) * 9.81)
         joint_id = mujoco.mj_name2id(
             simulation.model, mujoco.mjtObj.mjOBJ_JOINT, "base_free"
         )
@@ -290,6 +363,8 @@ def default_clips() -> tuple[ClipSpec, ...]:
                 right_swing_completed=False,
                 left_swing_completed=False,
             ),
+            calibration_video=BUNDLED_VIDEO_PATHS["jumping-jacks"],
+            calibration_frame=2,
         ),
         ClipSpec(
             "arm-circles",
@@ -322,6 +397,8 @@ def default_clips() -> tuple[ClipSpec, ...]:
                 minimum_right_clearance_m=0.020,
                 minimum_support_transitions=4,
             ),
+            calibration_video=external / "dvids_arm_circles.mp4",
+            calibration_frame=29,
         ),
         ClipSpec(
             "stationary-squat",
@@ -354,6 +431,8 @@ def default_clips() -> tuple[ClipSpec, ...]:
                 right_swing_completed=False,
                 left_swing_completed=False,
             ),
+            calibration_video=external / "dvids_arm_circles.mp4",
+            calibration_frame=29,
         ),
     )
 
@@ -374,11 +453,23 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _runtime_input_hashes() -> dict[str, str]:
-    missing = [path for path in RUNTIME_INPUTS if not path.is_file()]
+def _runtime_input_hashes(clips: Sequence[ClipSpec]) -> dict[str, str]:
+    paths = {
+        *RUNTIME_INPUTS,
+        *(clip.path.expanduser().resolve() for clip in clips),
+        *(
+            clip.calibration_video.expanduser().resolve()
+            for clip in clips
+            if clip.calibration_video is not None
+        ),
+    }
+    missing = sorted(str(path) for path in paths if not path.is_file())
     if missing:
         raise FileNotFoundError(f"runtime acceptance inputs are missing: {missing}")
-    return {_project_path(path): _sha256(path) for path in RUNTIME_INPUTS}
+    return {
+        _project_path(path): _sha256(path)
+        for path in sorted(paths, key=lambda item: str(item).lower())
+    }
 
 
 def _teleop_arguments(clip: ClipSpec, settling_seconds: float) -> list[str]:
@@ -404,6 +495,15 @@ def _teleop_arguments(clip: ClipSpec, settling_seconds: float) -> list[str]:
         arguments.extend(("--video-path", str(clip.path)))
     else:
         raise ValueError(f"unsupported acceptance source {clip.source!r}: {clip.name}")
+    if clip.calibration_video is not None:
+        arguments.extend(
+            (
+                "--calibration-video",
+                str(clip.calibration_video),
+                "--calibration-frame",
+                str(clip.calibration_frame),
+            )
+        )
     return arguments
 
 
@@ -421,6 +521,22 @@ def _settling_metrics(
         "data_instance_count": len(recorder.data_instances),
         "minimum_base_height_m": float(stats.settling_minimum_base_height_m),
         "maximum_tilt_deg": float(np.degrees(stats.settling_maximum_tilt_rad)),
+        "maximum_base_linear_speed_m_s": float(
+            stats.settling_maximum_base_linear_speed_m_s
+        ),
+        "maximum_joint_speed_rad_s": float(
+            stats.settling_maximum_joint_speed_rad_s
+        ),
+        "maximum_joint_tracking_error_rad": float(
+            stats.settling_maximum_joint_tracking_error_rad
+        ),
+        "maximum_loaded_foot_slip_speed_m_s": float(
+            stats.settling_maximum_loaded_foot_slip_speed_m_s
+        ),
+        "maximum_capture_point_error_m": float(
+            stats.settling_maximum_capture_point_error_m
+        ),
+        "observation_count": int(stats.settling_observation_count),
     }
 
 
@@ -430,6 +546,17 @@ def _stats_metrics(
     frames = int(stats.frames)
     input_simulation_time_s = float(
         stats.simulation_time_s - stats.settling_elapsed_s
+    )
+    robot_weight_n = recorder.robot_weight_n
+    normalized_peak_force = (
+        float(stats.maximum_swing_foot_impact_force_n / robot_weight_n)
+        if robot_weight_n is not None and robot_weight_n > 0.0
+        else math.nan
+    )
+    normalized_contact_impulse = (
+        float(stats.maximum_swing_foot_contact_impulse_n_s / robot_weight_n)
+        if robot_weight_n is not None and robot_weight_n > 0.0
+        else math.nan
     )
     return {
         "base_mode": stats.base_mode,
@@ -447,6 +574,8 @@ def _stats_metrics(
         "maximum_tilt_deg": float(np.degrees(stats.maximum_tilt_rad)),
         "fell": bool(stats.fell),
         "support_transitions": int(stats.support_transitions),
+        "support_abort_count": int(stats.support_abort_count),
+        "support_abort_reasons": list(stats.support_abort_reasons),
         "right_swing_completed": bool(stats.right_swing_completed),
         "left_swing_completed": bool(stats.left_swing_completed),
         "maximum_right_foot_clearance_m": float(
@@ -474,12 +603,21 @@ def _stats_metrics(
         "maximum_swing_foot_impact_speed_m_s": float(
             stats.maximum_swing_foot_impact_speed_m_s
         ),
+        "maximum_swing_foot_precontact_vertical_speed_m_s": float(
+            stats.maximum_swing_foot_precontact_vertical_speed_m_s
+        ),
         "maximum_swing_foot_impact_force_n": float(
             stats.maximum_swing_foot_impact_force_n
         ),
         "maximum_swing_foot_contact_impulse_n_s": float(
             stats.maximum_swing_foot_contact_impulse_n_s
         ),
+        "robot_weight_n": robot_weight_n,
+        "maximum_swing_foot_peak_force_bodyweights": normalized_peak_force,
+        "maximum_swing_foot_contact_impulse_weight_s": (
+            normalized_contact_impulse
+        ),
+        "swing_foot_contact_episodes": int(stats.swing_foot_contact_episodes),
         "motion": recorder.motion(settling_elapsed_s=stats.settling_elapsed_s),
     }
 
@@ -488,6 +626,8 @@ def _teleop_exit_code(stats: TeleopStats) -> int:
     """Mirror ``teleop.main`` safety status for the direct ``run_teleop`` call."""
 
     if stats.fell:
+        return 3
+    if int(getattr(stats, "support_abort_count", 0)) > 0:
         return 3
     if stats.settling_requested_s > 0.0 and not stats.settling_completed:
         return 3
@@ -510,6 +650,16 @@ def evaluate_clip(clip: ClipSpec, settling_seconds: float) -> dict[str, object]:
         "video_size_bytes": path.stat().st_size,
         "video_sha256": _sha256(path),
         "teleop_arguments": arguments,
+        "calibration": {
+            "mode": stats.calibration_mode,
+            "source": (
+                None
+                if stats.calibration_source_path is None
+                else _project_path(Path(stats.calibration_source_path))
+            ),
+            "source_sha256": stats.calibration_source_sha256,
+            "frame_index": stats.calibration_frame_index,
+        },
         "metrics": _stats_metrics(stats, recorder),
         "settling": _settling_metrics(stats, recorder),
     }
@@ -592,6 +742,71 @@ def assess_clip(
             )
         )
 
+    calibration = evaluation.get("calibration")
+    expected_calibration_path = (
+        None
+        if clip.calibration_video is None
+        else _project_path(clip.calibration_video)
+    )
+    expected_calibration_hash = (
+        None
+        if clip.calibration_video is None
+        else _sha256(clip.calibration_video.expanduser().resolve())
+    )
+    expected_calibration_mode = (
+        "automatic_window"
+        if clip.calibration_video is None
+        else "explicit_replay_frame"
+    )
+    gates.append(
+        _gate(
+            "calibration_evidence",
+            isinstance(calibration, Mapping),
+            isinstance(calibration, Mapping),
+            True,
+        )
+    )
+    for name, expected in (
+        ("calibration_mode", expected_calibration_mode),
+        ("calibration_source", expected_calibration_path),
+        ("calibration_source_sha256", expected_calibration_hash),
+        ("calibration_frame_index", clip.calibration_frame),
+    ):
+        field = name.removeprefix("calibration_")
+        observed = calibration.get(field) if isinstance(calibration, Mapping) else None
+        gates.append(_gate(name, observed == expected, observed, expected))
+
+    expected_video_path = _project_path(clip.path)
+    observed_video_path = evaluation.get("video")
+    gates.append(
+        _gate(
+            "video_path",
+            observed_video_path == expected_video_path,
+            observed_video_path,
+            expected_video_path,
+        )
+    )
+    expected_video_size = clip.path.expanduser().resolve().stat().st_size
+    observed_video_size = evaluation.get("video_size_bytes")
+    gates.append(
+        _gate(
+            "video_size_bytes",
+            observed_video_size == expected_video_size,
+            observed_video_size,
+            expected_video_size,
+        )
+    )
+    expected_video_hash = _sha256(clip.path.expanduser().resolve())
+    observed_video_hash = evaluation.get("video_sha256")
+    gates.append(
+        _gate(
+            "video_sha256",
+            observed_video_hash == expected_video_hash,
+            observed_video_hash,
+            expected_video_hash,
+        )
+    )
+
     equals("base_mode", "free")
     equals("equality_constraint_count", 0)
     equals("base_joint_type", "free")
@@ -616,6 +831,16 @@ def assess_clip(
     at_most("maximum_tilt_deg", thresholds.maximum_tilt_deg)
     at_most("media_sync_error_s", thresholds.maximum_media_sync_error_s)
     equals("maximum_non_foot_ground_contacts", 0)
+    equals("support_abort_count", 0)
+    observed_abort_reasons = metrics.get("support_abort_reasons")
+    gates.append(
+        _gate(
+            "support_abort_reasons",
+            observed_abort_reasons == [],
+            observed_abort_reasons,
+            [],
+        )
+    )
     at_most(
         "maximum_loaded_foot_slip_speed_m_s",
         thresholds.maximum_loaded_foot_slip_speed_m_s,
@@ -625,6 +850,26 @@ def assess_clip(
     )
     at_most(
         "left_foot_slip_distance_m", thresholds.maximum_foot_slip_distance_m
+    )
+    at_most(
+        "maximum_swing_foot_precontact_vertical_speed_m_s",
+        thresholds.maximum_swing_precontact_vertical_speed_m_s,
+    )
+    at_most(
+        "maximum_swing_foot_impact_force_n",
+        thresholds.maximum_swing_impact_force_n,
+    )
+    at_most(
+        "maximum_swing_foot_contact_impulse_n_s",
+        thresholds.maximum_swing_contact_impulse_n_s,
+    )
+    at_most(
+        "maximum_swing_foot_peak_force_bodyweights",
+        thresholds.maximum_swing_peak_force_bodyweights,
+    )
+    at_most(
+        "maximum_swing_foot_contact_impulse_weight_s",
+        thresholds.maximum_swing_contact_impulse_weight_s,
     )
 
     finite_fields = (
@@ -643,8 +888,12 @@ def assess_clip(
         "right_foot_slip_distance_m",
         "left_foot_slip_distance_m",
         "maximum_swing_foot_impact_speed_m_s",
+        "maximum_swing_foot_precontact_vertical_speed_m_s",
         "maximum_swing_foot_impact_force_n",
         "maximum_swing_foot_contact_impulse_n_s",
+        "robot_weight_n",
+        "maximum_swing_foot_peak_force_bodyweights",
+        "maximum_swing_foot_contact_impulse_weight_s",
     )
     invalid = [name for name in finite_fields if not _finite_number(metrics.get(name))]
     gates.append(_gate("finite_metrics", not invalid, invalid, []))
@@ -658,9 +907,34 @@ def assess_clip(
         stable = settling.get("stable_s")
         minimum_height = settling.get("minimum_base_height_m")
         maximum_tilt = settling.get("maximum_tilt_deg")
+        maximum_base_linear_speed = settling.get(
+            "maximum_base_linear_speed_m_s"
+        )
+        maximum_joint_speed = settling.get("maximum_joint_speed_rad_s")
+        maximum_tracking_error = settling.get(
+            "maximum_joint_tracking_error_rad"
+        )
+        maximum_settling_slip = settling.get(
+            "maximum_loaded_foot_slip_speed_m_s"
+        )
+        maximum_capture_point_error = settling.get(
+            "maximum_capture_point_error_m"
+        )
+        observation_count = settling.get("observation_count")
         settling_finite = all(
             _finite_number(value)
-            for value in (requested, elapsed, stable, minimum_height, maximum_tilt)
+            for value in (
+                requested,
+                elapsed,
+                stable,
+                minimum_height,
+                maximum_tilt,
+                maximum_base_linear_speed,
+                maximum_joint_speed,
+                maximum_tracking_error,
+                maximum_settling_slip,
+                maximum_capture_point_error,
+            )
         )
         gates.extend(
             (
@@ -693,6 +967,14 @@ def assess_clip(
                     settling.get("completed") is True,
                     settling.get("completed"),
                     True,
+                ),
+                _gate(
+                    "settling_observations_present",
+                    isinstance(observation_count, int)
+                    and not isinstance(observation_count, bool)
+                    and observation_count > 0,
+                    observation_count,
+                    {"minimum": 1},
                 ),
                 _gate(
                     "settling_requested_duration_s",
@@ -729,6 +1011,64 @@ def assess_clip(
                     and float(maximum_tilt) <= thresholds.maximum_tilt_deg,
                     maximum_tilt,
                     {"maximum": thresholds.maximum_tilt_deg},
+                ),
+                _gate(
+                    "settling_maximum_base_linear_speed_m_s",
+                    _finite_number(maximum_base_linear_speed)
+                    and float(maximum_base_linear_speed)
+                    <= thresholds.settling_maximum_base_linear_speed_m_s,
+                    maximum_base_linear_speed,
+                    {
+                        "maximum": (
+                            thresholds.settling_maximum_base_linear_speed_m_s
+                        )
+                    },
+                ),
+                _gate(
+                    "settling_maximum_joint_speed_rad_s",
+                    _finite_number(maximum_joint_speed)
+                    and float(maximum_joint_speed)
+                    <= thresholds.settling_maximum_joint_speed_rad_s,
+                    maximum_joint_speed,
+                    {
+                        "maximum": thresholds.settling_maximum_joint_speed_rad_s
+                    },
+                ),
+                _gate(
+                    "settling_maximum_joint_tracking_error_rad",
+                    _finite_number(maximum_tracking_error)
+                    and float(maximum_tracking_error)
+                    <= thresholds.settling_maximum_joint_tracking_error_rad,
+                    maximum_tracking_error,
+                    {
+                        "maximum": (
+                            thresholds.settling_maximum_joint_tracking_error_rad
+                        )
+                    },
+                ),
+                _gate(
+                    "settling_maximum_loaded_foot_slip_speed_m_s",
+                    _finite_number(maximum_settling_slip)
+                    and float(maximum_settling_slip)
+                    <= thresholds.settling_maximum_loaded_foot_slip_speed_m_s,
+                    maximum_settling_slip,
+                    {
+                        "maximum": (
+                            thresholds.settling_maximum_loaded_foot_slip_speed_m_s
+                        )
+                    },
+                ),
+                _gate(
+                    "settling_maximum_capture_point_error_m",
+                    _finite_number(maximum_capture_point_error)
+                    and float(maximum_capture_point_error)
+                    <= thresholds.settling_maximum_capture_point_error_m,
+                    maximum_capture_point_error,
+                    {
+                        "maximum": (
+                            thresholds.settling_maximum_capture_point_error_m
+                        )
+                    },
                 ),
                 _gate("finite_settling_metrics", settling_finite, settling_finite, True),
             )
@@ -775,6 +1115,36 @@ def assess_clip(
         equals("right_swing_completed", expectation.right_swing_completed)
     if expectation.left_swing_completed is not None:
         equals("left_swing_completed", expectation.left_swing_completed)
+    expected_landings = sum(
+        value is True
+        for value in (
+            expectation.right_swing_completed,
+            expectation.left_swing_completed,
+        )
+    )
+    if expected_landings > 0:
+        at_least("swing_foot_contact_episodes", float(expected_landings))
+        observed_force = metrics.get("maximum_swing_foot_impact_force_n")
+        gates.append(
+            _gate(
+                "swing_landing_force_observed",
+                _finite_number(observed_force) and float(observed_force) >= 4.0,
+                observed_force,
+                {"minimum": 4.0},
+            )
+        )
+        observed_impulse = metrics.get(
+            "maximum_swing_foot_contact_impulse_n_s"
+        )
+        gates.append(
+            _gate(
+                "swing_landing_impulse_observed",
+                _finite_number(observed_impulse)
+                and float(observed_impulse) >= 0.001,
+                observed_impulse,
+                {"minimum": 0.001},
+            )
+        )
     if expectation.minimum_right_clearance_m > 0.0:
         at_least(
             "maximum_right_foot_clearance_m",
@@ -892,14 +1262,14 @@ def _git_worktree_provenance() -> dict[str, object]:
     }
 
 
-def _capture_run_provenance() -> dict[str, object]:
+def _capture_run_provenance(clips: Sequence[ClipSpec]) -> dict[str, object]:
     """Freeze identifiers before importing video data or stepping physics."""
 
     return {
         "captured_at_utc": datetime.now(timezone.utc).isoformat(),
         "git_revision": _git_revision(),
         "git_worktree": _git_worktree_provenance(),
-        "runtime_input_sha256": _runtime_input_hashes(),
+        "runtime_input_sha256": _runtime_input_hashes(clips),
     }
 
 
@@ -916,22 +1286,115 @@ def _sanitize_json(value: object) -> object:
     return value
 
 
+def _threshold_policy_violations(
+    thresholds: StabilityThresholds,
+) -> dict[str, dict[str, float | str]]:
+    canonical = StabilityThresholds()
+    violations: dict[str, dict[str, float | str]] = {}
+    for name in _MINIMUM_THRESHOLD_FIELDS:
+        observed = getattr(thresholds, name)
+        required = getattr(canonical, name)
+        if not _finite_number(observed) or float(observed) < required:
+            violations[name] = {
+                "observed": observed,
+                "canonical": required,
+                "required_relation": ">=",
+            }
+    for name in _MAXIMUM_THRESHOLD_FIELDS:
+        observed = getattr(thresholds, name)
+        required = getattr(canonical, name)
+        if not _finite_number(observed) or float(observed) > required:
+            violations[name] = {
+                "observed": observed,
+                "canonical": required,
+                "required_relation": "<=",
+            }
+    return violations
+
+
+def _clip_contract(clip: ClipSpec) -> dict[str, object]:
+    return {
+        "name": clip.name,
+        "source": clip.source,
+        "path": _project_path(clip.path),
+        "demo_video": clip.demo_video,
+        "expected_frames": clip.expected_frames,
+        "expectation": asdict(clip.expectation),
+        "calibration_video": (
+            None
+            if clip.calibration_video is None
+            else _project_path(clip.calibration_video)
+        ),
+        "calibration_frame": clip.calibration_frame,
+    }
+
+
 def build_report(
     results: Sequence[Mapping[str, object]],
+    clips: Sequence[ClipSpec],
     *,
     thresholds: StabilityThresholds,
     settling_seconds: float,
     provenance: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
-    captured = dict(provenance or _capture_run_provenance())
+    selected_clips = tuple(clips)
+    canonical_clips = default_clips()
+    captured = dict(provenance or _capture_run_provenance(selected_clips))
     initial_hashes = captured.get("runtime_input_sha256")
-    final_hashes = _runtime_input_hashes()
+    final_hashes = _runtime_input_hashes(selected_clips)
     runtime_inputs_unchanged = initial_hashes == final_hashes
+    canonical_names = [clip.name for clip in canonical_clips]
+    selected_names = [clip.name for clip in selected_clips]
+    result_names = [result.get("name") for result in results]
+    threshold_violations = _threshold_policy_violations(thresholds)
+    suite_gates = [
+        _gate(
+            "exact_canonical_clip_matrix",
+            selected_clips == canonical_clips,
+            [_clip_contract(clip) for clip in selected_clips],
+            [_clip_contract(clip) for clip in canonical_clips],
+        ),
+        _gate(
+            "complete_clip_result_count",
+            len(results) == len(canonical_clips),
+            len(results),
+            len(canonical_clips),
+        ),
+        _gate(
+            "exact_canonical_result_matrix",
+            result_names == canonical_names,
+            result_names,
+            canonical_names,
+        ),
+        _gate(
+            "canonical_or_stricter_thresholds",
+            not threshold_violations,
+            threshold_violations,
+            {
+                "minimum_thresholds": ">= canonical defaults",
+                "maximum_thresholds": "<= canonical defaults",
+            },
+        ),
+        _gate(
+            "minimum_settling_duration_s",
+            _finite_number(settling_seconds)
+            and settling_seconds >= CANONICAL_SETTLING_SECONDS,
+            settling_seconds,
+            {"minimum": CANONICAL_SETTLING_SECONDS},
+        ),
+        _gate(
+            "runtime_inputs_unchanged_during_run",
+            runtime_inputs_unchanged,
+            runtime_inputs_unchanged,
+            True,
+        ),
+    ]
     clips_passed = bool(results) and all(
         bool(result.get("passed")) for result in results
     )
+    suite_passed = all(bool(gate["passed"]) for gate in suite_gates)
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "description": (
             "End-to-end MediaPipe -> constrained IK -> balance/support -> free-base "
             "MuJoCo replay acceptance. No floating-base constraint is enabled."
@@ -944,16 +1407,20 @@ def build_report(
         "runtime_input_sha256": initial_hashes,
         "runtime_input_sha256_at_completion": final_hashes,
         "runtime_inputs_unchanged_during_run": runtime_inputs_unchanged,
+        "report_kind": "canonical_acceptance" if suite_passed else "diagnostic",
         "configuration": {
             "base_mode": "free",
             "headless": True,
             "retargeting": "ik",
             "balance_controller": True,
             "settling_requested_s": settling_seconds,
+            "clips": selected_names,
+            "canonical_complete_matrix": selected_clips == canonical_clips,
             "thresholds": asdict(thresholds),
             "versions": _package_versions(),
         },
-        "overall_passed": clips_passed and runtime_inputs_unchanged,
+        "suite_gates": suite_gates,
+        "overall_passed": clips_passed and suite_passed,
         "clips": list(results),
     }
 
@@ -968,16 +1435,54 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run only this named default clip; repeat to select several.",
     )
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
-    parser.add_argument("--minimum-base-height-m", type=float, default=0.70)
-    parser.add_argument("--minimum-final-base-height-m", type=float, default=0.70)
-    parser.add_argument("--maximum-tilt-deg", type=float, default=30.0)
+    parser.add_argument("--minimum-base-height-m", type=float, default=0.80)
+    parser.add_argument("--minimum-final-base-height-m", type=float, default=0.88)
+    parser.add_argument("--maximum-tilt-deg", type=float, default=20.0)
     parser.add_argument("--maximum-media-sync-error-s", type=float, default=0.003)
     parser.add_argument("--maximum-stale-fraction", type=float, default=0.10)
     parser.add_argument("--minimum-skeleton-fraction", type=float, default=0.85)
     parser.add_argument(
-        "--maximum-loaded-foot-slip-speed-m-s", type=float, default=0.25
+        "--maximum-loaded-foot-slip-speed-m-s", type=float, default=0.15
     )
-    parser.add_argument("--maximum-foot-slip-distance-m", type=float, default=0.15)
+    parser.add_argument("--maximum-foot-slip-distance-m", type=float, default=0.075)
+    parser.add_argument(
+        "--maximum-swing-precontact-vertical-speed-m-s", type=float, default=0.50
+    )
+    parser.add_argument("--maximum-swing-impact-force-n", type=float, default=60.0)
+    parser.add_argument(
+        "--maximum-swing-contact-impulse-n-s", type=float, default=9.0
+    )
+    parser.add_argument(
+        "--maximum-swing-peak-force-bodyweights", type=float, default=2.25
+    )
+    parser.add_argument(
+        "--maximum-swing-contact-impulse-weight-s", type=float, default=0.30
+    )
+    parser.add_argument(
+        "--settling-maximum-base-linear-speed-m-s",
+        type=float,
+        default=SETTLING_MAX_BASE_LINEAR_SPEED_M_S,
+    )
+    parser.add_argument(
+        "--settling-maximum-joint-speed-rad-s",
+        type=float,
+        default=SETTLING_MAX_JOINT_SPEED_RAD_S,
+    )
+    parser.add_argument(
+        "--settling-maximum-joint-tracking-error-rad",
+        type=float,
+        default=SETTLING_MAX_JOINT_TRACKING_ERROR_RAD,
+    )
+    parser.add_argument(
+        "--settling-maximum-loaded-foot-slip-speed-m-s",
+        type=float,
+        default=SETTLING_MAX_LOADED_FOOT_SLIP_SPEED_M_S,
+    )
+    parser.add_argument(
+        "--settling-maximum-capture-point-error-m",
+        type=float,
+        default=SETTLING_MAX_CAPTURE_POINT_ERROR_M,
+    )
     parser.add_argument(
         "--settling-seconds",
         type=float,
@@ -1000,6 +1505,16 @@ def _validated_thresholds(args: argparse.Namespace) -> StabilityThresholds:
         args.minimum_skeleton_fraction,
         args.maximum_loaded_foot_slip_speed_m_s,
         args.maximum_foot_slip_distance_m,
+        args.maximum_swing_precontact_vertical_speed_m_s,
+        args.maximum_swing_impact_force_n,
+        args.maximum_swing_contact_impulse_n_s,
+        args.maximum_swing_peak_force_bodyweights,
+        args.maximum_swing_contact_impulse_weight_s,
+        args.settling_maximum_base_linear_speed_m_s,
+        args.settling_maximum_joint_speed_rad_s,
+        args.settling_maximum_joint_tracking_error_rad,
+        args.settling_maximum_loaded_foot_slip_speed_m_s,
+        args.settling_maximum_capture_point_error_m,
         args.settling_seconds,
     )
     if not all(math.isfinite(value) for value in values):
@@ -1018,6 +1533,21 @@ def _validated_thresholds(args: argparse.Namespace) -> StabilityThresholds:
         raise ValueError("--maximum-loaded-foot-slip-speed-m-s must be non-negative")
     if args.maximum_foot_slip_distance_m < 0.0:
         raise ValueError("--maximum-foot-slip-distance-m must be non-negative")
+    non_negative = (
+        "maximum_swing_precontact_vertical_speed_m_s",
+        "maximum_swing_impact_force_n",
+        "maximum_swing_contact_impulse_n_s",
+        "maximum_swing_peak_force_bodyweights",
+        "maximum_swing_contact_impulse_weight_s",
+        "settling_maximum_base_linear_speed_m_s",
+        "settling_maximum_joint_speed_rad_s",
+        "settling_maximum_joint_tracking_error_rad",
+        "settling_maximum_loaded_foot_slip_speed_m_s",
+        "settling_maximum_capture_point_error_m",
+    )
+    for name in non_negative:
+        if float(getattr(args, name)) < 0.0:
+            raise ValueError(f"--{name.replace('_', '-')} must be non-negative")
     if args.settling_seconds < 0.0:
         raise ValueError("--settling-seconds must be non-negative")
     return StabilityThresholds(
@@ -1031,6 +1561,34 @@ def _validated_thresholds(args: argparse.Namespace) -> StabilityThresholds:
             args.maximum_loaded_foot_slip_speed_m_s
         ),
         maximum_foot_slip_distance_m=args.maximum_foot_slip_distance_m,
+        maximum_swing_precontact_vertical_speed_m_s=(
+            args.maximum_swing_precontact_vertical_speed_m_s
+        ),
+        maximum_swing_impact_force_n=args.maximum_swing_impact_force_n,
+        maximum_swing_contact_impulse_n_s=(
+            args.maximum_swing_contact_impulse_n_s
+        ),
+        maximum_swing_peak_force_bodyweights=(
+            args.maximum_swing_peak_force_bodyweights
+        ),
+        maximum_swing_contact_impulse_weight_s=(
+            args.maximum_swing_contact_impulse_weight_s
+        ),
+        settling_maximum_base_linear_speed_m_s=(
+            args.settling_maximum_base_linear_speed_m_s
+        ),
+        settling_maximum_joint_speed_rad_s=(
+            args.settling_maximum_joint_speed_rad_s
+        ),
+        settling_maximum_joint_tracking_error_rad=(
+            args.settling_maximum_joint_tracking_error_rad
+        ),
+        settling_maximum_loaded_foot_slip_speed_m_s=(
+            args.settling_maximum_loaded_foot_slip_speed_m_s
+        ),
+        settling_maximum_capture_point_error_m=(
+            args.settling_maximum_capture_point_error_m
+        ),
     )
 
 
@@ -1041,13 +1599,13 @@ def main(
 ) -> int:
     args = build_parser().parse_args(argv)
     thresholds = _validated_thresholds(args)
-    provenance = _capture_run_provenance()
     available = {clip.name: clip for clip in default_clips()}
     clips = (
         [available[name] for name in args.clip]
         if args.clip
         else list(available.values())
     )
+    provenance = _capture_run_provenance(clips)
     results = evaluate_suite(
         clips,
         thresholds=thresholds,
@@ -1056,6 +1614,7 @@ def main(
     )
     report = build_report(
         results,
+        clips,
         thresholds=thresholds,
         settling_seconds=args.settling_seconds,
         provenance=provenance,

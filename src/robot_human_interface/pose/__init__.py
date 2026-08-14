@@ -1,5 +1,6 @@
 """Human pose estimation adapters."""
 
+from .calibration import NeutralCalibrationError
 from .mediapipe_tasks import (
     MediaPipePoseConfig,
     MediaPipePoseLandmarker,
@@ -13,6 +14,7 @@ from .synthetic import SyntheticPoseConfig, SyntheticPoseEstimator, make_synthet
 __all__ = [
     "MediaPipePoseConfig",
     "MediaPipePoseLandmarker",
+    "NeutralCalibrationError",
     "POSE_CONNECTIONS",
     "PoseDependencyError",
     "PoseEstimator",

@@ -12,12 +12,36 @@ from robot_human_interface.app.teleop import (
     BUNDLED_VIDEO_PATHS,
     DEMO_VIDEO_PATH,
     PROJECT_ROOT,
+    SETTLING_MAX_BASE_LINEAR_SPEED_M_S,
+    SETTLING_MAX_CAPTURE_POINT_ERROR_M,
+    SETTLING_MAX_JOINT_SPEED_RAD_S,
+    SETTLING_MAX_JOINT_TRACKING_ERROR_RAD,
+    SETTLING_MAX_LOADED_FOOT_SLIP_SPEED_M_S,
+    _FootContactTelemetry,
+    _SupportAbortTelemetry,
     _handle_key,
     _video_path,
     build_parser,
     main,
     run_teleop,
 )
+
+
+def _contact_state(
+    *,
+    right_force: float,
+    right_velocity: tuple[float, float, float],
+    left_force: float = 20.0,
+    left_velocity: tuple[float, float, float] = (0.0, 0.0, 0.0),
+) -> object:
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        right_foot_normal_force_n=right_force,
+        left_foot_normal_force_n=left_force,
+        right_foot_linear_velocity_m_s=np.asarray(right_velocity),
+        left_foot_linear_velocity_m_s=np.asarray(left_velocity),
+    )
 
 
 def test_parser_defaults_to_camera_and_free_base() -> None:
@@ -55,18 +79,182 @@ def test_parser_keeps_explicit_fixed_and_legacy_free_base_options() -> None:
     (
         ("double_support", "double_support", (True, True)),
         ("center_weight", "right_swing", (True, True)),
-        ("shift_weight", "right_swing", (False, True)),
+        ("shift_weight", "right_swing", (True, True)),
+        ("verify_stance", "left_swing", (True, True)),
         ("lift_swing", "left_swing", (True, False)),
         ("verify_touchdown", "right_swing", (False, True)),
         ("verify_touchdown", "left_swing", (True, False)),
     ),
 )
-def test_phase_aware_loaded_feet_excludes_swing_impact_from_stance_slip(
+def test_phase_aware_loaded_feet_counts_pre_lift_contact_then_excludes_swing(
     phase: str,
     active: str,
     expected: tuple[bool, bool],
 ) -> None:
     assert teleop_module._phase_aware_loaded_feet(phase, active) == expected
+
+
+@pytest.mark.parametrize("phase", ("shift_weight", "verify_stance"))
+def test_pre_lift_selected_sole_motion_is_counted_as_loaded_slip(
+    phase: str,
+) -> None:
+    telemetry = _FootContactTelemetry()
+
+    telemetry.update(
+        _contact_state(
+            right_force=8.0,
+            right_velocity=(0.20, 0.0, 0.0),
+            left_force=20.0,
+        ),
+        phase=phase,
+        active_intent="right_swing",
+        dt_s=0.10,
+    )
+
+    assert telemetry.maximum_loaded_foot_slip_speed_m_s == pytest.approx(0.20)
+    assert telemetry.right_foot_slip_distance_m == pytest.approx(0.02)
+
+
+def test_landing_telemetry_uses_precontact_vertical_speed_and_episode_impulse() -> None:
+    telemetry = _FootContactTelemetry()
+
+    # The initially loaded swing candidate during weight shift is not a
+    # landing because no unloaded sample has been observed yet.
+    telemetry.update(
+        _contact_state(right_force=12.0, right_velocity=(0.4, 0.0, -0.1)),
+        phase="shift_weight",
+        active_intent="right_swing",
+        dt_s=0.01,
+    )
+    assert telemetry.swing_foot_contact_episodes == 0
+
+    telemetry.update(
+        _contact_state(right_force=0.0, right_velocity=(0.4, 0.0, -0.7)),
+        phase="lower_swing",
+        active_intent="right_swing",
+        dt_s=0.01,
+    )
+    telemetry.update(
+        # Contact is detected below the 4 N load/slip threshold, so the stored
+        # velocity is genuinely the last pre-contact sample.
+        _contact_state(right_force=0.5, right_velocity=(0.0, 0.0, -0.2)),
+        phase="lower_swing",
+        active_intent="right_swing",
+        dt_s=0.01,
+    )
+    telemetry.update(
+        _contact_state(right_force=10.0, right_velocity=(0.0, 0.0, -0.1)),
+        phase="verify_touchdown",
+        active_intent="right_swing",
+        dt_s=0.01,
+    )
+    # A one-tick force dropout is contact bounce, not a second landing.
+    telemetry.update(
+        _contact_state(right_force=0.0, right_velocity=(0.0, 0.0, 0.1)),
+        phase="verify_touchdown",
+        active_intent="right_swing",
+        dt_s=0.01,
+    )
+    telemetry.update(
+        _contact_state(right_force=20.0, right_velocity=(0.0, 0.0, 0.0)),
+        phase="verify_touchdown",
+        active_intent="right_swing",
+        dt_s=0.01,
+    )
+
+    assert telemetry.swing_foot_contact_episodes == 1
+    assert telemetry.maximum_swing_foot_precontact_vertical_speed_m_s == pytest.approx(
+        0.7
+    )
+    assert telemetry.maximum_swing_foot_impact_force_n == pytest.approx(20.0)
+    # Integral of both force samples, not max(force) * one timestep.
+    assert telemetry.maximum_swing_foot_contact_impulse_n_s == pytest.approx(0.305)
+
+
+def test_landing_telemetry_retains_early_swing_collision_peak_and_impulse() -> None:
+    telemetry = _FootContactTelemetry()
+
+    telemetry.update(
+        _contact_state(right_force=0.0, right_velocity=(0.0, 0.0, -1.0)),
+        phase="lift_swing",
+        active_intent="right_swing",
+        dt_s=0.01,
+    )
+    telemetry.update(
+        _contact_state(right_force=100.0, right_velocity=(0.0, 0.0, -0.2)),
+        phase="hold_swing",
+        active_intent="right_swing",
+        dt_s=0.01,
+    )
+    # Contact bounce does not finish the semantic episode.  A later contact in
+    # LOWER belongs to the same episode and must not replace the earlier peak.
+    telemetry.update(
+        _contact_state(right_force=0.0, right_velocity=(0.0, 0.0, 0.1)),
+        phase="hold_swing",
+        active_intent="right_swing",
+        dt_s=0.01,
+    )
+    telemetry.update(
+        _contact_state(right_force=5.0, right_velocity=(0.0, 0.0, 0.0)),
+        phase="lower_swing",
+        active_intent="right_swing",
+        dt_s=0.01,
+    )
+
+    assert telemetry.swing_foot_contact_episodes == 1
+    assert telemetry.maximum_swing_foot_precontact_vertical_speed_m_s == pytest.approx(
+        1.0
+    )
+    assert telemetry.maximum_swing_foot_impact_force_n == pytest.approx(100.0)
+    assert telemetry.maximum_swing_foot_contact_impulse_n_s == pytest.approx(1.05)
+
+
+def test_landing_telemetry_updates_precontact_speed_after_contact_bounce() -> None:
+    telemetry = _FootContactTelemetry()
+
+    for force_n, vertical_speed in (
+        (0.0, -0.1),
+        (0.002, -0.1),
+        (0.0, -2.0),
+        (20.0, -2.0),
+    ):
+        telemetry.update(
+            _contact_state(
+                right_force=force_n,
+                right_velocity=(0.0, 0.0, vertical_speed),
+            ),
+            phase="lower_swing",
+            active_intent="right_swing",
+            dt_s=0.01,
+        )
+
+    assert telemetry.swing_foot_contact_episodes == 1
+    assert telemetry.maximum_swing_foot_precontact_vertical_speed_m_s == pytest.approx(
+        2.0
+    )
+    assert telemetry.maximum_swing_foot_impact_force_n == pytest.approx(20.0)
+
+
+def test_support_abort_telemetry_counts_fault_edges_not_repeated_ticks() -> None:
+    telemetry = _SupportAbortTelemetry()
+
+    for reason in (
+        None,
+        "touchdown_timeout",
+        "touchdown_timeout",
+        None,
+        "touchdown_timeout",
+        "active_tilt_limit",
+        "active_tilt_limit",
+    ):
+        telemetry.update(reason)
+
+    assert telemetry.count == 3
+    assert telemetry.reasons == [
+        "touchdown_timeout",
+        "touchdown_timeout",
+        "active_tilt_limit",
+    ]
 
 
 def test_parser_selects_slow_bundled_demo() -> None:
@@ -207,6 +395,10 @@ def test_main_prints_machine_readable_smoke_summary(capsys: pytest.CaptureFixtur
             "settling_completed": False,
             "settling_stable_s": 0.2,
         },
+        {
+            "support_abort_count": 1,
+            "support_abort_reasons": ("touchdown_timeout",),
+        },
     ),
 )
 def test_main_returns_nonzero_when_free_base_acceptance_fails(
@@ -225,6 +417,70 @@ def test_main_returns_nonzero_when_free_base_acceptance_fails(
     )
 
     assert main(["--source", "synthetic", "--headless", "--max-frames", "1"]) == 3
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    (
+        {
+            "robot_output_enabled": True,
+            "robot_commands_sent": 0,
+            "robot_send_attempts": 1,
+            "robot_last_error": None,
+        },
+        {
+            "robot_output_enabled": True,
+            "robot_commands_sent": 0,
+            "robot_send_attempts": 1,
+            "robot_last_error": "connection refused",
+        },
+        {
+            "robot_output_enabled": True,
+            "robot_commands_sent": 2,
+            "robot_send_attempts": 3,
+            "robot_last_error": "disconnected",
+        },
+    ),
+)
+def test_main_returns_nonzero_when_requested_robot_output_is_not_healthy(
+    monkeypatch: pytest.MonkeyPatch,
+    overrides: dict[str, object],
+) -> None:
+    baseline = run_teleop(
+        build_parser().parse_args(
+            ["--source", "synthetic", "--headless", "--max-frames", "1"]
+        )
+    )
+    monkeypatch.setattr(
+        teleop_module,
+        "run_teleop",
+        lambda _args: replace(baseline, **overrides),
+    )
+
+    assert main(["--source", "synthetic", "--headless", "--max-frames", "1"]) == 4
+
+
+def test_main_fails_closed_after_a_recovered_robot_output_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    baseline = run_teleop(
+        build_parser().parse_args(
+            ["--source", "synthetic", "--headless", "--max-frames", "1"]
+        )
+    )
+    monkeypatch.setattr(
+        teleop_module,
+        "run_teleop",
+        lambda _args: replace(
+            baseline,
+            robot_output_enabled=True,
+            robot_commands_sent=2,
+            robot_send_attempts=3,
+            robot_last_error=None,
+        ),
+    )
+
+    assert main(["--source", "synthetic", "--headless", "--max-frames", "1"]) == 4
 
 
 def test_finite_source_settles_on_the_same_free_base_simulation() -> None:
@@ -253,6 +509,23 @@ def test_finite_source_settles_on_the_same_free_base_simulation() -> None:
     assert not stats.fell
     assert stats.settling_minimum_base_height_m > 0.85
     assert np.degrees(stats.settling_maximum_tilt_rad) < 10.0
+    assert (
+        stats.settling_maximum_base_linear_speed_m_s
+        <= SETTLING_MAX_BASE_LINEAR_SPEED_M_S
+    )
+    assert stats.settling_maximum_joint_speed_rad_s <= SETTLING_MAX_JOINT_SPEED_RAD_S
+    assert (
+        stats.settling_maximum_joint_tracking_error_rad
+        <= SETTLING_MAX_JOINT_TRACKING_ERROR_RAD
+    )
+    assert (
+        stats.settling_maximum_loaded_foot_slip_speed_m_s
+        <= SETTLING_MAX_LOADED_FOOT_SLIP_SPEED_M_S
+    )
+    assert (
+        stats.settling_maximum_capture_point_error_m
+        <= SETTLING_MAX_CAPTURE_POINT_ERROR_M
+    )
 
 
 @pytest.mark.parametrize(

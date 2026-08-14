@@ -10,8 +10,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from math import pi
+from numbers import Real
 from pathlib import Path
-from typing import Mapping, Sequence
+from typing import Iterable, Mapping, Sequence
 
 import numpy as np
 import yaml
@@ -30,6 +31,11 @@ KNEE_INDICES = np.asarray((12, 13), dtype=np.int64)
 ANKLE_PITCH_INDICES = np.asarray((14, 15), dtype=np.int64)
 ANKLE_ROLL_INDICES = np.asarray((16, 17), dtype=np.int64)
 SHOULDER_PITCH_INDICES = np.asarray((0, 1), dtype=np.int64)
+_BALANCE_SECTIONS = {
+    "standing_balance",
+    "human_support_intent",
+    "support_control",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +80,17 @@ class StandingBalanceConfig:
     max_inverse_crouch_amplitude_rad: float = 6.0 * pi / 180.0
 
     def __post_init__(self) -> None:
+        if type(self.enabled) is not bool:
+            raise ValueError("standing_balance.enabled must be a boolean")
+        _require_real_config_fields(
+            self,
+            (
+                name
+                for name in type(self).__dataclass_fields__
+                if name != "enabled"
+            ),
+            section="standing_balance",
+        )
         if not 0.0 <= self.lower_body_imitation_scale <= 1.0:
             raise ValueError("lower_body_imitation_scale must be within [0, 1]")
         if not 0.0 <= self.transverse_lower_body_imitation_scale <= 1.0:
@@ -178,6 +195,21 @@ class StandingBalanceConfig:
             raise ValueError("capture full-gain foot-force thresholds must be ordered")
 
 
+def _require_real_config_fields(
+    config: object,
+    field_names: Iterable[str],
+    *,
+    section: str,
+) -> None:
+    for name in field_names:
+        value = getattr(config, name)
+        if isinstance(value, bool) or not isinstance(value, Real):
+            raise ValueError(
+                f"{section}.{name} must be a real number "
+                "(booleans are not accepted)"
+            )
+
+
 @dataclass(frozen=True, slots=True)
 class BalanceDiagnostics:
     """Signals needed to distinguish imitation from stability corrections.
@@ -261,13 +293,27 @@ def load_standing_balance_config(path: str | Path | None) -> StandingBalanceConf
         document = yaml.safe_load(stream) or {}
     if not isinstance(document, Mapping):
         raise ValueError("balance YAML root must be a mapping")
-    settings = document.get("standing_balance", document)
+    if set(document) & _BALANCE_SECTIONS:
+        unknown_sections = set(document) - _BALANCE_SECTIONS
+        if unknown_sections:
+            raise ValueError(
+                "balance YAML contains unknown section(s): "
+                f"{sorted(unknown_sections)}"
+            )
+        settings = document.get("standing_balance", {})
+    else:
+        # Preserve the documented standalone-section form while validating it
+        # with the same strict field schema.
+        settings = document
     if not isinstance(settings, Mapping):
         raise ValueError("standing_balance settings must be a mapping")
     allowed = set(StandingBalanceConfig.__dataclass_fields__)
-    return StandingBalanceConfig(
-        **{key: value for key, value in settings.items() if key in allowed}
-    )
+    unknown = set(settings) - allowed
+    if unknown:
+        raise ValueError(
+            "standing_balance contains unknown key(s): " f"{sorted(unknown)}"
+        )
+    return StandingBalanceConfig(**dict(settings))
 
 
 def _projected_gravity_angles(quaternion_wxyz: Sequence[float]) -> tuple[float, float, float]:
@@ -533,9 +579,10 @@ class StandingBalanceController:
 
         roll, pitch, tilt = _projected_gravity_angles(orientation)
         span = self.config.recovery_tilt_rad - self.config.tracking_fade_start_rad
-        tracking_weight = float(
+        tilt_tracking_weight = float(
             np.clip((self.config.recovery_tilt_rad - tilt) / span, 0.0, 1.0)
         )
+        tracking_weight = tilt_tracking_weight
         (
             com_offset_x_m,
             com_velocity_x_m_s,

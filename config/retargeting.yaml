@@ -1,8 +1,20 @@
 retargeting:
   mode: whole_body
   # Learn the operator's neutral pose first and hold every motor at home while
-  # the reference window is collected. Set to 0 only for controlled tests.
+  # a still, two-foot reference window is admitted. Set to 0 only for
+  # controlled tests that perform an explicit calibrate(frame) call.
   auto_calibration_frames: 30
+  # Reject moving/one-leg windows instead of averaging the first 30 confident
+  # frames. After five seconds of valid 30 FPS observations, fail explicitly;
+  # the operator must hold neutral and start calibration again.
+  calibration_max_observations: 150
+  calibration_max_pose_spread_ratio: 0.06
+  calibration_max_ankle_offset_ratio: 0.08
+  calibration_max_ankle_spread_ratio: 0.035
+  calibration_max_arm_deviation_rad: 1.0471975511965976 # 60 deg
+  calibration_max_upper_arm_deviation_rad: 1.0471975511965976 # 60 deg
+  calibration_max_elbow_flexion_rad: 1.0471975511965976 # 60 deg
+  calibration_max_knee_flexion_rad: 0.7853981633974483 # 45 deg
   confidence_threshold: 0.55
   minimum_coverage: 0.75
   smoothing_time_constant_s: 0.10

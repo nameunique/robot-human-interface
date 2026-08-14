@@ -8,6 +8,8 @@ param(
 
     [Alias("VideoPath")]
     [string]$ReplayPath = "",
+    [string]$CalibrationVideo = "",
+    [Nullable[int]]$CalibrationFrame = $null,
     [switch]$LoopReplay,
     [int]$CameraIndex = 0,
     [ValidateSet("auto", "dshow", "msmf", "v4l2", "avfoundation", "gstreamer")]
@@ -61,6 +63,17 @@ if ($needsSetup) {
 if ($Source -eq "replay" -and [string]::IsNullOrWhiteSpace($ReplayPath)) {
     throw "-VideoPath is required when -Source replay is selected."
 }
+$hasCalibrationVideo = -not [string]::IsNullOrWhiteSpace($CalibrationVideo)
+$hasCalibrationFrame = $null -ne $CalibrationFrame
+if ($hasCalibrationFrame -and $CalibrationFrame -lt 0) {
+    throw "-CalibrationFrame must be non-negative."
+}
+if ($hasCalibrationVideo -ne $hasCalibrationFrame) {
+    throw "-CalibrationVideo and a non-negative -CalibrationFrame must be supplied together."
+}
+if ($hasCalibrationVideo -and $Source -notin @("mp4", "replay")) {
+    throw "Controlled replay calibration is supported only with -Source mp4 or replay."
+}
 if ($CameraIndex -lt 0) {
     throw "-CameraIndex must be non-negative."
 }
@@ -103,6 +116,19 @@ if ($ReplayPath) {
         throw "Video file does not exist: $ReplayPath"
     }
     $teleopArguments += @("--video-path", $ReplayPath)
+}
+if ($hasCalibrationVideo) {
+    if (-not [System.IO.Path]::IsPathRooted($CalibrationVideo)) {
+        $CalibrationVideo = Join-Path $projectRoot $CalibrationVideo
+    }
+    $CalibrationVideo = [System.IO.Path]::GetFullPath($CalibrationVideo)
+    if (-not (Test-Path -LiteralPath $CalibrationVideo -PathType Leaf)) {
+        throw "Calibration video does not exist: $CalibrationVideo"
+    }
+    $teleopArguments += @(
+        "--calibration-video", $CalibrationVideo,
+        "--calibration-frame", "$CalibrationFrame"
+    )
 }
 if ($LoopReplay) {
     $teleopArguments += "--loop-replay"

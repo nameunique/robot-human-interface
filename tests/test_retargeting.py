@@ -5,12 +5,14 @@ from math import pi
 from pathlib import Path
 
 import numpy as np
+import pytest
 import yaml
 
 from robot_human_interface.pose import make_synthetic_skeleton
 from robot_human_interface.retargeting import (
     DEFAULT_JOINT_SPECS,
     GeometricRetargeter,
+    JointSpec,
     RetargetingConfig,
     canonicalize_mirrored_skeleton,
     compute_human_joint_angles,
@@ -76,6 +78,30 @@ def _with_right_leg_forward(frame: SkeletonFrame, angle_rad: float) -> SkeletonF
     return replace(frame, landmarks_3d=points)
 
 
+def _with_optional_calibration_channels_occluded(
+    frame: SkeletonFrame,
+) -> SkeletonFrame:
+    visibility = frame.visibility.copy()
+    presence = frame.presence.copy()
+    optional = (
+        L.NOSE,
+        L.LEFT_EAR,
+        L.RIGHT_EAR,
+        L.LEFT_INDEX,
+        L.LEFT_PINKY,
+        L.RIGHT_INDEX,
+        L.RIGHT_PINKY,
+        L.LEFT_HEEL,
+        L.RIGHT_HEEL,
+        L.LEFT_FOOT_INDEX,
+        L.RIGHT_FOOT_INDEX,
+    )
+    indices = [int(landmark) for landmark in optional]
+    visibility[indices] = 0.0
+    presence[indices] = 0.0
+    return replace(frame, visibility=visibility, presence=presence)
+
+
 def test_shared_joint_yaml_loads_exact_unity_home_pose() -> None:
     path = Path(__file__).parents[1] / "config" / "joints.yaml"
     specs = load_joint_specs(path)
@@ -88,6 +114,114 @@ def test_shared_joint_yaml_loads_exact_unity_home_pose() -> None:
     assert coordinates["robot_front_mujoco"] == [-1.0, 0.0, 0.0]
     assert coordinates["robot_left_mujoco"] == [0.0, 1.0, 0.0]
     assert coordinates["robot_up_mujoco"] == [0.0, 0.0, 1.0]
+
+
+def _minimal_joint_yaml() -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "joints": [
+            {
+                "index": spec.index,
+                "name": spec.name,
+                "axis": spec.axis,
+                "limit_rad": [spec.lower_rad, spec.upper_rad],
+                "home_rad": spec.start_rad,
+                "zero_offset_rad": spec.zero_offset_rad,
+                "retarget_sign": spec.retarget_sign,
+            }
+            for spec in DEFAULT_JOINT_SPECS
+        ],
+    }
+
+
+def _write_joint_yaml(tmp_path: Path, data: object) -> Path:
+    path = tmp_path / "joints.yaml"
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+    return path
+
+
+def test_joint_yaml_rejects_unknown_root_and_record_keys(tmp_path: Path) -> None:
+    unknown_root = _minimal_joint_yaml()
+    unknown_root["schema_verzion"] = 1
+    with pytest.raises(ValueError, match=r"top-level.*schema_verzion"):
+        load_joint_specs(_write_joint_yaml(tmp_path, unknown_root))
+
+    unknown_record = _minimal_joint_yaml()
+    records = unknown_record["joints"]
+    assert isinstance(records, list)
+    records[0]["home_radians"] = 0.0
+    with pytest.raises(ValueError, match=r"record 0.*home_radians"):
+        load_joint_specs(_write_joint_yaml(tmp_path, unknown_record))
+
+
+@pytest.mark.parametrize("bad_index", (True, 0.0, "0"))
+def test_joint_yaml_index_is_an_exact_integer(
+    tmp_path: Path,
+    bad_index: object,
+) -> None:
+    data = _minimal_joint_yaml()
+    records = data["joints"]
+    assert isinstance(records, list)
+    records[0]["index"] = bad_index
+
+    with pytest.raises(ValueError, match=r"index.*integer.*without coercion"):
+        load_joint_specs(_write_joint_yaml(tmp_path, data))
+
+
+@pytest.mark.parametrize(
+    ("field_name", "bad_value"),
+    (
+        ("limit_rad", [False, 1.0]),
+        ("home_rad", float("nan")),
+        ("zero_offset_rad", float("inf")),
+        ("retarget_sign", True),
+        ("axis", [1.0, 0.0, float("-inf")]),
+        ("mass_kg", False),
+    ),
+)
+def test_joint_yaml_numeric_fields_are_finite_reals_not_booleans(
+    tmp_path: Path,
+    field_name: str,
+    bad_value: object,
+) -> None:
+    data = _minimal_joint_yaml()
+    records = data["joints"]
+    assert isinstance(records, list)
+    records[0][field_name] = bad_value
+
+    with pytest.raises(ValueError, match=rf"{field_name}.*(?:finite|real number)"):
+        load_joint_specs(_write_joint_yaml(tmp_path, data))
+
+
+@pytest.mark.parametrize(
+    ("field_name", "bad_value"),
+    (
+        ("index", True),
+        ("lower_rad", float("nan")),
+        ("upper_rad", float("inf")),
+        ("start_rad", False),
+        ("zero_offset_rad", "0"),
+        ("retarget_sign", True),
+    ),
+)
+def test_joint_spec_constructor_enforces_strict_numeric_types(
+    field_name: str,
+    bad_value: object,
+) -> None:
+    values: dict[str, object] = {
+        "index": 0,
+        "name": "joint",
+        "axis": "+X",
+        "lower_rad": -1.0,
+        "upper_rad": 1.0,
+        "start_rad": 0.0,
+        "zero_offset_rad": 0.0,
+        "retarget_sign": 1.0,
+    }
+    values[field_name] = bad_value
+
+    with pytest.raises(ValueError):
+        JointSpec(**values)
 
 
 def test_body_basis_front_matches_face_and_not_camera_back() -> None:
@@ -133,6 +267,34 @@ def test_calibration_maps_neutral_human_pose_to_exact_robot_home() -> None:
     expected = np.array([spec.start_rad for spec in DEFAULT_JOINT_SPECS])
     np.testing.assert_allclose(command.positions_rad, expected, atol=1e-12)
     assert not command.stale
+
+
+def test_explicit_recalibration_clears_precalibration_stale_fallback() -> None:
+    neutral = make_synthetic_skeleton(1.0, phase_rad=0.0)
+    moved = make_synthetic_skeleton(2.0, phase_rad=0.9)
+    retargeter = GeometricRetargeter(
+        config=RetargetingConfig(
+            mode="upper_body",
+            smoothing_time_constant_s=0.0,
+            hold_seconds=0.2,
+        )
+    )
+    assert retargeter.calibrate(neutral)
+    old_command = retargeter.retarget(moved)
+    assert np.max(
+        np.abs(old_command.positions_rad - retargeter.neutral_positions_rad)
+    ) > np.radians(5.0)
+
+    recalibration = replace(neutral, timestamp_s=2.05, sequence=2)
+    assert retargeter.calibrate(recalibration)
+    missing = retargeter.retarget(None, timestamp_s=2.1)
+
+    assert missing.stale
+    np.testing.assert_allclose(
+        missing.positions_rad,
+        retargeter.neutral_positions_rad,
+        atol=1e-12,
+    )
 
 
 def test_right_human_arm_drives_right_robot_shoulder_only() -> None:
@@ -344,6 +506,38 @@ def test_auto_calibration_holds_home_for_full_reference_window() -> None:
     assert not retargeter.is_calibrating
     moved = retargeter.retarget(_mediapipe_camera_skeleton(4.0, phase_rad=0.7))
     assert moved.positions_rad[0] > home[0] + 0.6
+
+
+def test_auto_calibration_does_not_invent_references_for_occluded_channels() -> None:
+    retargeter = GeometricRetargeter(
+        config=RetargetingConfig(
+            mode="whole_body",
+            auto_calibration_frames=3,
+            smoothing_time_constant_s=0.0,
+        )
+    )
+    home = retargeter.neutral_positions_rad
+    for sequence in range(3):
+        frame = make_synthetic_skeleton(sequence / 30.0, sequence=sequence)
+        command = retargeter.retarget(
+            _with_optional_calibration_channels_occluded(frame)
+        )
+        np.testing.assert_allclose(command.positions_rad, home, atol=1e-12)
+
+    assert not retargeter.is_calibrating
+    unavailable = np.array((4, 5, 6, 7, 14, 15, 18, 19))
+    assert not np.any(retargeter._calibration_reference_valid[unavailable])
+
+    # Merely seeing those landmarks later must not interpret their absolute
+    # angles relative to an implicit zero reference and jump the robot.
+    visible_neutral = make_synthetic_skeleton(0.1, sequence=3)
+    command = retargeter.retarget(visible_neutral)
+    np.testing.assert_allclose(command.positions_rad, home, atol=1e-12)
+
+    # A deliberate, accepted recalibration is the only operation that can
+    # admit the previously unavailable head, hand, and foot channels.
+    assert retargeter.calibrate(visible_neutral)
+    assert np.all(retargeter._calibration_reference_valid[unavailable])
 
 
 def test_calibrated_angles_use_shortest_delta_across_pi_branch() -> None:

@@ -257,11 +257,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         legs = metrics["legs"]
         end_effectors = metrics["end_effectors"]
         assert isinstance(arms, dict) and isinstance(legs, dict) and isinstance(end_effectors, dict)
+        def improvement_text(group: dict[str, object]) -> str:
+            value = group.get("ik_mean_improvement_percent")
+            return "n/a" if value is None else f"{float(value):+.1f}%"
+
         print(
             f"{video['video']}: IK mean improvement "
-            f"arms={arms['ik_mean_improvement_percent']:+.1f}% "
-            f"legs={legs['ik_mean_improvement_percent']:+.1f}% "
-            f"end={end_effectors['ik_mean_improvement_percent']:+.1f}%"
+            f"arms={improvement_text(arms)} "
+            f"legs={improvement_text(legs)} "
+            f"end={improvement_text(end_effectors)}"
         )
     return 0
 

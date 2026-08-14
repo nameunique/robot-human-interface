@@ -13,6 +13,10 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import least_squares
 
+from robot_human_interface.pose.calibration import (
+    NeutralCalibrationError,
+    NeutralCalibrationGate,
+)
 from robot_human_interface.skeleton import (
     JOINT_NAMES,
     PoseLandmark as L,
@@ -68,6 +72,13 @@ _IMAGE_MAX_LIFT_FRACTION = 0.75
 _IMAGE_LEG_DIRECTION_SCALE = 0.15
 _IMAGE_ANKLE_HEIGHT_WEIGHT = 30.0
 _IMAGE_TOE_HEIGHT_WEIGHT = 12.0
+
+_CALIBRATION_LANDMARKS = UPPER_BODY_REQUIRED + (
+    L.LEFT_KNEE,
+    L.RIGHT_KNEE,
+    L.LEFT_ANKLE,
+    L.RIGHT_ANKLE,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -218,7 +229,8 @@ class MujocoIKRetargeter:
     def calibration_progress(self) -> float:
         if self._calibration_target == 0:
             return 1.0
-        return min(1.0, len(self._calibration_frames) / self._calibration_target)
+        assert self._calibration_gate is not None
+        return self._calibration_gate.progress
 
     @property
     def is_calibrating(self) -> bool:
@@ -237,6 +249,9 @@ class MujocoIKRetargeter:
         self._neutral_leg_flex = {"right": 0.0, "left": 0.0}
         self._calibration_target = self.config.auto_calibration_frames
         self._calibration_frames: list[SkeletonFrame] = []
+        self._calibration_gate = self._new_calibration_gate(
+            self._calibration_target
+        )
         self._last_output: FloatArray | None = None
         self._last_output_timestamp: float | None = None
         self._last_valid_positions: FloatArray | None = None
@@ -248,6 +263,41 @@ class MujocoIKRetargeter:
             raise ValueError("sample_count must be positive")
         self.reset()
         self._calibration_target = int(sample_count)
+        self._calibration_gate = self._new_calibration_gate(
+            self._calibration_target
+        )
+
+    def _new_calibration_gate(
+        self, sample_count: int
+    ) -> NeutralCalibrationGate | None:
+        if sample_count == 0:
+            return None
+        landmarks = (
+            UPPER_BODY_REQUIRED
+            if self.config.mode == "upper_body"
+            else _CALIBRATION_LANDMARKS
+        )
+        return NeutralCalibrationGate(
+            sample_count=sample_count,
+            max_observations=max(
+                sample_count, self.config.calibration_max_observations
+            ),
+            landmark_indices=landmarks,
+            confidence_threshold=self.config.confidence_threshold,
+            max_pose_spread_ratio=self.config.calibration_max_pose_spread_ratio,
+            require_double_support=self.config.mode == "whole_body",
+            max_ankle_offset_ratio=self.config.calibration_max_ankle_offset_ratio,
+            max_ankle_spread_ratio=self.config.calibration_max_ankle_spread_ratio,
+            max_arm_deviation_rad=self.config.calibration_max_arm_deviation_rad,
+            max_upper_arm_deviation_rad=(
+                self.config.calibration_max_upper_arm_deviation_rad
+            ),
+            max_elbow_flexion_rad=self.config.calibration_max_elbow_flexion_rad,
+            max_knee_flexion_rad=self.config.calibration_max_knee_flexion_rad,
+            require_extended_legs=self.config.mode == "whole_body",
+            mirrored_input=self.config.mirrored_input,
+            label="MuJoCo IK neutral-pose",
+        )
 
     def _set_q(self, positions: FloatArray) -> None:
         self.data.qpos[self._qpos_adr] = positions
@@ -537,41 +587,69 @@ class MujocoIKRetargeter:
                 self._alignments[name] = _rotation_from_to(reference, home)
 
     def calibrate(self, frame: SkeletonFrame) -> bool:
+        """Explicitly override auto-admission with one caller-approved frame."""
+
         if not self._frame_is_valid(frame):
+            return False
+        gate = self._new_calibration_gate(1)
+        assert gate is not None
+        if not gate.accepts_explicit(frame):
             return False
         if not self._install_image_reference((frame,)):
             return False
         directions, _ = self._observations(frame)
         if not directions:
             return False
+        # Explicit calibration replaces the complete task reference set.
+        # Optional tasks absent from this approved frame must stay unavailable
+        # instead of inheriting face/hand/foot alignments from an older epoch.
+        self._references = {}
+        self._alignments = {}
         self._install_references(directions)
         self._calibration_target = 0
         self._calibration_frames = []
+        self._calibration_gate = None
         self._last_output = None
+        self._last_output_timestamp = None
+        # Do not let stale-pose fallback revive a command computed against the
+        # previous calibration after the reference geometry has changed.
+        self._last_valid_positions = None
+        self._last_valid_timestamp = None
+        self._last_diagnostics = None
         return True
 
     def _observe_calibration(self, frame: SkeletonFrame) -> bool:
         if self._calibration_target == 0:
             return False
-        self._calibration_frames.append(frame)
-        if len(self._calibration_frames) < self._calibration_target:
+        assert self._calibration_gate is not None
+        accepted = self._calibration_gate.observe(frame)
+        if accepted is None:
             return True
-        if not self._install_image_reference(self._calibration_frames):
-            self.reset()
-            return True
+        if not self._install_image_reference(accepted):
+            raise NeutralCalibrationError(
+                "MuJoCo IK neutral-pose calibration produced an invalid image "
+                "reference; hold a clearly visible, still, two-foot pose and "
+                "explicitly restart calibration"
+            )
         calibration_samples = [
-            self._observations(sample)[0] for sample in self._calibration_frames
+            self._observations(sample)[0] for sample in accepted
         ]
         averaged: dict[str, FloatArray] = {}
         for name in self._home_vectors:
             values = [sample[name] for sample in calibration_samples if name in sample]
-            if values:
+            # Optional tasks (face, hands, feet) are not part of the neutral
+            # gate's mandatory landmark set.  A single intermittently visible
+            # frame must not silently define their reference for the whole
+            # session; admit a task only when every accepted neutral sample
+            # observed it.
+            if len(values) == len(calibration_samples):
                 mean = _unit(np.mean(values, axis=0))
                 if mean is not None:
                     averaged[name] = mean
         self._install_references(averaged)
         self._calibration_target = 0
         self._calibration_frames = []
+        self._calibration_gate = None
         return True
 
     def _aligned(self, name: str, direction: FloatArray) -> FloatArray:
