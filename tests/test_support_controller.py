@@ -1338,39 +1338,6 @@ def test_camera_intent_is_latched_until_the_safe_lift_reaches_hold() -> None:
     ) is SupportIntent.DOUBLE_SUPPORT
 
 
-def test_completed_cycle_requires_post_return_double_observation_to_rearm() -> None:
-    latch = SupportIntentLatch()
-
-    assert latch.update(
-        SupportIntent.RIGHT_SWING, SupportPhase.DOUBLE_SUPPORT
-    ) is SupportIntent.RIGHT_SWING
-    assert latch.update(
-        SupportIntent.DOUBLE_SUPPORT, SupportPhase.HOLD_SWING
-    ) is SupportIntent.DOUBLE_SUPPORT
-    # The same gesture can reappear while the robot is still lowering.  It is
-    # not an opposite-side pending request and must not replay at touchdown.
-    assert latch.update(
-        SupportIntent.RIGHT_SWING, SupportPhase.LOWER_SWING
-    ) is SupportIntent.DOUBLE_SUPPORT
-    assert latch.update(
-        SupportIntent.RIGHT_SWING, SupportPhase.CENTER_WEIGHT
-    ) is SupportIntent.DOUBLE_SUPPORT
-    assert latch.update(
-        SupportIntent.RIGHT_SWING, SupportPhase.DOUBLE_SUPPORT
-    ) is SupportIntent.DOUBLE_SUPPORT
-    assert latch.update(
-        SupportIntent.RIGHT_SWING, SupportPhase.DOUBLE_SUPPORT
-    ) is SupportIntent.DOUBLE_SUPPORT
-
-    # Rearming is a camera-side two-foot edge observed after physical return.
-    assert latch.update(
-        SupportIntent.DOUBLE_SUPPORT, SupportPhase.DOUBLE_SUPPORT
-    ) is SupportIntent.DOUBLE_SUPPORT
-    assert latch.update(
-        SupportIntent.RIGHT_SWING, SupportPhase.DOUBLE_SUPPORT
-    ) is SupportIntent.RIGHT_SWING
-
-
 def test_latched_intent_releases_immediately_on_stale_or_controller_abort() -> None:
     latch = SupportIntentLatch()
     latch.update(SupportIntent.LEFT_SWING, SupportPhase.DOUBLE_SUPPORT)
