@@ -351,6 +351,127 @@ def test_headless_synthetic_runs_the_full_command_pipeline() -> None:
     assert 0.7 < stats.final_base_height_m < 1.0
 
 
+def test_teleop_holds_double_support_until_squat_interlock_releases(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cover the actual teleop wiring between balance diagnostics and the latch."""
+
+    from types import SimpleNamespace
+
+    from robot_human_interface.control import (
+        HumanSupportEstimate,
+        HumanSupportIntentEstimator,
+        StandingBalanceController,
+        SupportIntent,
+        SupportIntentLatch,
+    )
+
+    schedule = (
+        # Active squat intent itself excludes a simultaneous leg-lift request.
+        (True, 0.0, 0.0, True),
+        # Once visual squat intent clears, both planner depth and velocity must
+        # independently clear before a unilateral request can reach the latch.
+        (False, 0.20, 0.0, False),
+        (False, 0.01, 0.20, False),
+        (False, 0.0, 0.0, True),
+    )
+    estimator_calls = 0
+    latch_observations: list[SupportIntent] = []
+
+    class FakeBalanceController:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.last_diagnostics: object | None = None
+
+        def reset(self) -> None:
+            self.calls = 0
+            self.last_diagnostics = None
+
+        def update(
+            self,
+            reference: object,
+            _state: object,
+            **_kwargs: object,
+        ) -> object:
+            _, depth_rad, velocity_rad_s, ready = schedule[self.calls]
+            self.calls += 1
+            self.last_diagnostics = SimpleNamespace(
+                squat_depth_rad=depth_rad,
+                squat_velocity_rad_s=velocity_rad_s,
+                squat_ready_for_support=ready,
+            )
+            return reference
+
+    fake_balance = FakeBalanceController()
+
+    def fake_balance_factory(
+        _cls: type[StandingBalanceController],
+        _simulation: object,
+        _config: object,
+    ) -> FakeBalanceController:
+        return fake_balance
+
+    def fake_estimate(
+        _self: HumanSupportIntentEstimator,
+        _skeleton: object,
+        *,
+        timestamp_s: float,
+    ) -> HumanSupportEstimate:
+        nonlocal estimator_calls
+        active, _, _, _ = schedule[estimator_calls]
+        estimator_calls += 1
+        return HumanSupportEstimate(
+            intent=SupportIntent.RIGHT_SWING,
+            signed_height_ratio=1.0,
+            confidence=1.0,
+            calibrated=True,
+            stale=False,
+            squat_active=active,
+            squat_observation_fresh=active,
+            squat_depth_ratio=1.0 if active else 0.0,
+        )
+
+    original_latch_update = SupportIntentLatch.update
+
+    def record_latch_update(
+        self: SupportIntentLatch,
+        observed: SupportIntent | str,
+        phase: object,
+        **kwargs: object,
+    ) -> SupportIntent:
+        latch_observations.append(SupportIntent(observed))
+        return original_latch_update(self, observed, phase, **kwargs)
+
+    monkeypatch.setattr(
+        StandingBalanceController,
+        "from_simulation",
+        classmethod(fake_balance_factory),
+    )
+    monkeypatch.setattr(HumanSupportIntentEstimator, "update", fake_estimate)
+    monkeypatch.setattr(SupportIntentLatch, "update", record_latch_update)
+
+    args = build_parser().parse_args(
+        [
+            "--source",
+            "synthetic",
+            "--headless",
+            "--max-frames",
+            "4",
+            "--physics-steps-per-frame",
+            "1",
+        ]
+    )
+    stats = run_teleop(args)
+
+    assert stats.frames == 4
+    assert latch_observations == [
+        SupportIntent.DOUBLE_SUPPORT,
+        SupportIntent.DOUBLE_SUPPORT,
+        SupportIntent.DOUBLE_SUPPORT,
+        SupportIntent.RIGHT_SWING,
+    ]
+
+
 def test_bundled_mp4_runs_media_pipe_retargeting_and_mujoco() -> None:
     assert DEMO_VIDEO_PATH.is_file()
     args = build_parser().parse_args(

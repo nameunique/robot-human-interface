@@ -23,6 +23,8 @@ from robot_human_interface.skeleton import JOINT_NAMES, RobotJointCommand
 
 FloatArray = NDArray[np.float64]
 UPPER_BODY_INDICES = np.asarray((0, 1, 2, 3, 4, 5, 18, 19), dtype=np.int64)
+ARM_INDICES = np.arange(0, 6, dtype=np.int64)
+HEAD_NECK_INDICES = np.asarray((18, 19), dtype=np.int64)
 LOWER_BODY_INDICES = np.arange(6, 18, dtype=np.int64)
 HIP_YAW_INDICES = np.asarray((6, 7), dtype=np.int64)
 HIP_ROLL_INDICES = np.asarray((8, 9), dtype=np.int64)
@@ -78,6 +80,34 @@ class StandingBalanceConfig:
     capture_minimum_total_support_force_n: float = 1.0
     capture_support_point_filter_time_constant_s: float = 0.04
     max_inverse_crouch_amplitude_rad: float = 6.0 * pi / 180.0
+    squat_max_depth_rad: float = 30.0 * pi / 180.0
+    squat_input_gain: float = 1.0
+    squat_hip_shape: float = 5.0 / 3.0
+    squat_ankle_shape: float = -2.0 / 3.0
+    squat_upper_body_fade_full_depth_rad: float = 6.0 * pi / 180.0
+    squat_arm_full_extension_depth_rad: float = 19.0 * pi / 180.0
+    squat_arm_shoulder_pitch_rad: float = 84.6969 * pi / 180.0
+    squat_arm_elbow_rad: float = 0.0
+    squat_arm_wrist_rad: float = 0.0
+    squat_arm_to_ankle_gain: float = 0.02
+    squat_capture_recovery_gain_multiplier: float = 2.0
+    squat_max_speed_rad_s: float = 38.0 * pi / 180.0
+    squat_max_acceleration_rad_s2: float = 300.0 * pi / 180.0
+    squat_min_foot_force_n: float = 4.0
+    squat_min_total_force_n: float = 20.0
+    squat_deepen_max_tilt_rad: float = 12.0 * pi / 180.0
+    squat_deepen_max_angular_speed_rad_s: float = 1.0
+    squat_capture_resume_m: float = 0.050
+    squat_capture_hold_m: float = 0.070
+    squat_capture_return_m: float = 0.090
+    squat_max_absolute_capture_offset_x_m: float = 0.095
+    squat_max_absolute_capture_offset_y_m: float = 0.160
+    squat_neutral_max_base_speed_m_s: float = 0.10
+    squat_return_tilt_rad: float = 18.0 * pi / 180.0
+    squat_return_angular_speed_rad_s: float = 3.0
+    squat_support_release_depth_rad: float = 2.0 * pi / 180.0
+    squat_support_release_speed_rad_s: float = 5.0 * pi / 180.0
+    squat_support_release_tracking_error_rad: float = 5.0 * pi / 180.0
 
     def __post_init__(self) -> None:
         if type(self.enabled) is not bool:
@@ -133,6 +163,34 @@ class StandingBalanceConfig:
             self.capture_minimum_total_support_force_n,
             self.capture_support_point_filter_time_constant_s,
             self.max_inverse_crouch_amplitude_rad,
+            self.squat_max_depth_rad,
+            self.squat_input_gain,
+            self.squat_hip_shape,
+            self.squat_ankle_shape,
+            self.squat_upper_body_fade_full_depth_rad,
+            self.squat_arm_full_extension_depth_rad,
+            self.squat_arm_shoulder_pitch_rad,
+            self.squat_arm_elbow_rad,
+            self.squat_arm_wrist_rad,
+            self.squat_arm_to_ankle_gain,
+            self.squat_capture_recovery_gain_multiplier,
+            self.squat_max_speed_rad_s,
+            self.squat_max_acceleration_rad_s2,
+            self.squat_min_foot_force_n,
+            self.squat_min_total_force_n,
+            self.squat_deepen_max_tilt_rad,
+            self.squat_deepen_max_angular_speed_rad_s,
+            self.squat_capture_resume_m,
+            self.squat_capture_hold_m,
+            self.squat_capture_return_m,
+            self.squat_max_absolute_capture_offset_x_m,
+            self.squat_max_absolute_capture_offset_y_m,
+            self.squat_neutral_max_base_speed_m_s,
+            self.squat_return_tilt_rad,
+            self.squat_return_angular_speed_rad_s,
+            self.squat_support_release_depth_rad,
+            self.squat_support_release_speed_rad_s,
+            self.squat_support_release_tracking_error_rad,
         )
         if not np.isfinite(finite).all():
             raise ValueError("balance-controller parameters must be finite")
@@ -193,6 +251,60 @@ class StandingBalanceConfig:
             <= self.capture_full_gain_start_foot_force_n
         ):
             raise ValueError("capture full-gain foot-force thresholds must be ordered")
+        if any(
+            value <= 0.0
+            for value in (
+                self.squat_max_depth_rad,
+                self.squat_input_gain,
+                self.squat_hip_shape,
+                self.squat_upper_body_fade_full_depth_rad,
+                self.squat_arm_full_extension_depth_rad,
+                self.squat_capture_recovery_gain_multiplier,
+                self.squat_max_speed_rad_s,
+                self.squat_max_acceleration_rad_s2,
+                self.squat_min_foot_force_n,
+                self.squat_min_total_force_n,
+                self.squat_deepen_max_tilt_rad,
+                self.squat_deepen_max_angular_speed_rad_s,
+                self.squat_capture_resume_m,
+                self.squat_max_absolute_capture_offset_x_m,
+                self.squat_max_absolute_capture_offset_y_m,
+                self.squat_neutral_max_base_speed_m_s,
+                self.squat_return_tilt_rad,
+                self.squat_return_angular_speed_rad_s,
+                self.squat_support_release_depth_rad,
+                self.squat_support_release_speed_rad_s,
+                self.squat_support_release_tracking_error_rad,
+            )
+        ):
+            raise ValueError("squat controller limits must be positive")
+        if not -1.0 < self.squat_ankle_shape < 0.0:
+            raise ValueError("squat ankle shape must be within (-1, 0)")
+        if abs(
+            self.squat_hip_shape - 1.0 + self.squat_ankle_shape
+        ) > 1e-9:
+            raise ValueError("squat shape must preserve signed sole pitch")
+        if self.squat_min_total_force_n <= 2.0 * self.squat_min_foot_force_n:
+            raise ValueError("squat total-force gate must exceed two foot thresholds")
+        if not (
+            self.squat_capture_resume_m
+            < self.squat_capture_hold_m
+            < self.squat_capture_return_m
+        ):
+            raise ValueError("squat capture thresholds must be strictly ordered")
+        if self.squat_return_tilt_rad <= self.squat_deepen_max_tilt_rad:
+            raise ValueError("squat return tilt must exceed deepen tilt")
+        if (
+            self.squat_return_angular_speed_rad_s
+            <= self.squat_deepen_max_angular_speed_rad_s
+        ):
+            raise ValueError("squat return angular speed must exceed deepen speed")
+        if self.squat_support_release_depth_rad >= self.squat_max_depth_rad:
+            raise ValueError("squat support-release depth must be below maximum depth")
+        if self.squat_arm_full_extension_depth_rad > self.squat_max_depth_rad:
+            raise ValueError(
+                "squat arm full-extension depth must not exceed maximum depth"
+            )
 
 
 def _require_real_config_fields(
@@ -227,10 +339,22 @@ class BalanceDiagnostics:
     com_offset_x_m: float
     com_velocity_x_m_s: float
     capture_point_error_x_m: float
+    squat_capture_point_error_x_m: float
+    absolute_capture_point_offset_x_m: float
+    absolute_capture_point_offset_y_m: float
+    capture_observation_valid: bool
     capture_tracking_weight: float
     capture_recovery_rad: float
     reference_positions_rad: FloatArray
     safe_positions_rad: FloatArray
+    squat_requested: bool
+    squat_authorized: bool
+    squat_depth_rad: float
+    squat_velocity_rad_s: float
+    squat_target_depth_rad: float
+    squat_actual_tracking_error_rad: float
+    squat_ready_for_support: bool
+    squat_block_reason: str | None
 
     @property
     def residual_positions_rad(self) -> FloatArray:
@@ -359,6 +483,51 @@ class StandingBalanceController:
             raise ValueError("every lower motor limit must be below its upper limit")
         if np.any(self._home < self._lower) or np.any(self._home > self._upper):
             raise ValueError("home motor angles must lie inside configured limits")
+        maximum_squat_delta = np.asarray(
+            (
+                self.config.squat_hip_shape * self.config.squat_max_depth_rad,
+                self.config.squat_max_depth_rad,
+                self.config.squat_ankle_shape * self.config.squat_max_depth_rad,
+            ),
+            dtype=np.float64,
+        )
+        for indices in (np.asarray((10, 12, 14)), np.asarray((11, 13, 15))):
+            maximum_squat_target = self._home[indices] + maximum_squat_delta
+            if np.any(maximum_squat_target < self._lower[indices]) or np.any(
+                maximum_squat_target > self._upper[indices]
+            ):
+                raise ValueError(
+                    "configured squat manifold must fit inside all sagittal "
+                    "motor limits without clipping"
+                )
+        squat_arm_target = np.asarray(
+            (
+                self.config.squat_arm_shoulder_pitch_rad,
+                self.config.squat_arm_shoulder_pitch_rad,
+                self.config.squat_arm_elbow_rad,
+                self.config.squat_arm_elbow_rad,
+                self.config.squat_arm_wrist_rad,
+                self.config.squat_arm_wrist_rad,
+            ),
+            dtype=np.float64,
+        )
+        if np.any(squat_arm_target < self._lower[ARM_INDICES]) or np.any(
+            squat_arm_target > self._upper[ARM_INDICES]
+        ):
+            raise ValueError(
+                "configured squat arm target must fit inside all arm motor limits"
+            )
+        if np.any(
+            np.abs(
+                squat_arm_target[SHOULDER_PITCH_INDICES]
+                - self._home[SHOULDER_PITCH_INDICES]
+            )
+            > self.config.max_shoulder_deviation_rad
+        ):
+            raise ValueError(
+                "configured squat shoulder target exceeds max shoulder deviation"
+            )
+        self._squat_arm_target = squat_arm_target
         self._rate_limits = np.full(len(JOINT_NAMES), self.config.lower_body_rate_limit_rad_s)
         self._rate_limits[UPPER_BODY_INDICES] = self.config.upper_body_rate_limit_rad_s
         self._lower_body_deviation_limits = np.zeros(len(JOINT_NAMES), dtype=np.float64)
@@ -396,22 +565,206 @@ class StandingBalanceController:
     def reset(self) -> None:
         self._last_output = self._home.copy()
         self._last_output_without_capture = self._home.copy()
+        self._output_initialized_from_state = False
         self._last_diagnostics: BalanceDiagnostics | None = None
         self._neutral_com_offset_x_m: float | None = None
+        self._squat_neutral_com_offset_x_m: float | None = None
         self._previous_com_offset_x_m: float | None = None
+        self._previous_com_offset_y_m: float | None = None
         self._filtered_com_velocity_x_m_s = 0.0
+        self._filtered_com_velocity_y_m_s = 0.0
         self._filtered_support_point_m: FloatArray | None = None
+        self._squat_depth_rad = 0.0
+        self._squat_velocity_rad_s = 0.0
+        self._squat_target_depth_rad = 0.0
+        self._squat_capture_blocked = False
+        self._squat_arm_override_active = False
+        # Start fail-closed until the first measured state proves that the
+        # lower body is actually home, loaded, and inside the capture envelope.
+        self._squat_interlock_active = True
 
     @property
     def last_diagnostics(self) -> BalanceDiagnostics | None:
         return self._last_diagnostics
 
+    def _advance_squat_depth(self, target_rad: float, dt_s: float) -> None:
+        """Advance one acceleration-limited coordinate without overshoot."""
+
+        target = float(np.clip(target_rad, 0.0, self.config.squat_max_depth_rad))
+        error = target - self._squat_depth_rad
+        if abs(error) < 1e-10 and abs(self._squat_velocity_rad_s) < 1e-10:
+            self._squat_depth_rad = target
+            self._squat_velocity_rad_s = 0.0
+            return
+        maximum_speed = self.config.squat_max_speed_rad_s
+        maximum_acceleration = self.config.squat_max_acceleration_rad_s2
+        stopping_speed = float(np.sqrt(max(0.0, 2.0 * maximum_acceleration * abs(error))))
+        desired_velocity = float(
+            np.sign(error) * min(maximum_speed, stopping_speed)
+        )
+        velocity_change = float(
+            np.clip(
+                desired_velocity - self._squat_velocity_rad_s,
+                -maximum_acceleration * dt_s,
+                maximum_acceleration * dt_s,
+            )
+        )
+        previous_depth = self._squat_depth_rad
+        self._squat_velocity_rad_s += velocity_change
+        self._squat_depth_rad += self._squat_velocity_rad_s * dt_s
+        crossed = bool(
+            (target - previous_depth) * (target - self._squat_depth_rad) <= 0.0
+        )
+        if crossed:
+            self._squat_depth_rad = target
+            self._squat_velocity_rad_s = 0.0
+        self._squat_depth_rad = float(
+            np.clip(self._squat_depth_rad, 0.0, self.config.squat_max_depth_rad)
+        )
+
+    def _update_squat_planner(
+        self,
+        state: object,
+        *,
+        requested: bool,
+        observation_fresh: bool,
+        requested_depth_rad: float,
+        allow_squat: bool,
+        tilt_rad: float,
+        angular_speed_rad_s: float,
+        capture_point_error_x_m: float,
+        capture_observation_valid: bool,
+        absolute_capture_point_offset_x_m: float,
+        absolute_capture_point_offset_y_m: float,
+        actual_tracking_error_rad: float,
+        actual_positions_valid: bool,
+        dt_s: float,
+    ) -> tuple[bool, bool, str | None]:
+        """Update the planted-foot squat coordinate and its safety interlock."""
+
+        try:
+            right_force = float(getattr(state, "right_foot_normal_force_n"))
+            left_force = float(getattr(state, "left_foot_normal_force_n"))
+        except (AttributeError, TypeError, ValueError):
+            right_force = left_force = float("nan")
+        force_sensors_valid = bool(
+            np.isfinite((right_force, left_force)).all()
+            and right_force >= 0.0
+            and left_force >= 0.0
+        )
+        bilateral_loaded = bool(
+            force_sensors_valid
+            and right_force >= self.config.squat_min_foot_force_n
+            and left_force >= self.config.squat_min_foot_force_n
+            and right_force + left_force >= self.config.squat_min_total_force_n
+        )
+        capture_magnitude = abs(capture_point_error_x_m)
+        absolute_capture_safe = bool(
+            abs(absolute_capture_point_offset_x_m)
+            <= self.config.squat_max_absolute_capture_offset_x_m
+            and abs(absolute_capture_point_offset_y_m)
+            <= self.config.squat_max_absolute_capture_offset_y_m
+        )
+        if capture_observation_valid:
+            if capture_magnitude >= self.config.squat_capture_hold_m:
+                self._squat_capture_blocked = True
+            elif capture_magnitude <= self.config.squat_capture_resume_m:
+                self._squat_capture_blocked = False
+        if requested or self._squat_depth_rad > 1e-9:
+            self._squat_interlock_active = True
+        deepen_allowed = bool(
+            requested
+            and observation_fresh
+            and allow_squat
+            and bilateral_loaded
+            and capture_observation_valid
+            and actual_positions_valid
+            and absolute_capture_safe
+            and tilt_rad <= self.config.squat_deepen_max_tilt_rad
+            and angular_speed_rad_s
+            <= self.config.squat_deepen_max_angular_speed_rad_s
+            and not self._squat_capture_blocked
+        )
+        hard_return = bool(
+            capture_observation_valid
+            and (
+                capture_magnitude >= self.config.squat_capture_return_m
+                or not absolute_capture_safe
+            )
+            or tilt_rad >= self.config.squat_return_tilt_rad
+            or angular_speed_rad_s
+            >= self.config.squat_return_angular_speed_rad_s
+        )
+        requested_target = float(
+            np.clip(
+                requested_depth_rad,
+                0.0,
+                self.config.squat_max_depth_rad,
+            )
+        )
+        if not capture_observation_valid:
+            target_depth = self._squat_depth_rad
+            block_reason = "missing_stability_observation"
+        elif not actual_positions_valid:
+            target_depth = self._squat_depth_rad
+            block_reason = "missing_joint_observation"
+        elif hard_return and bilateral_loaded:
+            target_depth = 0.0
+            block_reason = "stability_return"
+        elif not requested or not allow_squat:
+            target_depth = 0.0 if bilateral_loaded else self._squat_depth_rad
+            block_reason = "support_interlock" if requested else None
+        elif deepen_allowed:
+            target_depth = requested_target
+            block_reason = None
+        elif bilateral_loaded:
+            # A perception gap or soft capture/load guard may allow the person
+            # to rise, but can never authorize a deeper robot target.
+            target_depth = min(requested_target, self._squat_depth_rad)
+            if not observation_fresh:
+                block_reason = "stale_squat_observation"
+            elif self._squat_capture_blocked:
+                block_reason = "capture_hold"
+            elif tilt_rad > self.config.squat_deepen_max_tilt_rad:
+                block_reason = "tilt_hold"
+            elif angular_speed_rad_s > self.config.squat_deepen_max_angular_speed_rad_s:
+                block_reason = "angular_speed_hold"
+            else:
+                block_reason = "load_hold"
+        else:
+            target_depth = self._squat_depth_rad
+            block_reason = "missing_bilateral_load"
+
+        self._squat_target_depth_rad = target_depth
+        self._advance_squat_depth(target_depth, dt_s)
+        reconciled = bool(
+            not requested
+            and self._squat_depth_rad
+            <= self.config.squat_support_release_depth_rad
+            and abs(self._squat_velocity_rad_s)
+            <= self.config.squat_support_release_speed_rad_s
+            and actual_positions_valid
+            and actual_tracking_error_rad
+            <= self.config.squat_support_release_tracking_error_rad
+            and bilateral_loaded
+            and capture_observation_valid
+            and absolute_capture_safe
+            and capture_magnitude < self.config.squat_capture_hold_m
+            and tilt_rad <= self.config.squat_deepen_max_tilt_rad
+            and angular_speed_rad_s
+            <= self.config.squat_deepen_max_angular_speed_rad_s
+        )
+        if self._squat_interlock_active and reconciled:
+            self._squat_interlock_active = False
+        ready_for_support = not self._squat_interlock_active
+        return deepen_allowed, ready_for_support, block_reason
+
     def _capture_observation(
         self,
         state: object,
         dt_s: float,
-    ) -> tuple[float, float, float, float, float]:
-        """Return CoM/CP signals, tracking weight, and bilateral-load weight.
+    ) -> tuple[float, float, float, float, float, bool, float, float, float]:
+        """Return CoM/CP signals and whether the observation is deployable.
 
         Lightweight controller callers predating the free-base governor do
         not necessarily expose CoM/foot positions.  In that case the governor
@@ -429,7 +782,7 @@ class StandingBalanceController:
                 getattr(state, "left_foot_position_m"), dtype=np.float64
             )
         except (AttributeError, TypeError, ValueError):
-            return 0.0, 0.0, 0.0, 1.0, 0.0
+            return 0.0, 0.0, 0.0, 1.0, 0.0, False, 0.0, 0.0, 0.0
         if (
             center_of_mass.shape != (3,)
             or right_foot.shape != (3,)
@@ -438,9 +791,10 @@ class StandingBalanceController:
                 np.concatenate((center_of_mass, right_foot, left_foot))
             ).all()
         ):
-            return 0.0, 0.0, 0.0, 1.0, 0.0
+            return 0.0, 0.0, 0.0, 1.0, 0.0, False, 0.0, 0.0, 0.0
 
-        support_point = 0.5 * (right_foot + left_foot)
+        foot_midpoint = 0.5 * (right_foot + left_foot)
+        support_point = foot_midpoint.copy()
         try:
             foot_forces = np.asarray(
                 (
@@ -450,8 +804,11 @@ class StandingBalanceController:
                 dtype=np.float64,
             )
         except (AttributeError, TypeError, ValueError):
-            foot_forces = np.zeros(2, dtype=np.float64)
-        if np.isfinite(foot_forces).all():
+            foot_forces = np.full(2, np.nan, dtype=np.float64)
+        force_sensors_valid = bool(
+            np.isfinite(foot_forces).all() and np.all(foot_forces >= 0.0)
+        )
+        if force_sensors_valid:
             foot_forces = np.maximum(foot_forces, 0.0)
             total_support_force_n = float(np.sum(foot_forces))
             if total_support_force_n >= self.config.capture_minimum_total_support_force_n:
@@ -459,7 +816,7 @@ class StandingBalanceController:
                     foot_forces[0] * right_foot + foot_forces[1] * left_foot
                 ) / total_support_force_n
         bilateral_support_weight = 0.0
-        if np.isfinite(foot_forces).all():
+        if force_sensors_valid:
             load_progress = float(
                 np.clip(
                     (
@@ -493,17 +850,19 @@ class StandingBalanceController:
             )
         support_point = self._filtered_support_point_m
         com_offset_x_m = float(center_of_mass[0] - support_point[0])
-        if self._neutral_com_offset_x_m is None:
-            self._neutral_com_offset_x_m = com_offset_x_m
+        com_offset_y_m = float(center_of_mass[1] - support_point[1])
+        base_linear_velocity = np.asarray(
+            getattr(state, "base_linear_velocity_m_s", np.full(3, np.nan)),
+            dtype=np.float64,
+        )
+        base_velocity_valid = bool(
+            base_linear_velocity.shape == (3,)
+            and np.isfinite(base_linear_velocity).all()
+        )
         if self._previous_com_offset_x_m is None:
-            base_linear_velocity = np.asarray(
-                getattr(state, "base_linear_velocity_m_s", np.zeros(3)),
-                dtype=np.float64,
-            )
             raw_velocity_x_m_s = (
                 float(base_linear_velocity[0])
-                if base_linear_velocity.shape == (3,)
-                and np.isfinite(base_linear_velocity).all()
+                if base_velocity_valid
                 else 0.0
             )
         else:
@@ -511,6 +870,15 @@ class StandingBalanceController:
                 com_offset_x_m - self._previous_com_offset_x_m
             ) / dt_s
         self._previous_com_offset_x_m = com_offset_x_m
+        if self._previous_com_offset_y_m is None:
+            raw_velocity_y_m_s = (
+                float(base_linear_velocity[1]) if base_velocity_valid else 0.0
+            )
+        else:
+            raw_velocity_y_m_s = (
+                com_offset_y_m - self._previous_com_offset_y_m
+            ) / dt_s
+        self._previous_com_offset_y_m = com_offset_y_m
         time_constant = self.config.capture_velocity_filter_time_constant_s
         velocity_alpha = 1.0 if time_constant == 0.0 else dt_s / (
             time_constant + dt_s
@@ -518,15 +886,75 @@ class StandingBalanceController:
         self._filtered_com_velocity_x_m_s += velocity_alpha * (
             raw_velocity_x_m_s - self._filtered_com_velocity_x_m_s
         )
+        self._filtered_com_velocity_y_m_s += velocity_alpha * (
+            raw_velocity_y_m_s - self._filtered_com_velocity_y_m_s
+        )
 
         com_height_m = max(
             float(center_of_mass[2] - support_point[2]),
             self.config.capture_minimum_com_height_m,
         )
         natural_frequency_rad_s = float(np.sqrt(9.81 / com_height_m))
+        absolute_capture_point_offset_x_m = float(
+            center_of_mass[0]
+            - foot_midpoint[0]
+            + self._filtered_com_velocity_x_m_s / natural_frequency_rad_s
+        )
+        absolute_capture_point_offset_y_m = float(
+            center_of_mass[1]
+            - foot_midpoint[1]
+            + self._filtered_com_velocity_y_m_s / natural_frequency_rad_s
+        )
+        bilateral_loaded = bool(
+            force_sensors_valid
+            and foot_forces[0] >= self.config.squat_min_foot_force_n
+            and foot_forces[1] >= self.config.squat_min_foot_force_n
+            and float(np.sum(foot_forces)) >= self.config.squat_min_total_force_n
+        )
+        try:
+            angular_velocity = np.asarray(
+                getattr(state, "base_angular_velocity_rad_s"), dtype=np.float64
+            )
+        except (AttributeError, TypeError, ValueError):
+            angular_velocity = np.full(3, np.nan)
+        angular_velocity_valid = bool(
+            angular_velocity.shape == (3,) and np.isfinite(angular_velocity).all()
+        )
+        neutral_observation_safe = bool(
+            bilateral_loaded
+            and base_velocity_valid
+            and np.linalg.norm(base_linear_velocity)
+            <= self.config.squat_neutral_max_base_speed_m_s
+            and angular_velocity_valid
+            and np.linalg.norm(angular_velocity)
+            <= self.config.squat_deepen_max_angular_speed_rad_s
+            and abs(absolute_capture_point_offset_x_m)
+            <= self.config.squat_max_absolute_capture_offset_x_m
+            and abs(absolute_capture_point_offset_y_m)
+            <= self.config.squat_max_absolute_capture_offset_y_m
+        )
+        if self._neutral_com_offset_x_m is None:
+            self._neutral_com_offset_x_m = com_offset_x_m
+        if neutral_observation_safe and self._squat_neutral_com_offset_x_m is None:
+            # Keep the original standing-recovery reference byte-for-byte.
+            # Squat authorization receives its own stricter quiet/load neutral.
+            self._squat_neutral_com_offset_x_m = com_offset_x_m
+        capture_observation_valid = bool(
+            self._squat_neutral_com_offset_x_m is not None
+            and force_sensors_valid
+            and base_velocity_valid
+            and angular_velocity_valid
+        )
         capture_point_error_x_m = (
             com_offset_x_m
             - self._neutral_com_offset_x_m
+            + self._filtered_com_velocity_x_m_s / natural_frequency_rad_s
+        )
+        squat_capture_point_error_x_m = (
+            0.0
+            if self._squat_neutral_com_offset_x_m is None
+            else com_offset_x_m
+            - self._squat_neutral_com_offset_x_m
             + self._filtered_com_velocity_x_m_s / natural_frequency_rad_s
         )
         margin_span = (
@@ -553,6 +981,10 @@ class StandingBalanceController:
             capture_point_error_x_m,
             capture_tracking_weight,
             bilateral_support_weight,
+            capture_observation_valid,
+            absolute_capture_point_offset_x_m,
+            absolute_capture_point_offset_y_m,
+            squat_capture_point_error_x_m,
         )
 
     def update(
@@ -561,6 +993,10 @@ class StandingBalanceController:
         state: object,
         *,
         dt_s: float,
+        squat_active: bool = False,
+        squat_observation_fresh: bool = False,
+        squat_depth_ratio: float = 0.0,
+        allow_squat: bool = False,
     ) -> RobotJointCommand:
         """Return one bounded position target from q/dq/IMU feedback."""
 
@@ -569,7 +1005,50 @@ class StandingBalanceController:
             raise ValueError("dt_s must be finite and positive")
         if tuple(reference.joint_names) != JOINT_NAMES:
             raise ValueError("reference must use canonical motor order")
+        if type(squat_active) is not bool:
+            raise ValueError("squat_active must be a boolean")
+        if type(squat_observation_fresh) is not bool:
+            raise ValueError("squat_observation_fresh must be a boolean")
+        if isinstance(squat_depth_ratio, bool) or not isinstance(
+            squat_depth_ratio, Real
+        ):
+            raise ValueError("squat_depth_ratio must be a real number")
+        squat_depth_ratio = float(squat_depth_ratio)
+        if not np.isfinite(squat_depth_ratio) or not 0.0 <= squat_depth_ratio <= 1.0:
+            raise ValueError("squat_depth_ratio must be finite and within [0, 1]")
+        if type(allow_squat) is not bool:
+            raise ValueError("allow_squat must be a boolean")
         human = self._vector(reference.positions_rad, "reference.positions_rad")
+        raw_lower_delta = human - self._home
+        try:
+            actual_positions = self._vector(
+                getattr(state, "joint_positions_rad"), "state.joint_positions_rad"
+            )
+            actual_positions_valid = True
+        except (AttributeError, TypeError, ValueError):
+            actual_positions = self._home.copy()
+            actual_positions_valid = False
+        initialized_from_state_now = not self._output_initialized_from_state
+        if initialized_from_state_now:
+            self._last_output = np.clip(
+                actual_positions if actual_positions_valid else self._home,
+                self._lower,
+                self._upper,
+            )
+            self._last_output_without_capture = self._last_output.copy()
+            self._output_initialized_from_state = True
+        actual_leg_tracking_error_rad = (
+            float(
+                np.max(
+                    np.abs(
+                        actual_positions[np.asarray((10, 11, 12, 13, 14, 15))]
+                        - self._home[np.asarray((10, 11, 12, 13, 14, 15))]
+                    )
+                )
+            )
+            if actual_positions_valid
+            else float("inf")
+        )
         orientation = getattr(state, "base_orientation_wxyz")
         angular_velocity = np.asarray(
             getattr(state, "base_angular_velocity_rad_s"), dtype=np.float64
@@ -589,6 +1068,10 @@ class StandingBalanceController:
             capture_point_error_x_m,
             capture_tracking_weight,
             bilateral_support_weight,
+            capture_observation_valid,
+            absolute_capture_point_offset_x_m,
+            absolute_capture_point_offset_y_m,
+            squat_capture_point_error_x_m,
         ) = self._capture_observation(state, dt_s)
         tracking_weight *= capture_tracking_weight
         if reference.stale:
@@ -597,7 +1080,77 @@ class StandingBalanceController:
             # feedback-only ankle/capture recovery needed by the free base.
             tracking_weight = 0.0
 
-        raw_lower_delta = human - self._home
+        squat_requested = bool(squat_active and not reference.stale)
+        if (
+            initialized_from_state_now
+            and actual_positions_valid
+            and float(
+                np.max(
+                    np.abs(actual_positions[ARM_INDICES] - self._home[ARM_INDICES])
+                )
+            )
+            > self.config.squat_support_release_tracking_error_rad
+        ):
+            # A reset may reinitialize software while the physical arms are
+            # still carrying the squat counterweight.  Adopt the measured
+            # motor pose for bounded slew, but keep the support interlock until
+            # both commanded and measured arms have returned home.
+            self._squat_arm_override_active = True
+            self._squat_interlock_active = True
+        if self._squat_depth_rad > 1e-9:
+            self._squat_arm_override_active = True
+        actual_arm_tracking_error_rad = (
+            max(
+                float(
+                    np.max(
+                        np.abs(actual_positions[ARM_INDICES] - self._home[ARM_INDICES])
+                    )
+                ),
+                float(
+                    np.max(
+                        np.abs(self._last_output[ARM_INDICES] - self._home[ARM_INDICES])
+                    )
+                ),
+            )
+            if actual_positions_valid and self._squat_arm_override_active
+            else (float("inf") if self._squat_arm_override_active else 0.0)
+        )
+        actual_tracking_error_rad = max(
+            actual_leg_tracking_error_rad,
+            actual_arm_tracking_error_rad,
+        )
+        requested_squat_depth_rad = (
+            self.config.squat_input_gain
+            * squat_depth_ratio
+            * self.config.squat_max_depth_rad
+        )
+        squat_authorized, squat_ready_for_support, squat_block_reason = (
+            self._update_squat_planner(
+                state,
+                requested=squat_requested,
+                observation_fresh=squat_observation_fresh,
+                requested_depth_rad=requested_squat_depth_rad,
+                allow_squat=allow_squat,
+                tilt_rad=tilt,
+                angular_speed_rad_s=float(np.linalg.norm(angular_velocity)),
+                capture_point_error_x_m=squat_capture_point_error_x_m,
+                capture_observation_valid=capture_observation_valid,
+                absolute_capture_point_offset_x_m=(
+                    absolute_capture_point_offset_x_m
+                ),
+                absolute_capture_point_offset_y_m=(
+                    absolute_capture_point_offset_y_m
+                ),
+                actual_tracking_error_rad=actual_tracking_error_rad,
+                actual_positions_valid=actual_positions_valid,
+                dt_s=dt_s,
+            )
+        )
+        if squat_authorized or self._squat_depth_rad > 1e-9:
+            self._squat_arm_override_active = True
+        if squat_ready_for_support:
+            self._squat_arm_override_active = False
+
         bilateral_hip_bend = max(
             0.0, min(raw_lower_delta[10], raw_lower_delta[11])
         )
@@ -630,9 +1183,14 @@ class StandingBalanceController:
             hip_progress * hip_progress * (3.0 - 2.0 * hip_progress),
             knee_progress * knee_progress * (3.0 - 2.0 * knee_progress),
         )
-        tracking_weight *= 1.0 - unsupported_progress * (
-            1.0 - self.config.unsupported_pose_tracking_scale
+        squat_deployed = bool(self._squat_depth_rad > 1e-9)
+        squat_cycle_active = bool(
+            squat_authorized or squat_deployed or self._squat_arm_override_active
         )
+        if not squat_cycle_active:
+            tracking_weight *= 1.0 - unsupported_progress * (
+                1.0 - self.config.unsupported_pose_tracking_scale
+            )
 
         desired = self._home.copy()
         upper_delta = human[UPPER_BODY_INDICES] - self._home[UPPER_BODY_INDICES]
@@ -669,22 +1227,75 @@ class StandingBalanceController:
             np.dot(symmetric_sagittal, crouch_basis)
             / np.dot(crouch_basis, crouch_basis)
         )
-        scaled_crouch_amplitude = max(
-            self.config.lower_body_imitation_scale * crouch_amplitude,
-            -self.config.max_inverse_crouch_amplitude_rad,
-        )
-        crouch_delta = scaled_crouch_amplitude * crouch_basis
+        if squat_cycle_active:
+            squat_depth = self._squat_depth_rad
+            crouch_delta = np.asarray(
+                (
+                    self.config.squat_hip_shape * squat_depth,
+                    squat_depth,
+                    self.config.squat_ankle_shape * squat_depth,
+                ),
+                dtype=np.float64,
+            )
+        else:
+            scaled_crouch_amplitude = max(
+                self.config.lower_body_imitation_scale * crouch_amplitude,
+                -self.config.max_inverse_crouch_amplitude_rad,
+            )
+            crouch_delta = scaled_crouch_amplitude * crouch_basis
         lower_delta[right_sagittal] = crouch_delta
         lower_delta[left_sagittal] = crouch_delta
 
-        lower_delta[LOWER_BODY_INDICES] = np.clip(
-            lower_delta[LOWER_BODY_INDICES],
-            -self._lower_body_deviation_limits[LOWER_BODY_INDICES],
-            self._lower_body_deviation_limits[LOWER_BODY_INDICES],
-        )
-        desired[LOWER_BODY_INDICES] += (
-            tracking_weight * lower_delta[LOWER_BODY_INDICES]
-        )
+        if squat_cycle_active:
+            tracked_head_neck = desired[HEAD_NECK_INDICES].copy()
+            non_arm_tracking_weight = float(
+                np.clip(
+                    1.0
+                    - self._squat_depth_rad
+                    / self.config.squat_upper_body_fade_full_depth_rad,
+                    0.0,
+                    1.0,
+                )
+            )
+            desired[UPPER_BODY_INDICES] = self._home[UPPER_BODY_INDICES]
+            arm_progress = float(
+                np.clip(
+                    self._squat_depth_rad
+                    / self.config.squat_arm_full_extension_depth_rad,
+                    0.0,
+                    1.0,
+                )
+            )
+            arm_blend = arm_progress * arm_progress * (3.0 - 2.0 * arm_progress)
+            desired[ARM_INDICES] = (
+                self._home[ARM_INDICES]
+                + arm_blend * (self._squat_arm_target - self._home[ARM_INDICES])
+            )
+            # Preserve the old fail-safe fade for head/neck while the fixed,
+            # symmetric straight-arm squat pose is deployed.
+            desired[HEAD_NECK_INDICES] = (
+                self._home[HEAD_NECK_INDICES]
+                + non_arm_tracking_weight
+                * (
+                    tracked_head_neck
+                    - self._home[HEAD_NECK_INDICES]
+                )
+            )
+            squat_target = np.clip(
+                self._home + lower_delta,
+                self._lower,
+                self._upper,
+            )
+            desired[LOWER_BODY_INDICES] = squat_target[LOWER_BODY_INDICES]
+        else:
+            lower_delta[LOWER_BODY_INDICES] = np.clip(
+                lower_delta[LOWER_BODY_INDICES],
+                -self._lower_body_deviation_limits[LOWER_BODY_INDICES],
+                self._lower_body_deviation_limits[LOWER_BODY_INDICES],
+            )
+            desired[LOWER_BODY_INDICES] += (
+                tracking_weight * lower_delta[LOWER_BODY_INDICES]
+            )
         pose_reference = self._home.copy()
         pose_delta = np.clip(
             self.config.swing_leg_imitation_scale
@@ -707,9 +1318,14 @@ class StandingBalanceController:
                 )
             ),
         )
+        arm_to_ankle_gain = (
+            self.config.squat_arm_to_ankle_gain
+            if squat_cycle_active
+            else self.config.arm_to_ankle_gain
+        )
         ankle_residual = (
             self.config.ankle_pitch_bias_rad
-            + self.config.arm_to_ankle_gain * arm_elevation
+            + arm_to_ankle_gain * arm_elevation
             + self.config.pitch_feedback_gain * pitch
             + self.config.pitch_rate_feedback_s * float(angular_velocity[1])
         )
@@ -723,6 +1339,8 @@ class StandingBalanceController:
                 - self.config.capture_recovery_gain_rad_per_m
             )
         )
+        if squat_cycle_active:
+            recovery_gain *= self.config.squat_capture_recovery_gain_multiplier
         capture_recovery = float(
             np.clip(
                 recovery_gain * capture_point_error_x_m,
@@ -737,10 +1355,13 @@ class StandingBalanceController:
         raw_capture_recovery_positions = np.zeros(
             len(JOINT_NAMES), dtype=np.float64
         )
-        raw_capture_recovery_positions[HIP_PITCH_INDICES] -= (
-            0.5 * capture_recovery
-        )
-        raw_capture_recovery_positions[KNEE_INDICES] += 0.5 * capture_recovery
+        if not squat_cycle_active:
+            raw_capture_recovery_positions[HIP_PITCH_INDICES] -= (
+                0.5 * capture_recovery
+            )
+            raw_capture_recovery_positions[KNEE_INDICES] += (
+                0.5 * capture_recovery
+            )
         raw_capture_recovery_positions[ANKLE_PITCH_INDICES] += capture_recovery
         desired_without_capture = desired.copy()
         desired += raw_capture_recovery_positions
@@ -787,10 +1408,26 @@ class StandingBalanceController:
             com_offset_x_m=com_offset_x_m,
             com_velocity_x_m_s=com_velocity_x_m_s,
             capture_point_error_x_m=capture_point_error_x_m,
+            squat_capture_point_error_x_m=squat_capture_point_error_x_m,
+            absolute_capture_point_offset_x_m=(
+                absolute_capture_point_offset_x_m
+            ),
+            absolute_capture_point_offset_y_m=(
+                absolute_capture_point_offset_y_m
+            ),
+            capture_observation_valid=capture_observation_valid,
             capture_tracking_weight=capture_tracking_weight,
             capture_recovery_rad=capture_recovery,
             reference_positions_rad=human.copy(),
             safe_positions_rad=safe.copy(),
+            squat_requested=squat_requested,
+            squat_authorized=squat_authorized,
+            squat_depth_rad=self._squat_depth_rad,
+            squat_velocity_rad_s=self._squat_velocity_rad_s,
+            squat_target_depth_rad=self._squat_target_depth_rad,
+            squat_actual_tracking_error_rad=actual_tracking_error_rad,
+            squat_ready_for_support=squat_ready_for_support,
+            squat_block_reason=squat_block_reason,
         )
         return BalancedJointCommand(
             reference.timestamp_s,

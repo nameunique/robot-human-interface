@@ -58,6 +58,47 @@ standing_balance:
   # linkage.  Preserve the full positive range but bound the signed negative
   # crouch coordinate to the measured recoverable envelope.
   max_inverse_crouch_amplitude_rad: 0.10471975511965977 # 6 deg
+  # Confirmed bilateral squat planner. The scalar knee coordinate follows the
+  # calibrated pelvis-descent ratio and commands [5q/3, q, -2q/3]. With this
+  # model's signed axes, 5q/3-q-2q/3=0, preserving sole pitch while moving
+  # thigh and shin in the same anatomical directions as the person. The 30 deg
+  # cap is the verified long-hold limit with a 12 deg hip-limit reserve.
+  squat_max_depth_rad: 0.5235987755982988 # 30 deg
+  squat_input_gain: 1.0
+  squat_hip_shape: 1.6666666666666667
+  squat_ankle_shape: -0.6666666666666666
+  squat_upper_body_fade_full_depth_rad: 0.10471975511965977 # 6 deg
+  # During an authorized squat, deploy a fixed symmetric straight-arm pose.
+  # In MuJoCo the robot faces -X; +84.6969 deg shoulder pitch makes the
+  # shoulder-to-hand vector horizontal and forward. Smoothstep reaches the
+  # full pose at q=19 deg without exceeding the 2.5 rad/s arm target slew.
+  squat_arm_full_extension_depth_rad: 0.33161255787892263 # 19 deg
+  squat_arm_shoulder_pitch_rad: 1.4782397712323851 # 84.6969 deg absolute
+  squat_arm_elbow_rad: 0.0
+  squat_arm_wrist_rad: 0.0
+  # Keep the generic human-arm feed-forward unchanged; the forward squat pose
+  # needs this separately verified sign and smaller magnitude.
+  squat_arm_to_ankle_gain: 0.02
+  squat_capture_recovery_gain_multiplier: 2.0
+  squat_max_speed_rad_s: 0.6632251157578453 # 38 deg/s
+  squat_max_acceleration_rad_s2: 5.235987755982989 # 300 deg/s^2
+  squat_min_foot_force_n: 4.0
+  squat_min_total_force_n: 20.0
+  squat_deepen_max_tilt_rad: 0.20943951023931953 # 12 deg
+  squat_deepen_max_angular_speed_rad_s: 1.0
+  squat_capture_resume_m: 0.05
+  squat_capture_hold_m: 0.07
+  squat_capture_return_m: 0.09
+  # Absolute DCM bounds relative to the midpoint of the two soles. They leave
+  # 10 mm fore-aft and about 96 mm lateral reserve inside the model support hull.
+  squat_max_absolute_capture_offset_x_m: 0.095
+  squat_max_absolute_capture_offset_y_m: 0.16
+  squat_neutral_max_base_speed_m_s: 0.10
+  squat_return_tilt_rad: 0.3141592653589793 # 18 deg
+  squat_return_angular_speed_rad_s: 3.0
+  squat_support_release_depth_rad: 0.03490658503988659 # 2 deg
+  squat_support_release_speed_rad_s: 0.08726646259971647 # 5 deg/s
+  squat_support_release_tracking_error_rad: 0.08726646259971647 # 5 deg
   upper_body_rate_limit_rad_s: 2.5
   lower_body_rate_limit_rad_s: 1.2
   # The provisional robot cannot statically balance both heavy arms beyond
@@ -88,6 +129,25 @@ human_support_intent:
   max_gap_s: 0.25
   activation_confidence: 0.65
   maintain_confidence: 0.50
+  # Bilateral squat intent reuses the exact same admitted neutral window.
+  # Pelvis descent is measured in aspect-corrected image coordinates relative
+  # to the neutral ankle midpoint and normalized by neutral leg-chain length.
+  # Both legs must flex together; ankle-height and stance-width gates exclude
+  # one-leg lifts and jumping/stepping gestures.
+  squat_enter_pelvis_descent_ratio: 0.10
+  squat_exit_pelvis_descent_ratio: 0.06
+  squat_full_pelvis_descent_ratio: 0.50
+  squat_enter_hip_flexion_rad: 0.3490658503988659 # 20 deg
+  squat_exit_hip_flexion_rad: 0.20943951023931953 # 12 deg
+  squat_enter_knee_flexion_rad: 0.4363323129985824 # 25 deg
+  squat_exit_knee_flexion_rad: 0.2617993877991494 # 15 deg
+  squat_activate_max_ankle_asymmetry_ratio: 0.10
+  squat_maintain_max_ankle_asymmetry_ratio: 0.14
+  squat_activate_max_stance_width_change_ratio: 0.10
+  squat_maintain_max_stance_width_change_ratio: 0.15
+  squat_activation_hold_s: 0.05
+  squat_release_hold_s: 0.15
+  squat_filter_time_constant_s: 0.05
 
 # Safe one-leg sequence applied after StandingBalanceController.  The motion
 # offsets themselves are verified constants in control/support.py; this block

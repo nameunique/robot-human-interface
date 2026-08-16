@@ -40,7 +40,7 @@ _BALANCE_SECTIONS = {
 
 @dataclass(frozen=True, slots=True)
 class HumanSupportIntentConfig:
-    """Thresholds for scale-normalized foot-lift intent estimation."""
+    """Thresholds for calibrated one-leg and bilateral-squat intent."""
 
     calibration_frames: int = 30
     calibration_max_observations: int = 150
@@ -60,6 +60,20 @@ class HumanSupportIntentConfig:
     max_gap_s: float = 0.25
     activation_confidence: float = 0.65
     maintain_confidence: float = 0.50
+    squat_enter_pelvis_descent_ratio: float = 0.10
+    squat_exit_pelvis_descent_ratio: float = 0.06
+    squat_full_pelvis_descent_ratio: float = 0.50
+    squat_enter_hip_flexion_rad: float = 20.0 * pi / 180.0
+    squat_exit_hip_flexion_rad: float = 12.0 * pi / 180.0
+    squat_enter_knee_flexion_rad: float = 25.0 * pi / 180.0
+    squat_exit_knee_flexion_rad: float = 15.0 * pi / 180.0
+    squat_activate_max_ankle_asymmetry_ratio: float = 0.10
+    squat_maintain_max_ankle_asymmetry_ratio: float = 0.14
+    squat_activate_max_stance_width_change_ratio: float = 0.10
+    squat_maintain_max_stance_width_change_ratio: float = 0.15
+    squat_activation_hold_s: float = 0.05
+    squat_release_hold_s: float = 0.15
+    squat_filter_time_constant_s: float = 0.05
 
     def __post_init__(self) -> None:
         _require_real_config_fields(
@@ -120,6 +134,20 @@ class HumanSupportIntentConfig:
             self.max_gap_s,
             self.activation_confidence,
             self.maintain_confidence,
+            self.squat_enter_pelvis_descent_ratio,
+            self.squat_exit_pelvis_descent_ratio,
+            self.squat_full_pelvis_descent_ratio,
+            self.squat_enter_hip_flexion_rad,
+            self.squat_exit_hip_flexion_rad,
+            self.squat_enter_knee_flexion_rad,
+            self.squat_exit_knee_flexion_rad,
+            self.squat_activate_max_ankle_asymmetry_ratio,
+            self.squat_maintain_max_ankle_asymmetry_ratio,
+            self.squat_activate_max_stance_width_change_ratio,
+            self.squat_maintain_max_stance_width_change_ratio,
+            self.squat_activation_hold_s,
+            self.squat_release_hold_s,
+            self.squat_filter_time_constant_s,
         )
         if not np.isfinite(values).all() or any(value <= 0.0 for value in values):
             raise ValueError("intent thresholds and time constants must be finite and positive")
@@ -129,6 +157,42 @@ class HumanSupportIntentConfig:
             raise ValueError(
                 "confidence gates must satisfy 0 <= maintain <= activation <= 1"
             )
+        if not (
+            0.0
+            < self.squat_exit_pelvis_descent_ratio
+            < self.squat_enter_pelvis_descent_ratio
+            < self.squat_full_pelvis_descent_ratio
+            < 1.0
+        ):
+            raise ValueError(
+                "squat pelvis-descent thresholds must be positive and ordered"
+            )
+        if not (
+            0.0
+            < self.squat_exit_hip_flexion_rad
+            < self.squat_enter_hip_flexion_rad
+            < pi
+        ):
+            raise ValueError("squat hip-flexion thresholds must be ordered below pi")
+        if not (
+            0.0
+            < self.squat_exit_knee_flexion_rad
+            < self.squat_enter_knee_flexion_rad
+            < pi
+        ):
+            raise ValueError("squat knee-flexion thresholds must be ordered below pi")
+        if not (
+            self.squat_activate_max_ankle_asymmetry_ratio
+            < self.squat_maintain_max_ankle_asymmetry_ratio
+            < 1.0
+        ):
+            raise ValueError("squat ankle-asymmetry limits must be ordered below one")
+        if not (
+            self.squat_activate_max_stance_width_change_ratio
+            < self.squat_maintain_max_stance_width_change_ratio
+            < 1.0
+        ):
+            raise ValueError("squat stance-width limits must be ordered below one")
 
 
 def _require_real_config_fields(
@@ -148,13 +212,22 @@ def _require_real_config_fields(
 
 @dataclass(frozen=True, slots=True)
 class HumanSupportEstimate:
-    """One observable camera-side support estimate."""
+    """Observable camera-side support and bilateral-squat estimate."""
 
     intent: SupportIntent
     signed_height_ratio: float
     confidence: float
     calibrated: bool
     stale: bool
+    squat_active: bool = False
+    squat_observation_fresh: bool = False
+    squat_depth_ratio: float = 0.0
+    squat_pelvis_descent_ratio: float = 0.0
+    squat_bilateral_hip_flexion_rad: float = 0.0
+    squat_bilateral_knee_flexion_rad: float = 0.0
+    squat_confidence: float = 0.0
+    squat_ankle_asymmetry_ratio: float = 0.0
+    squat_stance_width_change_ratio: float = 0.0
 
     @property
     def right_lift_ratio(self) -> float:
@@ -165,8 +238,30 @@ class HumanSupportEstimate:
         return max(0.0, -self.signed_height_ratio)
 
 
+@dataclass(frozen=True, slots=True)
+class _SquatGeometry:
+    """One fully observable image-plane squat measurement."""
+
+    up_2d: np.ndarray
+    leg_scale_2d: float
+    pelvis_height_2d: float
+    stance_width_2d: float
+    ankle_asymmetry_2d: float
+    hip_flexion_rad: np.ndarray
+    knee_flexion_rad: np.ndarray
+    confidence: float
+
+
+def _angle_between(first: np.ndarray, second: np.ndarray) -> float | None:
+    denominator = float(np.linalg.norm(first) * np.linalg.norm(second))
+    if not np.isfinite(denominator) or denominator < 1e-8:
+        return None
+    cosine = float(np.dot(first, second) / denominator)
+    return float(np.arccos(np.clip(cosine, -1.0, 1.0)))
+
+
 class HumanSupportIntentEstimator:
-    """Estimate LEFT/RIGHT swing intent from a calibrated camera skeleton."""
+    """Estimate unilateral support and bilateral squat from one calibration."""
 
     def __init__(self, config: HumanSupportIntentConfig | None = None) -> None:
         self.config = config or HumanSupportIntentConfig()
@@ -180,12 +275,30 @@ class HumanSupportIntentEstimator:
         self._fixed_scale: float | None = None
         self._baseline_ratio = 0.0
         self._filtered_ratio = 0.0
+        self._squat_geometry_samples: list[_SquatGeometry] = []
+        self._squat_frame_samples: list[SkeletonFrame] = []
+        self._fixed_squat_up_2d: np.ndarray | None = None
+        self._fixed_squat_leg_scale_2d: float | None = None
+        self._neutral_pelvis_height_2d: float | None = None
+        self._neutral_stance_width_2d: float | None = None
+        self._neutral_hip_flexion_rad: np.ndarray | None = None
+        self._neutral_knee_flexion_rad: np.ndarray | None = None
+        self._filtered_squat_pelvis_descent_ratio = 0.0
+        self._filtered_squat_min_hip_flexion_rad = 0.0
+        self._filtered_squat_min_knee_flexion_rad = 0.0
+        self._filtered_squat_ankle_asymmetry_ratio = 0.0
+        self._filtered_squat_stance_width_change_ratio = 0.0
+        self._squat_active = False
+        self._squat_candidate = False
+        self._squat_candidate_since_s: float | None = None
         self._intent = SupportIntent.DOUBLE_SUPPORT
         self._candidate = SupportIntent.DOUBLE_SUPPORT
         self._candidate_since_s: float | None = None
         self._last_timestamp_s: float | None = None
         self._last_valid_timestamp_s: float | None = None
+        self._last_squat_valid_timestamp_s: float | None = None
         self._last_confidence = 0.0
+        self._last_squat_confidence = 0.0
         self._calibration_gate: NeutralCalibrationGate | None = (
             self._new_calibration_gate(self.config.calibration_frames)
         )
@@ -231,11 +344,19 @@ class HumanSupportIntentEstimator:
         gate = self._new_calibration_gate(1, max_observations=1)
         if not gate.accepts_explicit(frame):
             return False
+        squat_geometry = self._squat_geometry(frame)
+        if (
+            squat_geometry is None
+            or squat_geometry.confidence < self.config.activation_confidence
+        ):
+            return False
         up, difference, scale, confidence = measurement
         self.reset()
         self._up_samples = [up.copy()]
         self._difference_samples = [difference.copy()]
         self._scale_samples = [scale]
+        self._squat_geometry_samples = [squat_geometry]
+        self._squat_frame_samples = [frame]
         # The selected frame can come from a separate replay whose media clock
         # is unrelated to the main source. Install geometry only; let the
         # first operational frame establish the debounce/filter timeline.
@@ -295,6 +416,90 @@ class HumanSupportIntentEstimator:
         difference = points[int(L.RIGHT_ANKLE)] - points[int(L.LEFT_ANKLE)]
         return up, difference, scale, confidence
 
+    def _squat_geometry(
+        self,
+        frame: SkeletonFrame,
+        *,
+        fixed_up_2d: np.ndarray | None = None,
+    ) -> _SquatGeometry | None:
+        """Measure bilateral flexion and pelvis height in the camera plane."""
+
+        valid = frame.valid_mask(self.config.confidence_threshold)
+        indices = np.asarray([int(index) for index in _MEASUREMENT], dtype=np.int64)
+        if not bool(np.all(valid[indices])):
+            return None
+        points = frame.landmarks_2d.copy()
+        if frame.image_size is not None:
+            width, height = frame.image_size
+            points[:, 0] *= float(width) / float(height)
+        left_shoulder = points[int(L.LEFT_SHOULDER)]
+        right_shoulder = points[int(L.RIGHT_SHOULDER)]
+        left_hip = points[int(L.LEFT_HIP)]
+        right_hip = points[int(L.RIGHT_HIP)]
+        left_knee = points[int(L.LEFT_KNEE)]
+        right_knee = points[int(L.RIGHT_KNEE)]
+        left_ankle = points[int(L.LEFT_ANKLE)]
+        right_ankle = points[int(L.RIGHT_ANKLE)]
+        vectors = np.concatenate(
+            (
+                left_shoulder,
+                right_shoulder,
+                left_hip,
+                right_hip,
+                left_knee,
+                right_knee,
+                left_ankle,
+                right_ankle,
+            )
+        )
+        if not np.isfinite(vectors).all():
+            return None
+        shoulder_mid = 0.5 * (left_shoulder + right_shoulder)
+        hip_mid = 0.5 * (left_hip + right_hip)
+        ankle_mid = 0.5 * (left_ankle + right_ankle)
+        observed_up_2d = shoulder_mid - hip_mid
+        up_norm = float(np.linalg.norm(observed_up_2d))
+        if up_norm < 1e-6:
+            return None
+        observed_up_2d = observed_up_2d / up_norm
+        up_2d = observed_up_2d if fixed_up_2d is None else fixed_up_2d
+        leg_scale = 0.5 * float(
+            np.linalg.norm(left_hip - left_knee)
+            + np.linalg.norm(left_knee - left_ankle)
+            + np.linalg.norm(right_hip - right_knee)
+            + np.linalg.norm(right_knee - right_ankle)
+        )
+        if not np.isfinite(leg_scale) or leg_scale < 1e-5:
+            return None
+        pelvis_height = float(np.dot(ankle_mid - hip_mid, -up_2d))
+        horizontal = np.asarray((-up_2d[1], up_2d[0]), dtype=np.float64)
+        stance_width = abs(float(np.dot(right_ankle - left_ankle, horizontal)))
+        ankle_asymmetry = abs(float(np.dot(right_ankle - left_ankle, up_2d)))
+        hip_flexions: list[float] = []
+        knee_flexions: list[float] = []
+        torso_down = hip_mid - shoulder_mid
+        for hip, knee, ankle in (
+            (left_hip, left_knee, left_ankle),
+            (right_hip, right_knee, right_ankle),
+        ):
+            hip_internal = _angle_between(knee - hip, torso_down)
+            knee_internal = _angle_between(hip - knee, ankle - knee)
+            if hip_internal is None or knee_internal is None:
+                return None
+            hip_flexions.append(max(0.0, hip_internal))
+            knee_flexions.append(max(0.0, pi - knee_internal))
+        confidence = float(np.min(frame.confidence()[indices]))
+        return _SquatGeometry(
+            up_2d.copy(),
+            leg_scale,
+            pelvis_height,
+            stance_width,
+            ankle_asymmetry,
+            np.asarray(hip_flexions, dtype=np.float64),
+            np.asarray(knee_flexions, dtype=np.float64),
+            confidence,
+        )
+
     def _finish_calibration_if_ready(self, *, force: bool = False) -> None:
         if not force and len(self._up_samples) < self.config.calibration_frames:
             return
@@ -323,6 +528,72 @@ class HumanSupportIntentEstimator:
         ]
         self._baseline_ratio = float(np.median(ratios))
         self._filtered_ratio = 0.0
+        if not self._squat_geometry_samples or not self._squat_frame_samples:
+            raise NeutralCalibrationError(
+                "human squat-intent calibration has no admitted geometry"
+            )
+        fixed_squat_up = np.median(
+            np.asarray([item.up_2d for item in self._squat_geometry_samples]),
+            axis=0,
+        )
+        squat_up_norm = float(np.linalg.norm(fixed_squat_up))
+        if not np.isfinite(squat_up_norm) or squat_up_norm < 1e-6:
+            raise NeutralCalibrationError(
+                "human squat-intent calibration produced an invalid image up axis"
+            )
+        self._fixed_squat_up_2d = fixed_squat_up / squat_up_norm
+        fixed_geometry = [
+            self._squat_geometry(sample, fixed_up_2d=self._fixed_squat_up_2d)
+            for sample in self._squat_frame_samples
+        ]
+        if any(item is None for item in fixed_geometry):
+            raise NeutralCalibrationError(
+                "human squat-intent admitted geometry became unobservable"
+            )
+        squat_geometry = [item for item in fixed_geometry if item is not None]
+        self._fixed_squat_leg_scale_2d = float(
+            np.median([item.leg_scale_2d for item in squat_geometry])
+        )
+        if (
+            not np.isfinite(self._fixed_squat_leg_scale_2d)
+            or self._fixed_squat_leg_scale_2d < 1e-5
+        ):
+            raise NeutralCalibrationError(
+                "human squat-intent calibration produced an invalid image leg scale"
+            )
+        self._neutral_pelvis_height_2d = float(
+            np.median([item.pelvis_height_2d for item in squat_geometry])
+            / self._fixed_squat_leg_scale_2d
+        )
+        self._neutral_stance_width_2d = float(
+            np.median([item.stance_width_2d for item in squat_geometry])
+            / self._fixed_squat_leg_scale_2d
+        )
+        self._neutral_hip_flexion_rad = np.median(
+            np.asarray([item.hip_flexion_rad for item in squat_geometry]),
+            axis=0,
+        )
+        self._neutral_knee_flexion_rad = np.median(
+            np.asarray([item.knee_flexion_rad for item in squat_geometry]),
+            axis=0,
+        )
+        if not np.isfinite(
+            np.concatenate(
+                (
+                    np.asarray(
+                        (
+                            self._neutral_pelvis_height_2d,
+                            self._neutral_stance_width_2d,
+                        )
+                    ),
+                    self._neutral_hip_flexion_rad,
+                    self._neutral_knee_flexion_rad,
+                )
+            )
+        ).all():
+            raise NeutralCalibrationError(
+                "human squat-intent calibration produced non-finite references"
+            )
         self._calibration_gate = None
 
     def _raw_candidate(self, ratio: float) -> SupportIntent:
@@ -367,6 +638,181 @@ class HumanSupportIntentEstimator:
             self._intent = candidate
             self._candidate_since_s = None
 
+    def _reset_squat_request(self, *, clear_filters: bool) -> None:
+        self._squat_active = False
+        self._squat_candidate = False
+        self._squat_candidate_since_s = None
+        if clear_filters:
+            self._filtered_squat_pelvis_descent_ratio = 0.0
+            self._filtered_squat_min_hip_flexion_rad = 0.0
+            self._filtered_squat_min_knee_flexion_rad = 0.0
+            self._filtered_squat_ankle_asymmetry_ratio = 0.0
+            self._filtered_squat_stance_width_change_ratio = 0.0
+
+    def _debounce_squat(self, candidate: bool, timestamp_s: float) -> None:
+        if candidate is self._squat_active:
+            self._squat_candidate = candidate
+            self._squat_candidate_since_s = None
+            return
+        if candidate is not self._squat_candidate:
+            self._squat_candidate = candidate
+            self._squat_candidate_since_s = timestamp_s
+            return
+        if self._squat_candidate_since_s is None:
+            self._squat_candidate_since_s = timestamp_s
+            return
+        required = (
+            self.config.squat_release_hold_s
+            if not candidate
+            else self.config.squat_activation_hold_s
+        )
+        if timestamp_s - self._squat_candidate_since_s >= required:
+            self._squat_active = candidate
+            self._squat_candidate_since_s = None
+
+    def _update_squat_measurement(
+        self,
+        geometry: _SquatGeometry,
+        *,
+        timestamp_s: float,
+        previous_timestamp_s: float | None,
+    ) -> None:
+        assert self._fixed_squat_leg_scale_2d is not None
+        assert self._neutral_pelvis_height_2d is not None
+        assert self._neutral_stance_width_2d is not None
+        assert self._neutral_hip_flexion_rad is not None
+        assert self._neutral_knee_flexion_rad is not None
+        scale = self._fixed_squat_leg_scale_2d
+        pelvis_descent = max(
+            0.0,
+            self._neutral_pelvis_height_2d - geometry.pelvis_height_2d / scale,
+        )
+        hip_flexion = float(
+            np.min(np.maximum(geometry.hip_flexion_rad - self._neutral_hip_flexion_rad, 0.0))
+        )
+        knee_flexion = float(
+            np.min(
+                np.maximum(
+                    geometry.knee_flexion_rad - self._neutral_knee_flexion_rad,
+                    0.0,
+                )
+            )
+        )
+        ankle_asymmetry = geometry.ankle_asymmetry_2d / scale
+        stance_width_change = abs(
+            geometry.stance_width_2d / scale - self._neutral_stance_width_2d
+        )
+        dt_s = (
+            0.0
+            if previous_timestamp_s is None
+            else timestamp_s - previous_timestamp_s
+        )
+        alpha = (
+            1.0
+            if dt_s <= 0.0
+            else 1.0
+            - exp(-dt_s / self.config.squat_filter_time_constant_s)
+        )
+        for name, value in (
+            ("_filtered_squat_pelvis_descent_ratio", pelvis_descent),
+            ("_filtered_squat_min_hip_flexion_rad", hip_flexion),
+            ("_filtered_squat_min_knee_flexion_rad", knee_flexion),
+            ("_filtered_squat_ankle_asymmetry_ratio", ankle_asymmetry),
+            ("_filtered_squat_stance_width_change_ratio", stance_width_change),
+        ):
+            previous = float(getattr(self, name))
+            setattr(self, name, previous + alpha * (value - previous))
+        self._last_squat_confidence = geometry.confidence
+        self._last_squat_valid_timestamp_s = timestamp_s
+
+        if self._squat_active:
+            candidate = bool(
+                self._filtered_squat_pelvis_descent_ratio
+                >= self.config.squat_exit_pelvis_descent_ratio
+                and self._filtered_squat_min_hip_flexion_rad
+                >= self.config.squat_exit_hip_flexion_rad
+                and self._filtered_squat_min_knee_flexion_rad
+                >= self.config.squat_exit_knee_flexion_rad
+                and self._filtered_squat_ankle_asymmetry_ratio
+                <= self.config.squat_maintain_max_ankle_asymmetry_ratio
+                and self._filtered_squat_stance_width_change_ratio
+                <= self.config.squat_maintain_max_stance_width_change_ratio
+                and geometry.confidence >= self.config.maintain_confidence
+            )
+        else:
+            candidate = bool(
+                self._intent is SupportIntent.DOUBLE_SUPPORT
+                and self._filtered_squat_pelvis_descent_ratio
+                >= self.config.squat_enter_pelvis_descent_ratio
+                and self._filtered_squat_min_hip_flexion_rad
+                >= self.config.squat_enter_hip_flexion_rad
+                and self._filtered_squat_min_knee_flexion_rad
+                >= self.config.squat_enter_knee_flexion_rad
+                and self._filtered_squat_ankle_asymmetry_ratio
+                <= self.config.squat_activate_max_ankle_asymmetry_ratio
+                and self._filtered_squat_stance_width_change_ratio
+                <= self.config.squat_activate_max_stance_width_change_ratio
+                and geometry.confidence >= self.config.activation_confidence
+            )
+        self._debounce_squat(candidate, timestamp_s)
+        if self._squat_active:
+            # Squat and a unilateral support request are mutually exclusive.
+            self._intent = SupportIntent.DOUBLE_SUPPORT
+            self._candidate = SupportIntent.DOUBLE_SUPPORT
+            self._candidate_since_s = None
+
+    def _estimate(
+        self,
+        *,
+        calibrated: bool,
+        stale: bool,
+        squat_observation_fresh: bool,
+    ) -> HumanSupportEstimate:
+        depth = float(
+            np.clip(
+                (
+                    self._filtered_squat_pelvis_descent_ratio
+                    - self.config.squat_exit_pelvis_descent_ratio
+                )
+                / (
+                    self.config.squat_full_pelvis_descent_ratio
+                    - self.config.squat_exit_pelvis_descent_ratio
+                ),
+                0.0,
+                1.0,
+            )
+        )
+        return HumanSupportEstimate(
+            self._intent,
+            self._filtered_ratio,
+            self._last_confidence,
+            calibrated=calibrated,
+            stale=stale,
+            squat_active=bool(self._squat_active and calibrated and not stale),
+            squat_observation_fresh=bool(
+                squat_observation_fresh and calibrated and not stale
+            ),
+            squat_depth_ratio=(
+                depth if self._squat_active and calibrated and not stale else 0.0
+            ),
+            squat_pelvis_descent_ratio=(
+                self._filtered_squat_pelvis_descent_ratio
+            ),
+            squat_bilateral_hip_flexion_rad=(
+                self._filtered_squat_min_hip_flexion_rad
+            ),
+            squat_bilateral_knee_flexion_rad=(
+                self._filtered_squat_min_knee_flexion_rad
+            ),
+            squat_confidence=self._last_squat_confidence,
+            squat_ankle_asymmetry_ratio=(
+                self._filtered_squat_ankle_asymmetry_ratio
+            ),
+            squat_stance_width_change_ratio=(
+                self._filtered_squat_stance_width_change_ratio
+            ),
+        )
+
     def update(
         self,
         frame: SkeletonFrame | None,
@@ -393,11 +839,27 @@ class HumanSupportIntentEstimator:
             self._last_confidence = measurement[3]
             required_confidence = (
                 self.config.activation_confidence
-                if self.is_calibrating or self._intent is SupportIntent.DOUBLE_SUPPORT
+                if self.is_calibrating
+                or (
+                    self._intent is SupportIntent.DOUBLE_SUPPORT
+                    and not self._squat_active
+                )
                 else self.config.maintain_confidence
             )
             if measurement[3] < required_confidence:
                 measurement = None
+            elif self.is_calibrating:
+                # Support intent deliberately uses a robust lower quantile,
+                # but squat geometry needs every shoulder/hip/knee/ankle.
+                # Do not admit a neutral reference with one weak landmark:
+                # it would permanently bias pelvis height or joint flexion.
+                calibration_geometry = self._squat_geometry(frame)
+                if (
+                    calibration_geometry is None
+                    or calibration_geometry.confidence
+                    < self.config.activation_confidence
+                ):
+                    measurement = None
         if measurement is None:
             stale = bool(
                 self._last_valid_timestamp_s is None
@@ -408,12 +870,15 @@ class HumanSupportIntentEstimator:
                 self._candidate = SupportIntent.DOUBLE_SUPPORT
                 self._candidate_since_s = None
                 self._filtered_ratio = 0.0
-            return HumanSupportEstimate(
-                self._intent,
-                self._filtered_ratio,
-                self._last_confidence,
+                self._reset_squat_request(clear_filters=True)
+            elif not self._squat_active:
+                # Missing data can never accumulate an entry dwell.
+                self._squat_candidate = False
+                self._squat_candidate_since_s = None
+            return self._estimate(
                 calibrated=not self.is_calibrating,
                 stale=stale,
+                squat_observation_fresh=False,
             )
 
         up, difference, scale, confidence = measurement
@@ -439,13 +904,23 @@ class HumanSupportIntentEstimator:
                     item[1].copy() for item in measurements
                 ]
                 self._scale_samples = [item[2] for item in measurements]
+                accepted_squat_geometry = [
+                    self._squat_geometry(sample) for sample in accepted
+                ]
+                if any(item is None for item in accepted_squat_geometry):
+                    raise NeutralCalibrationError(
+                        "accepted squat-intent neutral window became "
+                        "unobservable; explicitly restart calibration"
+                    )
+                self._squat_geometry_samples = [
+                    item for item in accepted_squat_geometry if item is not None
+                ]
+                self._squat_frame_samples = list(accepted)
                 self._finish_calibration_if_ready()
-            return HumanSupportEstimate(
-                SupportIntent.DOUBLE_SUPPORT,
-                0.0,
-                confidence,
+            return self._estimate(
                 calibrated=not self.is_calibrating,
                 stale=False,
+                squat_observation_fresh=False,
             )
 
         assert self._fixed_up is not None and self._fixed_scale is not None
@@ -457,12 +932,31 @@ class HumanSupportIntentEstimator:
         alpha = 1.0 if dt_s <= 0.0 else 1.0 - exp(-dt_s / self.config.filter_time_constant_s)
         self._filtered_ratio += alpha * (ratio - self._filtered_ratio)
         self._debounce(self._raw_candidate(self._filtered_ratio), timestamp)
-        return HumanSupportEstimate(
-            self._intent,
-            self._filtered_ratio,
-            confidence,
+        assert self._fixed_squat_up_2d is not None
+        squat_geometry = self._squat_geometry(
+            frame,
+            fixed_up_2d=self._fixed_squat_up_2d,
+        )
+        if squat_geometry is None:
+            if not self._squat_active:
+                self._squat_candidate = False
+                self._squat_candidate_since_s = None
+        else:
+            self._update_squat_measurement(
+                squat_geometry,
+                timestamp_s=timestamp,
+                previous_timestamp_s=previous_timestamp,
+            )
+        squat_stale = bool(
+            self._last_squat_valid_timestamp_s is None
+            or timestamp - self._last_squat_valid_timestamp_s > self.config.max_gap_s
+        )
+        if squat_stale:
+            self._reset_squat_request(clear_filters=True)
+        return self._estimate(
             calibrated=True,
             stale=False,
+            squat_observation_fresh=squat_geometry is not None,
         )
 
 

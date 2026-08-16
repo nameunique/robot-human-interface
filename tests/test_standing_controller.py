@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import mujoco
 import numpy as np
 import pytest
 
 from robot_human_interface.control import (
     StandingBalanceConfig,
     StandingBalanceController,
+    SupportIntent,
+    SupportIntentLatch,
+    SupportPhase,
     load_standing_balance_config,
 )
 from robot_human_interface.simulation import HumanoidSimulation
@@ -31,6 +35,30 @@ def _state(
         state.right_foot_normal_force_n = right_force_n
     if left_force_n is not None:
         state.left_foot_normal_force_n = left_force_n
+    return state
+
+
+def _loaded_free_state(
+    simulation: HumanoidSimulation,
+    *,
+    right_force_n: float = 14.0,
+    left_force_n: float = 14.0,
+    com_offset_x_m: float = 0.0,
+    com_offset_y_m: float = 0.0,
+) -> SimpleNamespace:
+    source = simulation.get_state()
+    state = _state(
+        right_force_n=right_force_n,
+        left_force_n=left_force_n,
+    )
+    state.joint_positions_rad = source.joint_positions_rad.copy()
+    state.center_of_mass_position_m = (
+        source.center_of_mass_position_m
+        + np.asarray((com_offset_x_m, com_offset_y_m, 0.0))
+    )
+    state.right_foot_position_m = source.right_foot_position_m.copy()
+    state.left_foot_position_m = source.left_foot_position_m.copy()
+    state.base_linear_velocity_m_s = np.zeros(3)
     return state
 
 
@@ -177,6 +205,836 @@ def test_balance_yaml_is_the_runtime_source_of_controller_gains() -> None:
     assert config.capture_full_gain_start_foot_force_n == pytest.approx(4.0)
     assert config.capture_full_gain_min_foot_force_n == pytest.approx(10.0)
     assert np.degrees(config.max_inverse_crouch_amplitude_rad) == pytest.approx(6.0)
+    assert np.degrees(config.squat_max_depth_rad) == pytest.approx(30.0)
+    assert config.squat_hip_shape == pytest.approx(5.0 / 3.0)
+    assert config.squat_ankle_shape == pytest.approx(-2.0 / 3.0)
+    assert np.degrees(config.squat_arm_full_extension_depth_rad) == pytest.approx(
+        19.0
+    )
+    assert np.degrees(config.squat_arm_shoulder_pitch_rad) == pytest.approx(
+        84.6969
+    )
+    assert config.squat_arm_elbow_rad == pytest.approx(0.0)
+    assert config.squat_arm_wrist_rad == pytest.approx(0.0)
+    assert config.squat_arm_to_ankle_gain == pytest.approx(0.02)
+    assert np.degrees(config.squat_max_speed_rad_s) == pytest.approx(38.0)
+    assert np.degrees(config.squat_max_acceleration_rad_s2) == pytest.approx(300.0)
+    assert config.squat_capture_recovery_gain_multiplier == pytest.approx(2.0)
+    assert config.squat_capture_resume_m == pytest.approx(0.05)
+    assert config.squat_capture_hold_m == pytest.approx(0.07)
+    assert config.squat_capture_return_m == pytest.approx(0.09)
+
+
+def test_squat_planner_deploys_symmetric_sole_flat_manifold() -> None:
+    with HumanoidSimulation("free") as simulation:
+        config = StandingBalanceConfig(
+            ankle_pitch_bias_rad=0.0,
+            arm_to_ankle_gain=0.0,
+            upper_body_rate_limit_rad_s=1000.0,
+            lower_body_rate_limit_rad_s=1000.0,
+            squat_max_speed_rad_s=1000.0,
+            squat_max_acceleration_rad_s2=100_000.0,
+        )
+        controller = StandingBalanceController.from_simulation(simulation, config)
+        target = simulation.home_positions_rad.copy()
+        target[:6] += 0.4
+        reference = RobotJointCommand.humanoid(1.0, target, 1.0)
+
+        command = controller.update(
+            reference,
+            _loaded_free_state(simulation),
+            dt_s=0.01,
+            squat_active=True,
+            squat_observation_fresh=True,
+            squat_depth_ratio=1.0,
+            allow_squat=True,
+        )
+
+        diagnostics = controller.last_diagnostics
+        assert diagnostics is not None
+        assert diagnostics.squat_authorized
+        assert diagnostics.squat_depth_rad == pytest.approx(config.squat_max_depth_rad)
+        assert not diagnostics.squat_ready_for_support
+        q = diagnostics.squat_depth_rad
+        expected = np.asarray(
+            (config.squat_hip_shape * q, q, config.squat_ankle_shape * q)
+        )
+        for indices in (np.asarray((10, 12, 14)), np.asarray((11, 13, 15))):
+            np.testing.assert_allclose(
+                command.positions_rad[indices]
+                - simulation.home_positions_rad[indices],
+                expected,
+                atol=1e-12,
+            )
+        assert expected[0] - expected[1] + expected[2] == pytest.approx(0.0)
+        np.testing.assert_allclose(
+            command.positions_rad[:6],
+            np.asarray(
+                (
+                    config.squat_arm_shoulder_pitch_rad,
+                    config.squat_arm_shoulder_pitch_rad,
+                    config.squat_arm_elbow_rad,
+                    config.squat_arm_elbow_rad,
+                    config.squat_arm_wrist_rad,
+                    config.squat_arm_wrist_rad,
+                )
+            ),
+            atol=1e-12,
+        )
+
+
+def test_squat_arm_pose_deploys_smoothly_and_request_keeps_support_interlocked() -> None:
+    with HumanoidSimulation("free") as simulation:
+        config = StandingBalanceConfig(ankle_pitch_bias_rad=0.0)
+        controller = StandingBalanceController.from_simulation(simulation, config)
+        reference = RobotJointCommand.humanoid(
+            1.0, simulation.home_positions_rad, 1.0
+        )
+        state = _loaded_free_state(simulation)
+
+        previous = simulation.home_positions_rad.copy()
+        for _ in range(120):
+            command = controller.update(
+                reference,
+                state,
+                dt_s=0.01,
+                squat_active=True,
+                squat_observation_fresh=True,
+                squat_depth_ratio=1.0,
+                allow_squat=True,
+            )
+            diagnostics = controller.last_diagnostics
+            assert diagnostics is not None
+            assert not diagnostics.squat_ready_for_support
+            np.testing.assert_array_less(
+                np.abs(command.positions_rad[:6] - previous[:6]),
+                np.full(6, config.upper_body_rate_limit_rad_s * 0.01 + 1e-12),
+            )
+            previous = command.positions_rad.copy()
+
+        diagnostics = controller.last_diagnostics
+        assert diagnostics is not None
+        assert diagnostics.squat_depth_rad > config.squat_arm_full_extension_depth_rad
+        np.testing.assert_allclose(
+            command.positions_rad[:6],
+            np.asarray(
+                (
+                    config.squat_arm_shoulder_pitch_rad,
+                    config.squat_arm_shoulder_pitch_rad,
+                    config.squat_arm_elbow_rad,
+                    config.squat_arm_elbow_rad,
+                    config.squat_arm_wrist_rad,
+                    config.squat_arm_wrist_rad,
+                )
+            ),
+            atol=np.radians(0.1),
+        )
+
+
+def test_squat_arm_target_is_validated_against_motor_and_safety_limits() -> None:
+    with HumanoidSimulation("free") as simulation:
+        with pytest.raises(ValueError, match="squat arm target.*motor limits"):
+            StandingBalanceController.from_simulation(
+                simulation,
+                StandingBalanceConfig(squat_arm_elbow_rad=np.radians(170.0)),
+            )
+
+
+def test_deep_squat_keeps_actual_arms_forward_and_free_base_safe() -> None:
+    with HumanoidSimulation("free") as simulation:
+        config = load_standing_balance_config("config/balance.yaml")
+        controller = StandingBalanceController.from_simulation(simulation, config)
+        reference = RobotJointCommand.humanoid(
+            0.0, simulation.home_positions_rad, 1.0
+        )
+        right_shoulder = mujoco.mj_name2id(
+            simulation.model, mujoco.mjtObj.mjOBJ_BODY, "shoulder_rh"
+        )
+        left_shoulder = mujoco.mj_name2id(
+            simulation.model, mujoco.mjtObj.mjOBJ_BODY, "shoulder_lh"
+        )
+        right_wrist = mujoco.mj_name2id(
+            simulation.model, mujoco.mjtObj.mjOBJ_BODY, "wrist_rh"
+        )
+        left_wrist = mujoco.mj_name2id(
+            simulation.model, mujoco.mjtObj.mjOBJ_BODY, "wrist_lh"
+        )
+        dt_s = float(simulation.model.opt.timestep)
+        deepest_q_rad = 0.0
+        minimum_base_height_m = float("inf")
+        maximum_tilt_rad = 0.0
+        maximum_nonfoot_contacts = 0
+        forward_dwell_s = 0.0
+
+        for step in range(int(11.0 / dt_s)):
+            elapsed_s = step * dt_s
+            if elapsed_s < 3.0:
+                depth_ratio = 0.0
+            elif elapsed_s < 4.2:
+                depth_ratio = (elapsed_s - 3.0) / 1.2
+            elif elapsed_s < 6.2:
+                depth_ratio = 1.0
+            elif elapsed_s < 7.4:
+                depth_ratio = (7.4 - elapsed_s) / 1.2
+            else:
+                depth_ratio = 0.0
+            depth_ratio = float(np.clip(depth_ratio, 0.0, 1.0))
+            state = simulation.get_state()
+            command = controller.update(
+                reference,
+                state,
+                dt_s=dt_s,
+                squat_active=depth_ratio > 1e-9,
+                squat_observation_fresh=True,
+                squat_depth_ratio=depth_ratio,
+                allow_squat=True,
+            )
+            simulation.apply_joint_command(command)
+            state = simulation.step()
+            diagnostics = controller.last_diagnostics
+            assert diagnostics is not None
+            deepest_q_rad = max(deepest_q_rad, diagnostics.squat_depth_rad)
+            minimum_base_height_m = min(
+                minimum_base_height_m, float(state.base_position_m[2])
+            )
+            maximum_tilt_rad = max(
+                maximum_tilt_rad,
+                _free_base_tilt_rad(state.base_orientation_wxyz),
+            )
+            maximum_nonfoot_contacts = max(
+                maximum_nonfoot_contacts,
+                int(state.non_foot_ground_contact_count),
+            )
+            if (
+                diagnostics.squat_depth_rad
+                >= config.squat_arm_full_extension_depth_rad
+            ):
+                for shoulder, wrist in (
+                    (right_shoulder, right_wrist),
+                    (left_shoulder, left_wrist),
+                ):
+                    arm_vector = (
+                        simulation.data.xpos[wrist]
+                        - simulation.data.xpos[shoulder]
+                    )
+                    assert -arm_vector[0] >= 0.30
+                    assert abs(arm_vector[2]) <= 0.10
+                forward_dwell_s += dt_s
+
+        assert np.degrees(deepest_q_rad) >= 28.0
+        assert 0.80 <= minimum_base_height_m <= 0.83
+        assert np.degrees(maximum_tilt_rad) < 20.0
+        assert maximum_nonfoot_contacts == 0
+        assert forward_dwell_s >= 0.5
+        assert state.base_position_m[2] >= 0.88
+        assert controller.last_diagnostics is not None
+        assert controller.last_diagnostics.squat_ready_for_support
+        with pytest.raises(ValueError, match="squat shoulder target.*deviation"):
+            StandingBalanceController.from_simulation(
+                simulation,
+                StandingBalanceConfig(
+                    squat_arm_shoulder_pitch_rad=np.radians(120.0),
+                    max_shoulder_deviation_rad=np.radians(70.0),
+                ),
+            )
+
+
+def test_squat_planner_never_deepens_without_fresh_bilateral_authority() -> None:
+    with HumanoidSimulation("free") as simulation:
+        config = StandingBalanceConfig(
+            ankle_pitch_bias_rad=0.0,
+            upper_body_rate_limit_rad_s=1000.0,
+            lower_body_rate_limit_rad_s=1000.0,
+        )
+        controller = StandingBalanceController.from_simulation(simulation, config)
+        reference = RobotJointCommand.humanoid(
+            1.0, simulation.home_positions_rad, 1.0
+        )
+        loaded = _loaded_free_state(simulation)
+        for _ in range(20):
+            controller.update(
+                reference,
+                loaded,
+                dt_s=0.01,
+                squat_active=True,
+                squat_observation_fresh=True,
+                squat_depth_ratio=1.0,
+                allow_squat=True,
+            )
+        assert controller.last_diagnostics is not None
+        deployed = controller.last_diagnostics.squat_depth_rad
+        assert deployed > 0.0
+
+        controller.update(
+            reference,
+            _loaded_free_state(
+                simulation, right_force_n=1.0, left_force_n=27.0
+            ),
+            dt_s=0.01,
+            squat_active=True,
+            squat_observation_fresh=True,
+            squat_depth_ratio=1.0,
+            allow_squat=True,
+        )
+        assert controller.last_diagnostics is not None
+        assert controller.last_diagnostics.squat_depth_rad == pytest.approx(deployed)
+        assert controller.last_diagnostics.squat_block_reason == "missing_bilateral_load"
+
+        controller.update(
+            reference,
+            loaded,
+            dt_s=0.01,
+            squat_active=True,
+            squat_observation_fresh=False,
+            squat_depth_ratio=1.0,
+            allow_squat=True,
+        )
+        assert controller.last_diagnostics is not None
+        assert controller.last_diagnostics.squat_depth_rad <= deployed + 1e-12
+        assert controller.last_diagnostics.squat_block_reason == (
+            "stale_squat_observation"
+        )
+
+        for _ in range(200):
+            controller.update(
+                reference,
+                loaded,
+                dt_s=0.01,
+                squat_active=False,
+                squat_observation_fresh=False,
+                squat_depth_ratio=0.0,
+            )
+        assert controller.last_diagnostics is not None
+        assert controller.last_diagnostics.squat_depth_rad == pytest.approx(0.0)
+        assert controller.last_diagnostics.squat_ready_for_support
+
+
+def test_squat_capture_guard_returns_instead_of_deepening() -> None:
+    with HumanoidSimulation("free") as simulation:
+        config = StandingBalanceConfig(
+            capture_velocity_filter_time_constant_s=0.0,
+            capture_support_point_filter_time_constant_s=0.0,
+            upper_body_rate_limit_rad_s=1000.0,
+            lower_body_rate_limit_rad_s=1000.0,
+        )
+        controller = StandingBalanceController.from_simulation(simulation, config)
+        source = simulation.get_state()
+
+        def loaded_state(offset_x_m: float) -> SimpleNamespace:
+            state = _state(right_force_n=14.0, left_force_n=14.0)
+            state.joint_positions_rad = source.joint_positions_rad.copy()
+            state.center_of_mass_position_m = (
+                source.center_of_mass_position_m + np.asarray((offset_x_m, 0.0, 0.0))
+            )
+            state.right_foot_position_m = source.right_foot_position_m
+            state.left_foot_position_m = source.left_foot_position_m
+            state.base_linear_velocity_m_s = np.zeros(3)
+            return state
+
+        reference = RobotJointCommand.humanoid(
+            1.0, simulation.home_positions_rad, 1.0
+        )
+        controller.update(reference, loaded_state(0.0), dt_s=0.01)
+        controller.update(
+            reference,
+            loaded_state(config.squat_capture_return_m + 0.01),
+            dt_s=0.01,
+            squat_active=True,
+            squat_observation_fresh=True,
+            squat_depth_ratio=1.0,
+            allow_squat=True,
+        )
+
+        diagnostics = controller.last_diagnostics
+        assert diagnostics is not None
+        assert not diagnostics.squat_authorized
+        assert diagnostics.squat_depth_rad == pytest.approx(0.0)
+        assert diagnostics.squat_target_depth_rad == pytest.approx(0.0)
+        assert diagnostics.squat_block_reason == "stability_return"
+
+
+def test_unilateral_support_phase_cannot_authorize_squat() -> None:
+    """The support FSM owns a leg before the squat planner may move either leg."""
+
+    with HumanoidSimulation("free") as simulation:
+        config = StandingBalanceConfig(
+            ankle_pitch_bias_rad=0.0,
+            upper_body_rate_limit_rad_s=1000.0,
+            lower_body_rate_limit_rad_s=1000.0,
+        )
+        controller = StandingBalanceController.from_simulation(simulation, config)
+        reference = RobotJointCommand.humanoid(
+            1.0, simulation.home_positions_rad, 1.0
+        )
+
+        for phase in (
+            SupportPhase.SHIFT_WEIGHT,
+            SupportPhase.VERIFY_STANCE,
+            SupportPhase.LIFT_SWING,
+            SupportPhase.HOLD_SWING,
+        ):
+            controller.reset()
+            controller.update(
+                reference,
+                _loaded_free_state(simulation),
+                dt_s=0.01,
+                squat_active=True,
+                squat_observation_fresh=True,
+                squat_depth_ratio=1.0,
+                allow_squat=phase is SupportPhase.DOUBLE_SUPPORT,
+            )
+
+            diagnostics = controller.last_diagnostics
+            assert diagnostics is not None
+            assert not diagnostics.squat_authorized
+            assert diagnostics.squat_depth_rad == pytest.approx(0.0)
+            assert diagnostics.squat_target_depth_rad == pytest.approx(0.0)
+            assert not diagnostics.squat_ready_for_support
+            assert diagnostics.squat_block_reason == "support_interlock"
+
+
+def test_denied_squat_request_does_not_override_arm_tracking() -> None:
+    with HumanoidSimulation("free") as simulation:
+        config = StandingBalanceConfig(ankle_pitch_bias_rad=0.0)
+        ordinary = StandingBalanceController.from_simulation(simulation, config)
+        denied = StandingBalanceController.from_simulation(simulation, config)
+        loaded = _loaded_free_state(simulation)
+        home = RobotJointCommand.humanoid(
+            0.0, simulation.home_positions_rad, 1.0
+        )
+        ordinary.update(home, loaded, dt_s=0.01)
+        denied.update(home, loaded, dt_s=0.01)
+        target = simulation.home_positions_rad.copy()
+        target[:2] = np.radians(70.0)
+        reference = RobotJointCommand.humanoid(1.0, target, 1.0)
+
+        ordinary_command = ordinary.update(reference, loaded, dt_s=0.01)
+        denied_command = denied.update(
+            reference,
+            loaded,
+            dt_s=0.01,
+            squat_active=True,
+            squat_observation_fresh=True,
+            squat_depth_ratio=1.0,
+            allow_squat=False,
+        )
+
+        np.testing.assert_allclose(
+            denied_command.positions_rad[:6],
+            ordinary_command.positions_rad[:6],
+            atol=1e-12,
+        )
+        diagnostics = denied.last_diagnostics
+        assert diagnostics is not None
+        assert not diagnostics.squat_authorized
+        assert not diagnostics.squat_ready_for_support
+        assert diagnostics.squat_block_reason == "support_interlock"
+
+
+def test_support_request_stays_double_until_squat_depth_and_speed_are_released() -> None:
+    """Exercise the balance/latch handshake used by the teleop physics loop."""
+
+    with HumanoidSimulation("free") as simulation:
+        config = StandingBalanceConfig(
+            ankle_pitch_bias_rad=0.0,
+            upper_body_rate_limit_rad_s=1000.0,
+            lower_body_rate_limit_rad_s=1000.0,
+        )
+        controller = StandingBalanceController.from_simulation(simulation, config)
+        latch = SupportIntentLatch()
+        reference = RobotJointCommand.humanoid(
+            1.0, simulation.home_positions_rad, 1.0
+        )
+        loaded = _loaded_free_state(simulation)
+
+        for _ in range(200):
+            controller.update(
+                reference,
+                loaded,
+                dt_s=0.01,
+                squat_active=True,
+                squat_observation_fresh=True,
+                squat_depth_ratio=1.0,
+                allow_squat=True,
+            )
+        deployed = controller.last_diagnostics
+        assert deployed is not None
+        assert deployed.squat_depth_rad > config.squat_support_release_depth_rad
+        assert abs(deployed.squat_velocity_rad_s) <= (
+            config.squat_support_release_speed_rad_s
+        )
+        assert not deployed.squat_ready_for_support
+
+        saw_shallow_but_moving = False
+        timestamp_s = 0.0
+        for _ in range(300):
+            controller.update(
+                reference,
+                loaded,
+                dt_s=0.01,
+                squat_active=False,
+                squat_observation_fresh=False,
+                squat_depth_ratio=0.0,
+            )
+            diagnostics = controller.last_diagnostics
+            assert diagnostics is not None
+            observed = (
+                SupportIntent.RIGHT_SWING
+                if diagnostics.squat_ready_for_support
+                else SupportIntent.DOUBLE_SUPPORT
+            )
+            requested = latch.update(
+                observed,
+                SupportPhase.DOUBLE_SUPPORT,
+                timestamp_s=timestamp_s,
+            )
+            timestamp_s += 0.01
+            if diagnostics.squat_ready_for_support:
+                assert requested is SupportIntent.RIGHT_SWING
+                break
+            assert requested is SupportIntent.DOUBLE_SUPPORT
+            if (
+                diagnostics.squat_depth_rad
+                <= config.squat_support_release_depth_rad
+                and abs(diagnostics.squat_velocity_rad_s)
+                > config.squat_support_release_speed_rad_s
+            ):
+                saw_shallow_but_moving = True
+        else:
+            pytest.fail("squat planner did not reach its support-release state")
+
+        assert saw_shallow_but_moving
+
+
+def test_reset_clears_squat_coordinate_velocity_and_interlock_state() -> None:
+    with HumanoidSimulation("free") as simulation:
+        controller = StandingBalanceController.from_simulation(
+            simulation, StandingBalanceConfig(ankle_pitch_bias_rad=0.0)
+        )
+        reference = RobotJointCommand.humanoid(
+            1.0, simulation.home_positions_rad, 1.0
+        )
+        loaded = _loaded_free_state(simulation)
+        for _ in range(20):
+            controller.update(
+                reference,
+                loaded,
+                dt_s=0.01,
+                squat_active=True,
+                squat_observation_fresh=True,
+                squat_depth_ratio=1.0,
+                allow_squat=True,
+            )
+        before_reset = controller.last_diagnostics
+        assert before_reset is not None
+        assert before_reset.squat_depth_rad > 0.0
+
+        controller.reset()
+
+        assert controller.last_diagnostics is None
+        controller.update(reference, loaded, dt_s=0.01)
+        after_reset = controller.last_diagnostics
+        assert after_reset is not None
+        assert after_reset.squat_depth_rad == pytest.approx(0.0)
+        assert after_reset.squat_velocity_rad_s == pytest.approx(0.0)
+        assert after_reset.squat_target_depth_rad == pytest.approx(0.0)
+        assert after_reset.squat_ready_for_support
+        assert not after_reset.squat_requested
+        assert not after_reset.squat_authorized
+
+
+@pytest.mark.parametrize(
+    "right_force_n,left_force_n",
+    (
+        (None, None),
+        (float("nan"), 28.0),
+        (14.0, float("inf")),
+        (-1.0, 29.0),
+    ),
+)
+def test_squat_planner_freezes_on_missing_or_invalid_force_sensing(
+    right_force_n: float | None,
+    left_force_n: float | None,
+) -> None:
+    with HumanoidSimulation("free") as simulation:
+        controller = StandingBalanceController.from_simulation(
+            simulation, StandingBalanceConfig(ankle_pitch_bias_rad=0.0)
+        )
+        reference = RobotJointCommand.humanoid(
+            1.0, simulation.home_positions_rad, 1.0
+        )
+        loaded = _loaded_free_state(simulation)
+        for _ in range(20):
+            controller.update(
+                reference,
+                loaded,
+                dt_s=0.01,
+                squat_active=True,
+                squat_observation_fresh=True,
+                squat_depth_ratio=1.0,
+                allow_squat=True,
+            )
+        deployed = controller.last_diagnostics
+        assert deployed is not None
+        assert deployed.squat_depth_rad > 0.0
+
+        invalid = _loaded_free_state(simulation)
+        if right_force_n is None:
+            del invalid.right_foot_normal_force_n
+        else:
+            invalid.right_foot_normal_force_n = right_force_n
+        if left_force_n is None:
+            del invalid.left_foot_normal_force_n
+        else:
+            invalid.left_foot_normal_force_n = left_force_n
+        controller.update(
+            reference,
+            invalid,
+            dt_s=0.01,
+            squat_active=True,
+            squat_observation_fresh=True,
+            squat_depth_ratio=1.0,
+            allow_squat=True,
+        )
+
+        diagnostics = controller.last_diagnostics
+        assert diagnostics is not None
+        assert not diagnostics.squat_authorized
+        assert diagnostics.squat_depth_rad == pytest.approx(
+            deployed.squat_depth_rad
+        )
+        assert diagnostics.squat_target_depth_rad == pytest.approx(
+            deployed.squat_depth_rad
+        )
+        assert diagnostics.squat_velocity_rad_s == pytest.approx(0.0)
+        assert diagnostics.squat_block_reason == "missing_stability_observation"
+
+
+@pytest.mark.parametrize(
+    "field",
+    (
+        "center_of_mass_position_m",
+        "right_foot_position_m",
+        "base_linear_velocity_m_s",
+    ),
+)
+def test_squat_planner_freezes_on_missing_stability_kinematics(field: str) -> None:
+    with HumanoidSimulation("free") as simulation:
+        controller = StandingBalanceController.from_simulation(
+            simulation, StandingBalanceConfig(ankle_pitch_bias_rad=0.0)
+        )
+        reference = RobotJointCommand.humanoid(
+            1.0, simulation.home_positions_rad, 1.0
+        )
+        loaded = _loaded_free_state(simulation)
+        for _ in range(20):
+            controller.update(
+                reference,
+                loaded,
+                dt_s=0.01,
+                squat_active=True,
+                squat_observation_fresh=True,
+                squat_depth_ratio=1.0,
+                allow_squat=True,
+            )
+        deployed = controller.last_diagnostics
+        assert deployed is not None
+        assert deployed.squat_depth_rad > 0.0
+
+        invalid = _loaded_free_state(simulation)
+        delattr(invalid, field)
+        controller.update(
+            reference,
+            invalid,
+            dt_s=0.01,
+            squat_active=True,
+            squat_observation_fresh=True,
+            squat_depth_ratio=1.0,
+            allow_squat=True,
+        )
+
+        diagnostics = controller.last_diagnostics
+        assert diagnostics is not None
+        assert not diagnostics.capture_observation_valid
+        assert not diagnostics.squat_authorized
+        assert diagnostics.squat_depth_rad == pytest.approx(
+            deployed.squat_depth_rad
+        )
+        assert diagnostics.squat_target_depth_rad == pytest.approx(
+            deployed.squat_depth_rad
+        )
+        assert diagnostics.squat_velocity_rad_s == pytest.approx(0.0)
+        assert diagnostics.squat_block_reason == "missing_stability_observation"
+
+
+@pytest.mark.parametrize("invalid_kind", ("missing", "nonfinite"))
+def test_squat_planner_freezes_without_valid_actual_joint_positions(
+    invalid_kind: str,
+) -> None:
+    with HumanoidSimulation("free") as simulation:
+        controller = StandingBalanceController.from_simulation(
+            simulation, StandingBalanceConfig(ankle_pitch_bias_rad=0.0)
+        )
+        reference = RobotJointCommand.humanoid(
+            1.0, simulation.home_positions_rad, 1.0
+        )
+        loaded = _loaded_free_state(simulation)
+        for _ in range(20):
+            controller.update(
+                reference,
+                loaded,
+                dt_s=0.01,
+                squat_active=True,
+                squat_observation_fresh=True,
+                squat_depth_ratio=1.0,
+                allow_squat=True,
+            )
+        deployed = controller.last_diagnostics
+        assert deployed is not None
+        assert deployed.squat_depth_rad > 0.0
+
+        invalid = _loaded_free_state(simulation)
+        if invalid_kind == "missing":
+            del invalid.joint_positions_rad
+        else:
+            invalid.joint_positions_rad[12] = float("nan")
+        controller.update(
+            reference,
+            invalid,
+            dt_s=0.01,
+            squat_active=True,
+            squat_observation_fresh=True,
+            squat_depth_ratio=1.0,
+            allow_squat=True,
+        )
+
+        diagnostics = controller.last_diagnostics
+        assert diagnostics is not None
+        assert not diagnostics.squat_authorized
+        assert diagnostics.squat_depth_rad == pytest.approx(
+            deployed.squat_depth_rad
+        )
+        assert diagnostics.squat_target_depth_rad == pytest.approx(
+            deployed.squat_depth_rad
+        )
+        assert diagnostics.squat_velocity_rad_s == pytest.approx(0.0)
+        assert not diagnostics.squat_ready_for_support
+        assert diagnostics.squat_block_reason == "missing_joint_observation"
+
+
+@pytest.mark.parametrize("unsafe_observation", ("forward_com", "lateral_speed"))
+def test_squat_cannot_calibrate_a_blind_unsafe_capture_neutral(
+    unsafe_observation: str,
+) -> None:
+    with HumanoidSimulation("free") as simulation:
+        config = StandingBalanceConfig(ankle_pitch_bias_rad=0.0)
+        controller = StandingBalanceController.from_simulation(simulation, config)
+        reference = RobotJointCommand.humanoid(
+            1.0, simulation.home_positions_rad, 1.0
+        )
+        state = _loaded_free_state(
+            simulation,
+            com_offset_x_m=0.30 if unsafe_observation == "forward_com" else 0.0,
+        )
+        if unsafe_observation == "lateral_speed":
+            state.base_linear_velocity_m_s = np.asarray((0.0, 2.0, 0.0))
+
+        controller.update(
+            reference,
+            state,
+            dt_s=0.01,
+            squat_active=True,
+            squat_observation_fresh=True,
+            squat_depth_ratio=1.0,
+            allow_squat=True,
+        )
+
+        diagnostics = controller.last_diagnostics
+        assert diagnostics is not None
+        assert not diagnostics.capture_observation_valid
+        assert not diagnostics.squat_authorized
+        assert diagnostics.squat_depth_rad == pytest.approx(0.0)
+        assert diagnostics.squat_target_depth_rad == pytest.approx(0.0)
+        assert not diagnostics.squat_ready_for_support
+        assert diagnostics.squat_block_reason == "missing_stability_observation"
+        if unsafe_observation == "forward_com":
+            assert abs(diagnostics.absolute_capture_point_offset_x_m) > (
+                config.squat_max_absolute_capture_offset_x_m
+            )
+        else:
+            assert np.linalg.norm(state.base_linear_velocity_m_s) > (
+                config.squat_neutral_max_base_speed_m_s
+            )
+
+
+def test_reset_seeds_motor_slew_from_deep_actual_pose_and_keeps_interlock() -> None:
+    with HumanoidSimulation("free") as simulation:
+        config = StandingBalanceConfig(ankle_pitch_bias_rad=0.0)
+        controller = StandingBalanceController.from_simulation(simulation, config)
+        reference = RobotJointCommand.humanoid(
+            1.0, simulation.home_positions_rad, 1.0
+        )
+        deep_actual = _loaded_free_state(simulation)
+        q = 0.10
+        squat_delta = np.asarray(
+            (config.squat_hip_shape * q, q, config.squat_ankle_shape * q)
+        )
+        for indices in (np.asarray((10, 12, 14)), np.asarray((11, 13, 15))):
+            deep_actual.joint_positions_rad[indices] += squat_delta
+
+        controller.reset()
+        command = controller.update(reference, deep_actual, dt_s=0.01)
+
+        diagnostics = controller.last_diagnostics
+        assert diagnostics is not None
+        assert diagnostics.squat_depth_rad == pytest.approx(0.0)
+        assert diagnostics.squat_velocity_rad_s == pytest.approx(0.0)
+        assert diagnostics.squat_actual_tracking_error_rad > (
+            config.squat_support_release_tracking_error_rad
+        )
+        assert not diagnostics.squat_ready_for_support
+        sagittal = np.asarray((10, 11, 12, 13, 14, 15))
+        np.testing.assert_array_less(
+            np.abs(
+                command.positions_rad[sagittal]
+                - deep_actual.joint_positions_rad[sagittal]
+            ),
+            np.full(6, config.lower_body_rate_limit_rad_s * 0.01 + 1e-12),
+        )
+
+
+def test_reset_keeps_support_interlocked_until_forward_arms_return_home() -> None:
+    with HumanoidSimulation("free") as simulation:
+        config = StandingBalanceConfig(ankle_pitch_bias_rad=0.0)
+        controller = StandingBalanceController.from_simulation(simulation, config)
+        reference = RobotJointCommand.humanoid(
+            1.0, simulation.home_positions_rad, 1.0
+        )
+        arms_forward = _loaded_free_state(simulation)
+        arms_forward.joint_positions_rad[:6] = np.asarray(
+            (
+                config.squat_arm_shoulder_pitch_rad,
+                config.squat_arm_shoulder_pitch_rad,
+                config.squat_arm_elbow_rad,
+                config.squat_arm_elbow_rad,
+                config.squat_arm_wrist_rad,
+                config.squat_arm_wrist_rad,
+            )
+        )
+
+        controller.reset()
+        command = controller.update(reference, arms_forward, dt_s=0.01)
+
+        diagnostics = controller.last_diagnostics
+        assert diagnostics is not None
+        assert not diagnostics.squat_ready_for_support
+        assert diagnostics.squat_actual_tracking_error_rad > (
+            config.squat_support_release_tracking_error_rad
+        )
+        np.testing.assert_array_less(
+            np.abs(command.positions_rad[:6] - arms_forward.joint_positions_rad[:6]),
+            np.full(6, config.upper_body_rate_limit_rad_s * 0.01 + 1e-12),
+        )
 
 
 def test_stale_reference_slews_imitation_to_home_but_keeps_feedback_active() -> None:

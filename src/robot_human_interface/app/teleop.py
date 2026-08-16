@@ -1178,6 +1178,14 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
                         command,
                         state,
                         dt_s=float(simulation.model.opt.timestep),
+                        squat_active=support_estimate.squat_active,
+                        squat_observation_fresh=(
+                            support_estimate.squat_observation_fresh
+                        ),
+                        squat_depth_ratio=support_estimate.squat_depth_ratio,
+                        allow_squat=(
+                            support_machine.phase is SupportPhase.DOUBLE_SUPPORT
+                        ),
                     )
                     if support_enabled:
                         prior_support = support_machine.last_diagnostics
@@ -1187,8 +1195,19 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
                             and support_machine.phase
                             in {SupportPhase.LOWER_SWING, SupportPhase.CENTER_WEIGHT}
                         )
+                        balance_diagnostics = balance_controller.last_diagnostics
+                        squat_interlocked = bool(
+                            balance_diagnostics is not None
+                            and not balance_diagnostics.squat_ready_for_support
+                        )
+                        support_observation = (
+                            SupportIntent.DOUBLE_SUPPORT
+                            if squat_interlocked
+                            or support_estimate.squat_active
+                            else observed_support_intent
+                        )
                         requested_support = support_latch.update(
-                            observed_support_intent,
+                            support_observation,
                             support_machine.phase,
                             stale=command.stale or support_estimate.stale,
                             aborted=aborting,
