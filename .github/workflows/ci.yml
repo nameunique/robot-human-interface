@@ -1,0 +1,115 @@
+name: cross-platform-ci
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Python 3.12 / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - ubuntu-24.04
+    env:
+      QT_QPA_PLATFORM: offscreen
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Ubuntu GUI, OpenGL, camera, and mDNS libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            avahi-daemon \
+            libdbus-1-3 \
+            libegl1 \
+            libfontconfig1 \
+            libgl1 \
+            libgl1-mesa-dri \
+            libglib2.0-0t64 \
+            libglfw3 \
+            libnss-mdns \
+            libportaudio2 \
+            libx11-xcb1 \
+            libxcb1 \
+            libxcb-cursor0 \
+            libxcb-glx0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-randr0 \
+            libxcb-render0 \
+            libxcb-render-util0 \
+            libxcb-shape0 \
+            libxcb-shm0 \
+            libxcb-sync1 \
+            libxcb-util1 \
+            libxcb-xfixes0 \
+            libxcb-xinerama0 \
+            libxi6 \
+            libxkbcommon-x11-0 \
+            libxrender1 \
+            v4l-utils \
+            xauth \
+            xvfb
+
+      - name: Install uv and CPython 3.12
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          python-version: "3.12"
+          version: "0.12.5"
+
+      - name: Synchronize universal lock
+        run: uv sync --locked --group dev
+
+      - name: Verify target interpreter and imports
+        run: >-
+          uv run --locked --no-sync python -c
+          "import platform, sys; import PyQt6, mediapipe, mujoco, websocket;
+          assert sys.version_info[:2] == (3, 12);
+          assert platform.machine().lower() in {'amd64', 'x86_64'};
+          assert callable(websocket.create_connection);
+          print(platform.platform(), mujoco.__version__, mediapipe.__version__)"
+
+      - name: Qt offscreen smoke
+        run: >-
+          uv run --locked --no-sync python -c
+          "from PyQt6.QtWidgets import QApplication;
+          app = QApplication([]); assert app is not None; app.quit();
+          print('PyQt6 offscreen OK')"
+
+      - name: Full pytest suite
+        run: uv run --locked --no-sync pytest
+
+      - name: Synthetic headless pipeline
+        run: >-
+          uv run --locked --no-sync robot-camera-teleop
+          --source synthetic --headless --free-base --max-frames 30
+
+      - name: MuJoCo model smoke on Windows
+        if: runner.os == 'Windows'
+        run: >-
+          uv run --locked --no-sync python -c
+          "from robot_human_interface.simulation import HumanoidSimulation;
+          sim = HumanoidSimulation('fixed'); state = sim.step(2);
+          assert state.is_finite; sim.close(); print('MuJoCo smoke OK')"
+
+      - name: MuJoCo model smoke under Xvfb on Ubuntu
+        if: runner.os == 'Linux'
+        run: >-
+          xvfb-run -a uv run --locked --no-sync python -c
+          "from robot_human_interface.simulation import HumanoidSimulation;
+          sim = HumanoidSimulation('fixed'); state = sim.step(2);
+          assert state.is_finite; sim.close(); print('MuJoCo smoke OK')"

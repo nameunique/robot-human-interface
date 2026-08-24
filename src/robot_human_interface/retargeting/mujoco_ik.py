@@ -17,6 +17,7 @@ from robot_human_interface.pose.calibration import (
     NeutralCalibrationError,
     NeutralCalibrationGate,
 )
+from robot_human_interface.resources import ResourceLocator
 from robot_human_interface.skeleton import (
     JOINT_NAMES,
     PoseLandmark as L,
@@ -90,8 +91,7 @@ class IKDiagnostics:
     success: bool
 
 
-def _project_root() -> Path:
-    return Path(__file__).resolve().parents[3]
+_RESOURCES = ResourceLocator()
 
 
 def _unit(vector: object) -> FloatArray | None:
@@ -144,7 +144,9 @@ class MujocoIKRetargeter:
             raise ValueError("joint_specs must use canonical joint order")
         self.config = config or RetargetingConfig()
         self._clock = clock
-        path = Path(model_path or (_project_root() / "models/humanoid/scene_fixed.xml"))
+        path = Path(
+            model_path or _RESOURCES.model("humanoid", "scene_fixed.xml")
+        )
         self.model_path = path.resolve()
         self.model = mujoco.MjModel.from_xml_path(str(self.model_path))
         self.data = mujoco.MjData(self.model)

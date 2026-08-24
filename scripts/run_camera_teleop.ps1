@@ -38,16 +38,23 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
-$venvPython = Join-Path $projectRoot ".venv\Scripts\python.exe"
 $setupScript = Join-Path $PSScriptRoot "setup_windows.ps1"
-$env:MPLCONFIGDIR = Join-Path $projectRoot ".cache\matplotlib"
-$env:PIP_CACHE_DIR = Join-Path $projectRoot ".cache\pip"
-New-Item -ItemType Directory -Force -Path $env:MPLCONFIGDIR, $env:PIP_CACHE_DIR | Out-Null
+$uvCommand = Get-Command "uv" -ErrorAction SilentlyContinue
+if (-not $uvCommand) {
+    $uvCommand = Get-Command (Join-Path $projectRoot ".venv\Scripts\uv.exe") -ErrorAction SilentlyContinue
+}
 
-$needsSetup = -not (Test-Path -LiteralPath $venvPython -PathType Leaf)
+$needsSetup = -not $uvCommand -or -not (Test-Path -LiteralPath (Join-Path $projectRoot ".venv"))
 if (-not $needsSetup) {
-    & $venvPython -c "import cv2, mediapipe, mujoco, websocket, robot_human_interface; assert callable(websocket.create_connection)" 2>$null
-    $needsSetup = $LASTEXITCODE -ne 0
+    Push-Location $projectRoot
+    try {
+        & $uvCommand.Source run --locked --no-sync python -c `
+            "import cv2, mediapipe, mujoco, websocket, robot_human_interface; assert callable(websocket.create_connection)" 2>$null
+        $needsSetup = $LASTEXITCODE -ne 0
+    }
+    finally {
+        Pop-Location
+    }
 }
 
 if ($needsSetup) {
@@ -57,6 +64,10 @@ if ($needsSetup) {
     }
     else {
         & $setupScript
+    }
+    $uvCommand = Get-Command "uv" -ErrorAction SilentlyContinue
+    if (-not $uvCommand) {
+        $uvCommand = Get-Command (Join-Path $projectRoot ".venv\Scripts\uv.exe") -ErrorAction Stop
     }
 }
 
@@ -168,7 +179,13 @@ if ($AdditionalArguments) {
     $teleopArguments += $AdditionalArguments
 }
 
-& $venvPython @teleopArguments
-if ($LASTEXITCODE -ne 0) {
-    throw "Camera teleoperation exited with code $LASTEXITCODE."
+Push-Location $projectRoot
+try {
+    & $uvCommand.Source run --locked --no-sync python @teleopArguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Camera teleoperation exited with code $LASTEXITCODE."
+    }
+}
+finally {
+    Pop-Location
 }

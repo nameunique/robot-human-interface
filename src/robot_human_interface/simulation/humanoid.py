@@ -13,6 +13,8 @@ import numpy as np
 import yaml
 from numpy.typing import NDArray
 
+from robot_human_interface.resources import ResourceLocator
+
 from .types import HumanoidState, LatestJointCommandBuffer
 
 
@@ -46,16 +48,15 @@ def _configure_view_options(options: mujoco.MjvOption, view_mode: ViewMode) -> N
         options.flags[mujoco.mjtVisFlag.mjVIS_AUTOCONNECT] = 1
 
 
-def _project_root() -> Path:
-    return Path(__file__).resolve().parents[3]
+_RESOURCES = ResourceLocator()
 
 
 def _default_joint_config() -> Path:
-    return _project_root() / "config" / "joints.yaml"
+    return _RESOURCES.config("joints.yaml")
 
 
 def _default_scene(scene: SceneName) -> Path:
-    return _project_root() / "models" / "humanoid" / f"scene_{scene}.xml"
+    return _RESOURCES.model("humanoid", f"scene_{scene}.xml")
 
 
 class HumanoidSimulation:
@@ -136,7 +137,7 @@ class HumanoidSimulation:
         else:
             path = Path(scene)
             if not path.is_absolute():
-                path = (_project_root() / path).resolve()
+                path = _RESOURCES.locate(path)
         if not path.is_file():
             raise FileNotFoundError(f"MuJoCo scene not found: {path}")
         return path.resolve()
@@ -445,6 +446,15 @@ class HumanoidSimulation:
             self._viewer_options_dirty.clear()
         viewer.sync()
 
+    def close_viewer(self) -> None:
+        """Close only the passive viewer while keeping simulation state alive."""
+
+        viewer, self._viewer = self._viewer, None
+        if viewer is not None:
+            viewer.close()
+        self._viewer_toggle_requested.clear()
+        self._viewer_options_dirty.clear()
+
     def _assert_finite(self) -> None:
         arrays = (self.data.qpos, self.data.qvel, self.data.ctrl, self.data.actuator_force)
         if not all(np.isfinite(values).all() for values in arrays):
@@ -455,11 +465,7 @@ class HumanoidSimulation:
             raise RuntimeError("HumanoidSimulation is closed")
 
     def close(self) -> None:
-        if self._viewer is not None:
-            self._viewer.close()
-            self._viewer = None
-        self._viewer_toggle_requested.clear()
-        self._viewer_options_dirty.clear()
+        self.close_viewer()
         self._closed = True
 
     def __enter__(self) -> "HumanoidSimulation":

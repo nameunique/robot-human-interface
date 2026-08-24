@@ -4,9 +4,11 @@
 
 `камера/MP4 → MediaPipe → SkeletonFrame → constrained MuJoCo IK → motor-angle safety → 20-DOF MuJoCo / legacy WebSocket`.
 
-Проект работает нативно на Windows без виртуальной машины. Все зависимости,
-модель MediaPipe и копии исходных FBX находятся внутри этого репозитория. Unity
-использовался только как read-only источник параметров и визуальной геометрии.
+Основная точка входа — тёмный русскоязычный PyQt6-пульт `humanoid-interface`.
+Исходный headless/legacy CLI `robot-camera-teleop` сохранён для тестов,
+автоматизации и воспроизводимых экспериментов. Проект рассчитан на CPython 3.12
+x86-64 в Windows и Ubuntu 24.04; Unity использовался только как read-only
+источник параметров, визуальной геометрии и формата legacy WebSocket-команд.
 
 > Это исследовательский прототип, а не готовый контур безопасности реального
 > робота. В free-base MuJoCo уже работает классический motor-angle controller:
@@ -17,6 +19,24 @@
 > запуск использует свободную базу без weld; grounded-fixed сцена доступна только
 > как явный диагностический режим `-FixedBase`.
 
+## Основной запуск GUI
+
+После подготовки окружения операторский пульт запускается из любой директории:
+
+```powershell
+& "C:\path\to\robot-human-interface\scripts\run_gui.ps1"
+```
+
+```bash
+bash /path/to/robot-human-interface/scripts/run_gui.sh
+```
+
+В GUI выбираются шесть встроенных эталонных роликов, пользовательские видео или
+камера; оттуда же открывается отдельное штатное окно MuJoCo. Отправка на
+физического робота при каждом старте выключена и требует отдельного ручного
+подтверждения. Подробнее об окружении, системных библиотеках, пользовательских
+данных и будущей сборке: [`docs/platform_setup.md`](docs/platform_setup.md).
+
 ## Windows: пошаговый запуск
 
 Все команды ниже нужно вводить в **PowerShell**, а не в Python-консоль. Подойдёт
@@ -24,27 +44,20 @@ Windows Terminal с профилем PowerShell или обычное прило
 PowerShell». Запуск от администратора не требуется. В примеры не нужно копировать
 приглашение вида `PS C:\...>` — вводите только сами команды из блоков.
 
-### 1. Один раз установите Python 3.12 x64
+### 1. Один раз установите uv
 
-При установке Python желательно включить пункт `Add python.exe to PATH`. MuJoCo
-отдельно устанавливать в Windows не нужно: он будет установлен в локальное
-окружение проекта.
+`uv` создаёт `.venv`, подбирает CPython 3.12 и синхронизирует универсальный
+`uv.lock`. MuJoCo и Python отдельно подготавливать не требуется.
 
-Откройте PowerShell и проверьте версию:
-
-```powershell
-python --version
-```
-
-Ожидаемый результат начинается с `Python 3.12`. Посмотреть, какой исполняемый
-файл найден Windows, можно так:
+Откройте PowerShell и выполните:
 
 ```powershell
-where.exe python
+winget install --id astral-sh.uv -e
+uv --version
 ```
 
-Если в системе несколько Python, запомните полный путь к версии 3.12 — его можно
-передать скрипту на шаге 5.
+После установки может понадобиться открыть новое окно PowerShell, чтобы команда
+`uv` появилась в `PATH`.
 
 ### 2. В PowerShell перейдите в папку проекта
 
@@ -94,13 +107,12 @@ Get-PnpDevice -Class Camera
 .\scripts\setup_windows.ps1
 ```
 
-Скрипт создаст `.venv` внутри `robot-human-interface`, установит точные версии
-из `requirements.lock.txt` и сам проект. Глобальный Python и другие проекты не
-изменяются. Повторный вызов безопасен: существующая `.venv` будет использована
-повторно.
+Скрипт создаст `.venv` внутри `robot-human-interface`, установит CPython 3.12 и
+точные версии из `uv.lock`. Глобальный Python и другие проекты не изменяются.
+Повторный вызов синхронизирует окружение с тем же lock-файлом.
 
-Если скрипт не нашёл Python 3.12 автоматически, укажите полный путь, полученный
-на шаге 1. Пример:
+При необходимости можно запретить загрузку managed Python и передать уже
+установленный CPython 3.12 x64 явно:
 
 ```powershell
 .\scripts\setup_windows.ps1 -PythonExe "C:\Program Files\Python312\python.exe"
@@ -108,7 +120,14 @@ Get-PnpDevice -Class Camera
 
 Успешная установка заканчивается сообщением `Windows setup complete`.
 
-### 6. Первый безопасный запуск без камеры
+### 6. Первый запуск операторского GUI
+
+```powershell
+.\scripts\run_gui.ps1
+```
+
+Для camera-free проверки старого автоматизируемого контура используйте
+синтетический скелет:
 
 Сначала проверьте весь pipeline на синтетическом скелете:
 
@@ -131,9 +150,10 @@ Get-PnpDevice -Class Camera
 
 ### 7. Запуск на встроенном MP4
 
-В репозитории есть два лицензированных видео с человеком в полный рост. По
-умолчанию запускается медленный 65-секундный тест: сначала плавные движения
-руками, затем баланс последовательно на каждой ноге. Он проходит через тот же
+В репозитории есть шесть эталонных видео с человеком в полный рост. Legacy CLI
+предлагает два именованных demo-варианта; по умолчанию запускается медленный
+65-секундный тест: сначала плавные движения руками, затем баланс последовательно
+на каждой ноге. Все шесть роликов доступны в GUI и проходят через тот же
 MediaPipe → retargeting → MuJoCo pipeline, что и камера:
 
 ```powershell
@@ -734,7 +754,7 @@ assets/                         MediaPipe bundle, тестовый MP4 и коп
 config/                         joint/camera/retargeting/balance параметры
 docs/                           протокол извлечения и ограничения
 models/humanoid/                MJCF, fixed/free scenes и 21 visual OBJ
-scripts/                        setup, запуск и проверки Windows
+scripts/                        setup, GUI/CLI-запуск и проверки Windows/Ubuntu
 src/robot_human_interface/
   app/                          end-to-end цикл и CLI
   camera/                       camera, replay, synthetic frame sources
@@ -748,27 +768,23 @@ tests/                          unit, model, physics и integration tests
 tools/fbx_converter_unity/      изолированный FBX → OBJ batch-конвертер
 ```
 
-## Переезд на Ubuntu 24.04
+## Ubuntu 24.04
 
-MuJoCo не требует Ubuntu 22.04. Ubuntu 24.04 содержит Python 3.12 и является
-правильной целью для будущего ROS 2 Jazzy. Код использует `pathlib` и не требует
-Windows API; платформенными остаются только PowerShell wrappers.
-
-Базовая установка без ROS:
+Ubuntu 24.04 x86-64 с CPython 3.12 — штатная поддерживаемая среда, а не
+отложенная миграция. Подготовка Qt/XCB, OpenGL/GLFW, V4L2, mDNS, Xvfb, uv и
+локальной `.venv` выполняется одним скриптом:
 
 ```bash
-sudo apt update
-sudo apt install python3-venv libgl1 libglib2.0-0 libportaudio2
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.lock.txt
-python -m pip install --no-deps --no-build-isolation -e .
-python -m pytest
-python -m robot_human_interface.app.teleop --source synthetic --headless --max-frames 120
+bash scripts/setup_ubuntu.sh
+bash scripts/run_gui.sh
+bash scripts/run_checks.sh
 ```
 
-Для GUI нужен рабочий OpenGL/display. На headless-машине остаются unit tests и
-physics loop; camera/display можно подключать отдельно.
+Все Python-зависимости устанавливаются исключительно через универсальный
+`uv.lock` командой `uv sync --locked`. На headless-машине Qt проверяется с
+`QT_QPA_PLATFORM=offscreen`, а MuJoCo smoke — под Xvfb. Полный список apt-
+пакетов, устройство каталогов и ручная приёмка приведены в
+[`docs/platform_setup.md`](docs/platform_setup.md).
 
 Следующий инфраструктурный этап на Ubuntu:
 

@@ -27,6 +27,7 @@ from urllib.parse import urlsplit
 import numpy as np
 
 from robot_human_interface.retargeting import load_joint_specs
+from robot_human_interface.resources import ResourceLocator
 from robot_human_interface.skeleton import JOINT_NAMES, RobotJointCommand
 
 
@@ -59,7 +60,7 @@ ConnectionFactory = Callable[[str, float], _WebSocketConnection]
 
 
 def _default_joint_config() -> Path:
-    return Path(__file__).resolve().parents[3] / "config" / "joints.yaml"
+    return ResourceLocator().config("joints.yaml")
 
 
 def _limits_from_specs(
@@ -288,6 +289,12 @@ class WebSocketTransport:
             self._connection = factory(self.url, self.timeout_s)
         return self._connection
 
+    def connect(self) -> None:
+        """Establish the socket without sending an application message."""
+
+        with self._lock:
+            self._connect_locked()
+
     def send(self, payload: str) -> None:
         if not isinstance(payload, str):
             raise TypeError("payload must be a text string")
@@ -328,7 +335,11 @@ class WebSocketTransport:
                         break
                     self._last_receive_error = error
                     self._close_locked()
-                    return
+                    # A successful send followed by a broken receive channel is
+                    # still a failed robot link.  Propagate it so the physical
+                    # output state machine can enter DEGRADED instead of lazily
+                    # reconnecting on the next armed heartbeat.
+                    raise
                 self._received_count += 1
                 self._last_receive_error = None
                 if message is None or message == "":
@@ -340,6 +351,9 @@ class WebSocketTransport:
                 except Exception as error:
                     self._last_receive_error = error
                     self._close_locked()
+                    raise
+                else:
+                    self._last_receive_error = None
 
     def _close_locked(self) -> None:
         connection, self._connection = self._connection, None

@@ -11,8 +11,9 @@ from typing import Any, Sequence
 
 import numpy as np
 
+from robot_human_interface.resources import ResourceLocator
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+PROJECT_ROOT = ResourceLocator().project_root
 WINDOW_NAME = "Robot human interface - camera skeleton"
 BUNDLED_VIDEO_PATHS = {
     "jumping-jacks": PROJECT_ROOT / "assets" / "videos" / "jumping_jacks_demo.mp4",
