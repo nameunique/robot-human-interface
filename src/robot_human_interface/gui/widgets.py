@@ -7,8 +7,8 @@ from pathlib import Path
 import platform
 from typing import Iterable, Mapping
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QPixmap
+from PyQt6.QtCore import QPointF, QRectF, Qt, pyqtSignal
+from PyQt6.QtGui import QColor, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
     QFormLayout,
     QFrame,
     QGridLayout,
+    QHeaderView,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -169,12 +170,12 @@ class SourcePanel(QFrame):
         user_layout.setContentsMargins(0, 0, 0, 0)
         user_layout.addWidget(self.user_list, 1)
         user_buttons = QHBoxLayout()
-        add_button = QPushButton("Добавить")
-        remove_button = QPushButton("Удалить путь")
-        add_button.clicked.connect(self.add_user_video)
-        remove_button.clicked.connect(self.remove_user_video)
-        user_buttons.addWidget(add_button)
-        user_buttons.addWidget(remove_button)
+        self.add_button = QPushButton("Добавить")
+        self.remove_button = QPushButton("Удалить путь")
+        self.add_button.clicked.connect(self.add_user_video)
+        self.remove_button.clicked.connect(self.remove_user_video)
+        user_buttons.addWidget(self.add_button)
+        user_buttons.addWidget(self.remove_button)
         user_layout.addLayout(user_buttons)
         self.tabs.addTab(user_page, "Мои")
 
@@ -196,15 +197,15 @@ class SourcePanel(QFrame):
         self.camera_fps.setRange(5, 120)
         self.camera_fps.setValue(30)
         self.camera_mirror = QCheckBox("Зеркальный preview")
-        use_camera = QPushButton("Использовать камеру")
-        use_camera.setProperty("primary", True)
-        use_camera.clicked.connect(self.select_camera)
+        self.use_camera_button = QPushButton("Использовать камеру")
+        self.use_camera_button.setProperty("primary", True)
+        self.use_camera_button.clicked.connect(self.select_camera)
         camera_layout.addRow("Устройство", self.camera_index)
         camera_layout.addRow("Backend", self.camera_backend)
         camera_layout.addRow("Разрешение", self.camera_resolution)
         camera_layout.addRow("FPS", self.camera_fps)
         camera_layout.addRow("", self.camera_mirror)
-        camera_layout.addRow("", use_camera)
+        camera_layout.addRow("", self.use_camera_button)
         self.tabs.addTab(camera_page, "Камера")
 
     @staticmethod
@@ -311,9 +312,45 @@ class SourcePanel(QFrame):
         self._current = source
         self.source_selected.emit(source)
 
+    def camera_settings(self) -> dict[str, object]:
+        return {
+            "index": self.camera_index.value(),
+            "backend": self.camera_backend.currentText(),
+            "resolution": self.camera_resolution.currentText(),
+            "fps": self.camera_fps.value(),
+            "mirror": self.camera_mirror.isChecked(),
+        }
+
+    def restore_camera_settings(self, values: Mapping[str, object]) -> None:
+        try:
+            self.camera_index.setValue(int(values.get("index", 0)))
+            backend = str(values.get("backend", ""))
+            if self.camera_backend.findText(backend) >= 0:
+                self.camera_backend.setCurrentText(backend)
+            resolution = str(values.get("resolution", ""))
+            if self.camera_resolution.findText(resolution) >= 0:
+                self.camera_resolution.setCurrentText(resolution)
+            self.camera_fps.setValue(int(values.get("fps", 30)))
+            self.camera_mirror.setChecked(bool(values.get("mirror", False)))
+        except (TypeError, ValueError):
+            return
+
+    def set_controls_locked(self, locked: bool) -> None:
+        enabled = not bool(locked)
+        self.tabs.setEnabled(enabled)
+        self.add_button.setEnabled(enabled)
+        self.remove_button.setEnabled(enabled)
+        self.use_camera_button.setEnabled(enabled)
+
 
 class MetricCard(QFrame):
-    def __init__(self, label: str, value: str, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        label: str,
+        value: str,
+        status: str = "Нет данных",
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self.setStyleSheet(f"MetricCard{{background:{COLORS['panel']};border:1px solid {COLORS['border']};border-radius:10px}}")
         layout = QVBoxLayout(self)
@@ -323,17 +360,210 @@ class MetricCard(QFrame):
         name.setProperty("eyebrow", True)
         self.value = QLabel(value)
         self.value.setProperty("metric", True)
-        self.status = QLabel("IDLE")
+        self.status = QLabel(status)
         self.status.setStyleSheet(f"color:{COLORS['muted']};font-size:10px;font-weight:600")
         layout.addWidget(name)
         layout.addWidget(self.value)
         layout.addWidget(self.status)
 
-    def update_value(self, value: str, state: str = "success") -> None:
+    def update_value(
+        self,
+        value: str,
+        state: str = "neutral",
+        status: str | None = None,
+    ) -> None:
         self.value.setText(value)
         color = {"success": COLORS["success"], "warning": COLORS["warning"], "critical": COLORS["critical"]}.get(state, COLORS["muted"])
         self.status.setStyleSheet(f"color:{color};font-size:10px;font-weight:600")
-        self.status.setText({"success": "TRACKING OK", "warning": "CHECK", "critical": "DEGRADED"}.get(state, "IDLE"))
+        if status is not None:
+            self.status.setText(status)
+
+    def clear(self) -> None:
+        self.update_value("—", "neutral", "Нет данных")
+
+
+class SupportPolygonWidget(QWidget):
+    """Small honest top-view of measured MuJoCo feet and CoM projection."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setMinimumHeight(92)
+        self.setMaximumHeight(112)
+        self.setToolTip(
+            "Проекция CoM и приближённый опорный многоугольник по положениям стоп MuJoCo"
+        )
+        self._right: tuple[float, float] | None = None
+        self._left: tuple[float, float] | None = None
+        self._com: tuple[float, float] | None = None
+        self._right_contact: bool | None = None
+        self._left_contact: bool | None = None
+        self._phase = ""
+
+    @staticmethod
+    def _point(value: object | None) -> tuple[float, float] | None:
+        try:
+            values = tuple(value)  # type: ignore[arg-type]
+            x, y = float(values[0]), float(values[1])
+        except (TypeError, ValueError, IndexError):
+            return None
+        return x, y
+
+    @staticmethod
+    def _contact(
+        telemetry: Mapping[str, object],
+        state: object | None,
+        side: str,
+    ) -> bool | None:
+        explicit = telemetry.get(f"{side}_foot_in_contact")
+        if type(explicit) is bool:
+            return explicit
+        state_contact = getattr(state, f"{side}_foot_in_contact", None)
+        if type(state_contact) is bool:
+            return state_contact
+        force = telemetry.get(
+            f"{side}_foot_force_n",
+            telemetry.get(
+                f"{side}_foot_normal_force_n",
+                getattr(state, f"{side}_foot_normal_force_n", None),
+            ),
+        )
+        try:
+            return float(force) > 1e-3
+        except (TypeError, ValueError, OverflowError):
+            return None
+
+    @property
+    def active_contact_count(self) -> int | None:
+        """Number of measured load-bearing feet, or ``None`` when unknown."""
+
+        if self._right_contact is None or self._left_contact is None:
+            return None
+        return int(self._right_contact) + int(self._left_contact)
+
+    def update_telemetry(self, telemetry: Mapping[str, object]) -> None:
+        state = telemetry.get("humanoid_state") or telemetry.get("simulation_state")
+        self._right = self._point(
+            telemetry.get(
+                "right_foot_position_m",
+                getattr(state, "right_foot_position_m", None),
+            )
+        )
+        self._left = self._point(
+            telemetry.get(
+                "left_foot_position_m",
+                getattr(state, "left_foot_position_m", None),
+            )
+        )
+        self._com = self._point(
+            telemetry.get(
+                "center_of_mass_position_m",
+                getattr(state, "center_of_mass_position_m", None),
+            )
+        )
+        self._right_contact = self._contact(telemetry, state, "right")
+        self._left_contact = self._contact(telemetry, state, "left")
+        self._phase = str(telemetry.get("support_phase", "") or "")
+        self.update()
+
+    def clear(self) -> None:
+        self._right = self._left = self._com = None
+        self._right_contact = self._left_contact = None
+        self._phase = ""
+        self.update()
+
+    def paintEvent(self, _event) -> None:  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        bounds = self.rect().adjusted(1, 1, -1, -1)
+        painter.setPen(QPen(QColor(COLORS["border"]), 1))
+        painter.setBrush(QColor(COLORS["panel"]))
+        painter.drawRoundedRect(bounds, 7, 7)
+        painter.setPen(QColor(COLORS["muted"]))
+        painter.drawText(8, 15, "ОПОРА · ВИД СВЕРХУ (MUJOCO)")
+        points = [point for point in (self._right, self._left, self._com) if point]
+        if (
+            not points
+            or self._right is None
+            or self._left is None
+            or self.active_contact_count is None
+            or self.active_contact_count == 0
+        ):
+            painter.drawText(
+                bounds,
+                Qt.AlignmentFlag.AlignCenter,
+                "Нет достоверных данных об опоре",
+            )
+            return
+
+        xs = [point[0] for point in points]
+        ys = [point[1] for point in points]
+        center_x = (min(xs) + max(xs)) / 2.0
+        center_y = (min(ys) + max(ys)) / 2.0
+        span = max(max(xs) - min(xs), max(ys) - min(ys), 0.32)
+        scale = min(max(1.0, bounds.width() - 36), max(1.0, bounds.height() - 34)) / span
+
+        def screen(point: tuple[float, float]) -> QPointF:
+            return QPointF(
+                bounds.center().x() + (point[0] - center_x) * scale,
+                bounds.center().y() - (point[1] - center_y) * scale + 8,
+            )
+
+        right = screen(self._right)
+        left = screen(self._left)
+        foot_w = max(10.0, min(22.0, 0.09 * scale))
+        foot_h = max(18.0, min(38.0, 0.18 * scale))
+        foot_rects = (
+            (
+                QRectF(
+                    right.x() - foot_w / 2,
+                    right.y() - foot_h / 2,
+                    foot_w,
+                    foot_h,
+                ),
+                "R",
+                bool(self._right_contact),
+            ),
+            (
+                QRectF(
+                    left.x() - foot_w / 2,
+                    left.y() - foot_h / 2,
+                    foot_w,
+                    foot_h,
+                ),
+                "L",
+                bool(self._left_contact),
+            ),
+        )
+        support_rects = [rect for rect, _label, contact in foot_rects if contact]
+        polygon = QRectF(support_rects[0])
+        for rect in support_rects[1:]:
+            polygon = polygon.united(rect)
+        painter.setPen(QPen(QColor(COLORS["accent"]), 1))
+        translucent = QColor(COLORS["accent"])
+        translucent.setAlpha(35)
+        painter.setBrush(translucent)
+        painter.drawRoundedRect(polygon, 5, 5)
+        for rect, label, contact in foot_rects:
+            painter.setPen(
+                QPen(QColor(COLORS["accent"] if contact else COLORS["muted"]), 1)
+            )
+            foot_fill = QColor(COLORS["raised"])
+            foot_fill.setAlpha(255 if contact else 45)
+            painter.setBrush(foot_fill)
+            painter.drawRoundedRect(rect, 3, 3)
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, label)
+        if self._com is not None:
+            com = screen(self._com)
+            inside = polygon.adjusted(-2, -2, 2, 2).contains(com)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(COLORS["success"] if inside else COLORS["critical"]))
+            painter.drawEllipse(com, 4.5, 4.5)
+        painter.setPen(QColor(COLORS["muted"]))
+        painter.drawText(
+            bounds.adjusted(7, 0, -7, -4),
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom,
+            self._phase or "—",
+        )
 
 
 class TelemetryPanel(QFrame):
@@ -366,54 +596,105 @@ class TelemetryPanel(QFrame):
         skeleton_layout = QVBoxLayout(skeleton)
         skeleton_layout.setContentsMargins(0, 0, 0, 0)
         metrics = QHBoxLayout()
-        self.quality_card = MetricCard("QUALITY", "0%")
-        self.rate_card = MetricCard("PIPELINE", "0 Hz")
+        self.quality_card = MetricCard("QUALITY", "—")
+        self.rate_card = MetricCard("PIPELINE", "—")
         metrics.addWidget(self.quality_card)
         metrics.addWidget(self.rate_card)
         skeleton_layout.addLayout(metrics)
         label = QLabel("КОМАНДНЫЕ УГЛЫ · 20")
         label.setProperty("eyebrow", True)
         skeleton_layout.addWidget(label)
-        self.angles_table = QTableWidget(len(JOINT_NAMES), 2)
-        self.angles_table.setHorizontalHeaderLabels(("UNITY JOINT", "DEG"))
-        self.angles_table.verticalHeader().setVisible(False)
+        self.angles_table = QTableWidget(len(JOINT_NAMES), 4)
+        self.angles_table.setHorizontalHeaderLabels(
+            ("СУСТАВ UNITY", "IK / RAW", "SAFE-ЦЕЛЬ", "ФАКТ MUJOCO")
+        )
+        group_labels = [""] * len(JOINT_NAMES)
+        group_labels[0], group_labels[6], group_labels[18] = "РУКИ", "НОГИ", "ГОЛОВА"
+        self.angles_table.setVerticalHeaderLabels(group_labels)
+        self.angles_table.verticalHeader().setVisible(True)
+        self.angles_table.verticalHeader().setMinimumWidth(44)
+        self.angles_table.verticalHeader().setDefaultAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
         self.angles_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.angles_table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
         self.angles_table.setAlternatingRowColors(True)
+        self.angles_table.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
         self.angles_table.verticalHeader().setDefaultSectionSize(20)
         self.angles_table.horizontalHeader().setStretchLastSection(True)
-        self.angles_table.setColumnWidth(0, 205)
+        self.angles_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
+        self.angles_table.setColumnWidth(0, 76)
+        self.angles_table.setColumnWidth(1, 42)
+        self.angles_table.setColumnWidth(2, 48)
+        self.angles_table.setColumnWidth(3, 58)
+        for column in range(self.angles_table.columnCount()):
+            header = self.angles_table.horizontalHeaderItem(column)
+            if header is not None:
+                header.setToolTip(header.text())
         for row, name in enumerate(JOINT_NAMES):
-            self.angles_table.setItem(row, 0, QTableWidgetItem(name))
-            value = QTableWidgetItem("0.0°")
-            value.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            value.setForeground(QColor(COLORS["accent"]))
-            self.angles_table.setItem(row, 1, value)
+            group = "РУКИ" if row < 6 else ("НОГИ" if row < 18 else "ГОЛОВА")
+            joint = QTableWidgetItem(name)
+            joint.setToolTip(group)
+            self.angles_table.setItem(row, 0, joint)
+            for column, color in (
+                (1, COLORS["muted"]),
+                (2, COLORS["accent"]),
+                (3, COLORS["success"]),
+            ):
+                value = QTableWidgetItem("—")
+                value.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                value.setForeground(QColor(color))
+                self.angles_table.setItem(row, column, value)
         skeleton_layout.addWidget(self.angles_table, 1)
+        self.real_feedback_note = QLabel(
+            "РЕАЛЬНЫЙ ФАКТ: — · legacy WebSocket не передаёт данные энкодеров"
+        )
+        self.real_feedback_note.setProperty("muted", True)
+        self.real_feedback_note.setWordWrap(True)
+        skeleton_layout.addWidget(self.real_feedback_note)
         self.tabs.addTab(skeleton, "Скелет")
 
         balance = QWidget()
         balance_layout = QVBoxLayout(balance)
         balance_layout.setContentsMargins(2, 6, 2, 2)
-        self.balance_status = StatusBadge("BALANCE READY", "success")
-        self.free_base_status = StatusBadge("FREE BASE", "info")
+        self.balance_status = StatusBadge("BALANCE · НЕ ПРОВЕРЕНО", "neutral")
+        self.free_base_status = StatusBadge("BASE · НЕ ПРОВЕРЕНО", "neutral")
         explanation = QLabel("Safe command проходит balance и ограничения суставов до симуляции и реального выхода.")
         explanation.setWordWrap(True)
         explanation.setProperty("muted", True)
         action_row = QHBoxLayout()
-        reset = QPushButton("Сброс")
-        calibrate = QPushButton("Калибровать")
+        self.reset_button = QPushButton("Сброс")
+        self.calibrate_button = QPushButton("Калибровать")
         self.pause_button = QPushButton("Пауза")
         self.pause_button.setEnabled(False)
-        reset.clicked.connect(self.reset_requested)
-        calibrate.clicked.connect(self.calibrate_requested)
+        self.reset_button.clicked.connect(self.reset_requested)
+        self.calibrate_button.clicked.connect(self.calibrate_requested)
         self.pause_button.clicked.connect(self.pause_requested)
         action_row.addWidget(self.pause_button)
-        action_row.addWidget(reset)
-        action_row.addWidget(calibrate)
+        action_row.addWidget(self.reset_button)
+        action_row.addWidget(self.calibrate_button)
         balance_layout.addWidget(self.balance_status)
         balance_layout.addWidget(self.free_base_status)
         balance_layout.addWidget(explanation)
+        self.support_polygon = SupportPolygonWidget()
+        balance_layout.addWidget(self.support_polygon)
+        self.balance_metrics = QLabel(
+            "Наклон / высота: — / —\n"
+            "CoM: —\n"
+            "Опора R/L: — / —\n"
+            "Силы стоп R/L: — / —\n"
+            "Фаза / контакты: — / —\n"
+            "Калибровка: —"
+        )
+        self.balance_metrics.setProperty("muted", True)
+        self.balance_metrics.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        balance_layout.addWidget(self.balance_metrics)
         balance_layout.addStretch(1)
         balance_layout.addLayout(action_row)
         self.tabs.addTab(balance, "Баланс")
@@ -444,19 +725,31 @@ class TelemetryPanel(QFrame):
         self.quality_card.update_value(
             f"{round(quality * 100)}%",
             "success" if quality >= .7 else ("warning" if quality >= .4 else "critical"),
+            "Хорошее слежение" if quality >= .7 else ("Проверьте позу" if quality >= .4 else "Слежение ненадёжно"),
         )
         telemetry = getattr(snapshot, "telemetry", {}) or {}
-        rate = telemetry.get("pipeline_hz", 20.0) if isinstance(telemetry, Mapping) else 20.0
-        self.rate_card.update_value(f"{float(rate):.0f} Hz", "success")
-        angles = getattr(snapshot, "angles_rad", None)
-        if angles is None:
-            command = getattr(snapshot, "safe_command", None)
-            angles = getattr(command, "positions_rad", ())
-        try:
-            for row, value in enumerate(tuple(angles)[: len(JOINT_NAMES)]):
-                self.angles_table.item(row, 1).setText(f"{degrees(float(value)):+.1f}°")
-        except (TypeError, ValueError):
-            pass
+        rate = telemetry.get("pipeline_hz") if isinstance(telemetry, Mapping) else None
+        if rate is None:
+            self.rate_card.clear()
+        else:
+            try:
+                self.rate_card.update_value(f"{float(rate):.1f} Hz", "success", "Измерено")
+            except (TypeError, ValueError):
+                self.rate_card.clear()
+        raw = getattr(getattr(snapshot, "raw_command", None), "positions_rad", None)
+        if raw is None:
+            raw = getattr(snapshot, "angles_rad", None)
+        safe = getattr(getattr(snapshot, "safe_command", None), "positions_rad", None)
+        actual = telemetry.get("joint_positions_rad") if isinstance(telemetry, Mapping) else None
+        lower = telemetry.get("joint_lower_limits_rad") if isinstance(telemetry, Mapping) else None
+        upper = telemetry.get("joint_upper_limits_rad") if isinstance(telemetry, Mapping) else None
+        self._set_angle_column(1, raw, lower, upper)
+        self._set_angle_column(2, safe, lower, upper)
+        self._set_angle_column(3, actual, lower, upper)
+        delta = telemetry.get("neural_delta_q_rad") if isinstance(telemetry, Mapping) else None
+        self._set_delta_column(delta)
+        self._update_balance_metrics(telemetry)
+        self.support_polygon.update_telemetry(telemetry)
         balance_active = getattr(snapshot, "balance_active", None)
         free_base = getattr(snapshot, "free_base_active", None)
         if type(balance_active) is bool and type(free_base) is bool:
@@ -464,16 +757,137 @@ class TelemetryPanel(QFrame):
 
     def set_safety_flags(self, known: bool, free_base: bool, balance_active: bool) -> None:
         if not known:
-            self.balance_status.set_status("BALANCE UNKNOWN", "critical")
-            self.free_base_status.set_status("BASE UNKNOWN", "critical")
+            self.balance_status.set_status("BALANCE · НЕ ПРОВЕРЕНО", "neutral")
+            self.free_base_status.set_status("BASE · НЕ ПРОВЕРЕНО", "neutral")
             return
         self.balance_status.set_status("BALANCE ACTIVE" if balance_active else "BALANCE OFF", "success" if balance_active else "critical")
         self.free_base_status.set_status("FREE BASE" if free_base else "FIXED BASE", "info" if free_base else "warning")
 
+    def _set_angle_column(
+        self,
+        column: int,
+        values: object | None,
+        lower_limits: object | None = None,
+        upper_limits: object | None = None,
+    ) -> None:
+        try:
+            sequence = tuple(values) if values is not None else ()
+        except TypeError:
+            sequence = ()
+        try:
+            lower = tuple(lower_limits) if lower_limits is not None else ()
+            upper = tuple(upper_limits) if upper_limits is not None else ()
+        except TypeError:
+            lower = upper = ()
+        default_color = {
+            1: COLORS["muted"],
+            2: COLORS["accent"],
+            3: COLORS["success"],
+            4: COLORS["warning"],
+        }.get(column, COLORS["muted"])
+        for row in range(len(JOINT_NAMES)):
+            item = self.angles_table.item(row, column)
+            item.setForeground(QColor(default_color))
+            item.setBackground(QColor("transparent"))
+            if row >= len(sequence):
+                item.setText("—")
+                continue
+            try:
+                value = float(sequence[row])
+                item.setText(f"{degrees(value):+.1f}°")
+                if row < len(lower) and row < len(upper):
+                    minimum, maximum = float(lower[row]), float(upper[row])
+                    span = maximum - minimum
+                    if span > 0.0:
+                        margin = min(value - minimum, maximum - value) / span
+                        if margin < 0.0:
+                            item.setForeground(QColor(COLORS["critical"]))
+                            background = QColor(COLORS["critical"])
+                            background.setAlpha(55)
+                            item.setBackground(background)
+                        elif margin <= 0.10:
+                            item.setForeground(QColor(COLORS["warning"]))
+                            background = QColor(COLORS["warning"])
+                            background.setAlpha(40)
+                            item.setBackground(background)
+            except (TypeError, ValueError):
+                item.setText("—")
+
+    def _set_delta_column(self, values: object | None) -> None:
+        has_delta = values is not None
+        if has_delta and self.angles_table.columnCount() == 4:
+            self.angles_table.setColumnCount(5)
+            self.angles_table.setHorizontalHeaderItem(4, QTableWidgetItem("Δq"))
+            for row in range(len(JOINT_NAMES)):
+                item = QTableWidgetItem("—")
+                item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                item.setForeground(QColor(COLORS["warning"]))
+                self.angles_table.setItem(row, 4, item)
+        elif not has_delta and self.angles_table.columnCount() == 5:
+            self.angles_table.setColumnCount(4)
+        if has_delta:
+            self._set_angle_column(4, values)
+
+    def _update_balance_metrics(self, telemetry: Mapping[str, object]) -> None:
+        def number(key: str, suffix: str, digits: int = 2) -> str:
+            value = telemetry.get(key)
+            try:
+                return f"{float(value):.{digits}f}{suffix}"
+            except (TypeError, ValueError):
+                return "—"
+
+        tilt = telemetry.get("base_tilt_rad")
+        try:
+            tilt_text = f"{degrees(float(tilt)):.1f}°"
+        except (TypeError, ValueError):
+            tilt_text = "—"
+        state = telemetry.get("humanoid_state") or telemetry.get("simulation_state")
+        com = telemetry.get("center_of_mass_position_m", getattr(state, "center_of_mass_position_m", None))
+        try:
+            com_text = ", ".join(f"{float(value):+.3f}" for value in tuple(com)[:3]) + " m"
+        except (TypeError, ValueError):
+            com_text = "—"
+        contacts = telemetry.get("contact_count", getattr(state, "contact_count", None))
+        contacts_text = "—" if contacts is None else str(contacts)
+        progress = telemetry.get("calibration_progress")
+        try:
+            progress_text = f"{max(0, min(100, round(float(progress) * 100)))}%"
+        except (TypeError, ValueError):
+            progress_text = "—"
+        def point(attribute: str) -> str:
+            values = telemetry.get(attribute, getattr(state, attribute, None))
+            try:
+                return "(" + ", ".join(f"{float(value):+.2f}" for value in tuple(values)[:2]) + ") m"
+            except (TypeError, ValueError):
+                return "—"
+        self.balance_metrics.setText(
+            f"Наклон / высота: {tilt_text} / {number('base_height_m', ' m')}\n"
+            f"CoM: {com_text}\n"
+            f"Опора R/L: {point('right_foot_position_m')} / {point('left_foot_position_m')}\n"
+            f"Силы стоп R/L: {number('right_foot_force_n', ' N', 1)} / {number('left_foot_force_n', ' N', 1)}\n"
+            f"Фаза / контакты: {telemetry.get('support_phase', '—') or '—'} / {contacts_text}\n"
+            f"Калибровка: {progress_text}"
+        )
+
+    def clear_snapshot(self) -> None:
+        self.quality_card.clear()
+        self.rate_card.clear()
+        for column in range(1, self.angles_table.columnCount()):
+            for row in range(self.angles_table.rowCount()):
+                self.angles_table.item(row, column).setText("—")
+        self.balance_metrics.setText(
+            "Наклон / высота: — / —\nCoM: —\nОпора R/L: — / —\nСилы стоп R/L: — / —\n"
+            "Фаза / контакты: — / —\nКалибровка: —"
+        )
+        self.support_polygon.clear()
+        self.set_safety_flags(False, False, False)
+
     def set_robot_state(self, state: str) -> None:
         state = state.upper()
         self.robot_state.setText(state)
-        self.connect_button.setText("Отключить" if state != "DISCONNECTED" else "Подключить")
+        transitions = {"CONNECTING", "ARMING", "DISARMING", "DISCONNECTING"}
+        self.connect_button.setText("Отключить" if state not in {"DISCONNECTED", "CONNECTING"} else ("Подключение…" if state == "CONNECTING" else "Подключить"))
+        self.connect_button.setEnabled(state not in transitions)
         self.robot_interlock.setEnabled(state in {"CONNECTED_DISARMED", "ARMED"})
         if state == "ARMED" and not self.robot_interlock.isChecked():
             self.robot_interlock.blockSignals(True)
@@ -488,6 +902,10 @@ class TelemetryPanel(QFrame):
             "CONNECTED_DISARMED": COLORS["accent"],
             "ARMED": COLORS["success"],
             "DEGRADED": COLORS["critical"],
+            "CONNECTING": COLORS["warning"],
+            "ARMING": COLORS["warning"],
+            "DISARMING": COLORS["warning"],
+            "DISCONNECTING": COLORS["warning"],
         }
         self.robot_state.setStyleSheet(f"color:{colors.get(state, COLORS['muted'])};font-size:10px;font-weight:600")
 

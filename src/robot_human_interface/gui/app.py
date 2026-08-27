@@ -44,6 +44,31 @@ def create_application(argv: Sequence[str] | None = None) -> QApplication:
     return app
 
 
+def _exec_with_worker_shutdown(app: QApplication, worker: object) -> int:
+    """Run Qt and cooperatively join the pipeline on every exit path."""
+
+    shutdown_complete = False
+
+    def shutdown_worker() -> None:
+        nonlocal shutdown_complete
+        if shutdown_complete:
+            return
+        # PipelineWorker owns camera, simulator and recorder resources.  Let
+        # its normal cleanup finish; QThread.terminate() would bypass it.
+        worker.request_shutdown()  # type: ignore[attr-defined]
+        worker.wait()  # type: ignore[attr-defined]
+        shutdown_complete = True
+
+    app.aboutToQuit.connect(shutdown_worker)
+    try:
+        return int(app.exec())
+    finally:
+        # ``aboutToQuit`` covers QApplication.quit(); the finally block also
+        # protects unusual event-loop failures and future alternate exits.
+        shutdown_worker()
+        app.aboutToQuit.disconnect(shutdown_worker)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = list(argv) if argv is not None else list(sys.argv[1:])
     options = build_parser().parse_args(arguments)
@@ -59,7 +84,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         window.showMaximized()
     else:
         window.show()
-    return int(app.exec())
+    return _exec_with_worker_shutdown(app, window.worker)
 
 
 if __name__ == "__main__":

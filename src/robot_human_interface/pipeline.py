@@ -12,6 +12,7 @@ from typing import Any
 
 import numpy as np
 
+from robot_human_interface.playback import PlaybackState
 from robot_human_interface.protocol import finalize_safe_command
 from robot_human_interface.resources import ResourceLocator
 from robot_human_interface.session import (
@@ -51,6 +52,7 @@ class DefaultTeleopPipeline:
         self._previous_frame_timestamp_s: float | None = None
         self._physics_accumulator_s = 0.0
         self._last_safe_command: Any | None = None
+        self._suppress_safe_command_once = False
 
     def _make_perception(self) -> tuple[Any, Any]:
         source_spec = self.config.source
@@ -194,6 +196,82 @@ class DefaultTeleopPipeline:
         self._require_started()
         return self._simulation
 
+    @property
+    def playback_state(self) -> PlaybackState | None:
+        source = self._source
+        if source is None:
+            return None
+        state = getattr(source, "playback_state", None)
+        if state is None:
+            return None
+        if not isinstance(state, PlaybackState):
+            raise TypeError("source playback_state must be a PlaybackState")
+        return state
+
+    def _playback_call(self, method_name: str, *args: object) -> PlaybackState:
+        self._require_started()
+        method = getattr(self._source, method_name, None)
+        if not callable(method):
+            raise NotImplementedError(
+                f"source does not support playback operation {method_name}"
+            )
+        state = method(*args)
+        if not isinstance(state, PlaybackState):
+            state = self.playback_state
+        if not isinstance(state, PlaybackState):
+            raise TypeError(f"{method_name} must return a PlaybackState")
+        return state
+
+    def seek(self, position_s: float) -> PlaybackState:
+        state = self._playback_call("seek", position_s)
+        self._reset_temporal_state()
+        return state
+
+    def step_relative(self, delta_frames: int) -> PlaybackState:
+        state = self._playback_call("step_relative", delta_frames)
+        self._reset_temporal_state()
+        return state
+
+    def set_rate(self, rate: float) -> PlaybackState:
+        return self._playback_call("set_rate", rate)
+
+    def set_loop(
+        self,
+        enabled: bool,
+        start_s: float = 0.0,
+        end_s: float | None = None,
+    ) -> PlaybackState:
+        state = self._playback_call("set_loop", enabled, start_s, end_s)
+        self._reset_temporal_state()
+        return state
+
+    def _reset_temporal_state(self) -> None:
+        """Reset time-dependent state without discarding accepted calibration."""
+
+        pose_reset = getattr(self._pose, "reset_temporal", None)
+        if callable(pose_reset):
+            pose_reset()
+        retargeting_reset = getattr(self._retargeter, "reset_temporal", None)
+        if callable(retargeting_reset):
+            retargeting_reset()
+        if self._simulation is not None:
+            self._simulation.reset()
+        for resetter in (
+            self._balance_controller,
+            self._support_machine,
+            self._support_latch,
+        ):
+            reset = getattr(resetter, "reset", None)
+            if callable(reset):
+                reset()
+        intent_reset = getattr(self._support_estimator, "reset_temporal", None)
+        if callable(intent_reset):
+            intent_reset()
+        self._previous_frame_timestamp_s = None
+        self._physics_accumulator_s = 0.0
+        self._last_safe_command = None
+        self._suppress_safe_command_once = True
+
     def _tracking_quality(self, skeleton: Any | None) -> float:
         if skeleton is None:
             return 0.0
@@ -235,6 +313,16 @@ class DefaultTeleopPipeline:
         frame = self._source.read()
         if frame is None:
             return None
+        playback = self.playback_state
+        if (
+            playback is not None
+            and playback.discontinuity_reason is not None
+            and not self._suppress_safe_command_once
+        ):
+            # The source reports the discontinuity on the first decoded frame,
+            # allowing externally initiated seeks and automatic loop wraps to
+            # share the same fail-closed reset path.
+            self._reset_temporal_state()
         skeleton = self._pose.estimate(frame)
         support_estimate = self._support_estimator.update(
             skeleton,
@@ -309,13 +397,22 @@ class DefaultTeleopPipeline:
         upright = 1.0 - 2.0 * (quaternion[1] ** 2 + quaternion[2] ** 2)
         tilt_rad = float(np.arccos(np.clip(upright, -1.0, 1.0)))
         telemetry = {
+            # Preserve the complete immutable MuJoCo state for research
+            # recording.  GUI cards may still consume the individual keys.
+            "humanoid_state": state,
             "base_height_m": float(state.base_position_m[2]),
             "base_tilt_rad": tilt_rad,
             "simulation_time_s": float(state.simulation_time_s),
             "joint_positions_rad": state.joint_positions_rad,
             "joint_velocities_rad_s": state.joint_velocities_rad_s,
+            "joint_lower_limits_rad": self._simulation.lower_limits_rad,
+            "joint_upper_limits_rad": self._simulation.upper_limits_rad,
             "right_foot_force_n": float(state.right_foot_normal_force_n),
             "left_foot_force_n": float(state.left_foot_normal_force_n),
+            # Contact-authoritative flags keep operator support visualization
+            # from treating a swing foot as load-bearing.
+            "right_foot_in_contact": bool(state.right_foot_in_contact),
+            "left_foot_in_contact": bool(state.left_foot_in_contact),
             "support_intent": support_estimate.intent.value,
             "support_phase": self._support_machine.phase.value,
             "support_diagnostics": support_diagnostics,
@@ -336,7 +433,7 @@ class DefaultTeleopPipeline:
         }
         finalized_safe_command = (
             None
-            if safe_command is None
+            if safe_command is None or self._suppress_safe_command_once
             else finalize_safe_command(
                 safe_command,
                 free_base_active=bool(self.config.free_base),
@@ -356,7 +453,9 @@ class DefaultTeleopPipeline:
             safe_command=finalized_safe_command,
             tracking_quality=self._tracking_quality(skeleton),
             telemetry=telemetry,
+            playback=playback,
         )
+        self._suppress_safe_command_once = False
         self._sequence += 1
         return snapshot
 
@@ -374,6 +473,7 @@ class DefaultTeleopPipeline:
         self._previous_frame_timestamp_s = None
         self._physics_accumulator_s = 0.0
         self._last_safe_command = None
+        self._suppress_safe_command_once = False
 
     def calibrate(self, sample_count: int) -> None:
         self._require_started()

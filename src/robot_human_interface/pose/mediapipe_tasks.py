@@ -198,6 +198,12 @@ class MediaPipePoseLandmarker:
             skeleton = canonicalize_mirrored_skeleton(skeleton)
         return self.landmark_filter.update(skeleton) if self.landmark_filter else skeleton
 
+    def reset_temporal(self) -> None:
+        """Forget frame-to-frame smoothing without reopening the model."""
+
+        if self.landmark_filter is not None:
+            self.landmark_filter.reset()
+
     def close(self) -> None:
         landmarker, self._landmarker = self._landmarker, None
         if landmarker is not None:

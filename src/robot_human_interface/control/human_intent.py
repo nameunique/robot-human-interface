@@ -303,6 +303,30 @@ class HumanSupportIntentEstimator:
             self._new_calibration_gate(self.config.calibration_frames)
         )
 
+    def reset_temporal(self) -> None:
+        """Forget debounce/filter history but retain a completed calibration."""
+
+        if self.is_calibrating:
+            self.reset()
+            return
+        self._filtered_ratio = self._baseline_ratio
+        self._filtered_squat_pelvis_descent_ratio = 0.0
+        self._filtered_squat_min_hip_flexion_rad = 0.0
+        self._filtered_squat_min_knee_flexion_rad = 0.0
+        self._filtered_squat_ankle_asymmetry_ratio = 0.0
+        self._filtered_squat_stance_width_change_ratio = 0.0
+        self._squat_active = False
+        self._squat_candidate = False
+        self._squat_candidate_since_s = None
+        self._intent = SupportIntent.DOUBLE_SUPPORT
+        self._candidate = SupportIntent.DOUBLE_SUPPORT
+        self._candidate_since_s = None
+        self._last_timestamp_s = None
+        self._last_valid_timestamp_s = None
+        self._last_squat_valid_timestamp_s = None
+        self._last_confidence = 0.0
+        self._last_squat_confidence = 0.0
+
     def _new_calibration_gate(
         self,
         sample_count: int,

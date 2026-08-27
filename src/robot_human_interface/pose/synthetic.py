@@ -133,5 +133,8 @@ class SyntheticPoseEstimator:
             confidence=self.config.confidence,
         )
 
+    def reset_temporal(self) -> None:
+        self._origin_s = None
+
     def close(self) -> None:
         self.closed = True

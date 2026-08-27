@@ -260,6 +260,20 @@ class MujocoIKRetargeter:
         self._last_valid_timestamp: float | None = None
         self._last_diagnostics: IKDiagnostics | None = None
 
+    def reset_temporal(self) -> None:
+        """Clear solver history while retaining accepted neutral references."""
+
+        if self._calibration_target > 0:
+            self._calibration_frames = []
+            self._calibration_gate = self._new_calibration_gate(
+                self._calibration_target
+            )
+        self._last_output = None
+        self._last_output_timestamp = None
+        self._last_valid_positions = None
+        self._last_valid_timestamp = None
+        self._last_diagnostics = None
+
     def start_calibration(self, sample_count: int = 15) -> None:
         if sample_count <= 0:
             raise ValueError("sample_count must be positive")

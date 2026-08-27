@@ -86,6 +86,7 @@ class PreviewWidget(QWidget):
         self._source_label = "Источник не запущен"
         self._quality = 0.0
         self._sequence = 0
+        self._overlay_text = ""
 
     def set_source_label(self, value: str) -> None:
         self._source_label = value
@@ -102,6 +103,20 @@ class PreviewWidget(QWidget):
         display_name = getattr(source, "display_name", None)
         if display_name:
             self._source_label = str(display_name)
+        self.update()
+
+    def clear(self, *, keep_frame: bool = False, overlay: str = "") -> None:
+        """Invalidate visual telemetry; optionally retain only the last image."""
+
+        if not keep_frame:
+            self._image = None
+        self._landmarks = ()
+        self._quality = 0.0
+        self._overlay_text = str(overlay)
+        self.update()
+
+    def set_overlay(self, text: str = "") -> None:
+        self._overlay_text = str(text)
         self.update()
 
     def _content_rect(self) -> QRectF:
@@ -127,13 +142,30 @@ class PreviewWidget(QWidget):
             painter.fillRect(content, QColor(0, 0, 0, 42))
         else:
             self._draw_grid(painter, content)
-            self._draw_demo_skeleton(painter, content)
         if self._landmarks:
             self._draw_landmarks(painter, content, self._landmarks)
         self._draw_chrome(painter, content)
+        if self._overlay_text:
+            self._draw_overlay(painter, content, self._overlay_text)
         painter.setPen(QPen(QColor(COLORS["border"]), 1))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), 10, 10)
+
+    @staticmethod
+    def _draw_overlay(painter: QPainter, rect: QRectF, text: str) -> None:
+        painter.fillRect(rect, QColor(3, 6, 8, 150))
+        box = QRectF(
+            rect.center().x() - min(240.0, rect.width() * 0.42),
+            rect.center().y() - 28.0,
+            min(480.0, rect.width() * 0.84),
+            56.0,
+        )
+        painter.setBrush(QColor(COLORS["raised"]))
+        painter.setPen(QPen(QColor(COLORS["warning"]), 1))
+        painter.drawRoundedRect(box, 10, 10)
+        painter.setPen(QColor(COLORS["text"]))
+        painter.setFont(QFont("Inter", 11, QFont.Weight.DemiBold))
+        painter.drawText(box, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, text)
 
     @staticmethod
     def _draw_grid(painter: QPainter, rect: QRectF) -> None:

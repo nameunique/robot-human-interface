@@ -21,6 +21,7 @@ def test_reference_catalog_contains_all_six_mp4_files() -> None:
     catalog = ResourceLocator(root).stock_videos()
     assert len(catalog) == 6
     assert all(item.available for item in catalog)
+    assert all(not item.loop for item in catalog)
     assert len({item.source_id for item in catalog}) == 6
 
 
@@ -31,6 +32,7 @@ def test_user_source_store_persists_absolute_paths_without_copying(tmp_path: Pat
     store = UserSourceStore(tmp_path / "app-data")
     items = store.add(video)
     assert items[0].path == str(video.resolve())
+    assert not items[0].loop
     assert Path(items[0].path).read_bytes() == b"not copied"
     assert list((tmp_path / "app-data").iterdir()) == [store.path]
     assert store.remove(items[0].source_id) == ()

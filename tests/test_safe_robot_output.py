@@ -264,6 +264,26 @@ def test_rejected_raw_submit_revokes_retained_pose_even_while_disarmed() -> None
     assert transport.payloads == []
 
 
+def test_arm_is_bound_to_the_authoritative_safe_command_generation() -> None:
+    transport = _Transport()
+    output = SafeRobotController(transport, clock=lambda: 0.0)
+    assert output.connect()
+    first_generation = output.submit_safe_command(_safe_command(10.0))
+    second_generation = output.submit_safe_command(_safe_command(20.0))
+
+    assert second_generation == first_generation + 1
+    assert not output.arm(
+        ACK,
+        expected_command_generation=first_generation,
+    )
+    assert output.status().last_disarm_reason == "safe_command_generation_changed"
+    assert output.arm(
+        ACK,
+        expected_command_generation=second_generation,
+    )
+    assert transport.payloads == []
+
+
 class WebSocketTimeoutException(Exception):
     pass
 

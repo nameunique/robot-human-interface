@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
 import pytest
 
+from robot_human_interface.playback import PlaybackDiscontinuity, PlaybackState
 from robot_human_interface.protocol import (
     OperatorSafetyAcknowledgement,
     SafeRobotController,
@@ -83,6 +84,93 @@ class _Pipeline:
 
     def close(self) -> None:
         self.closed += 1
+
+
+@dataclass
+class _SeekablePipeline(_Pipeline):
+    frame_count: int = 4
+    fps: float = 10.0
+    current_frame: int = -1
+    eof: bool = False
+    rate: float = 1.0
+    loop_enabled: bool = False
+    loop_start_s: float = 0.0
+    loop_end_s: float | None = None
+    pending_discontinuity: PlaybackDiscontinuity | None = None
+
+    @property
+    def playback_state(self) -> PlaybackState:
+        frame_index = self.current_frame if self.current_frame >= 0 else self.steps
+        position = self.frame_count / self.fps if self.eof else frame_index / self.fps
+        return PlaybackState(
+            True,
+            position,
+            self.frame_count / self.fps,
+            max(0, min(frame_index, self.frame_count - 1)),
+            self.frame_count,
+            self.fps,
+            self.rate,
+            self.loop_enabled,
+            self.loop_start_s,
+            self.loop_end_s,
+            self.eof,
+            self.pending_discontinuity,
+        )
+
+    def step(self) -> PipelineSnapshot | None:
+        if self.steps >= self.frame_count:
+            self.eof = True
+            return None
+        current = self.steps
+        snapshot = super().step()
+        assert snapshot is not None
+        self.current_frame = current
+        self.eof = False
+        state = self.playback_state
+        self.pending_discontinuity = None
+        return replace(snapshot, playback=state)
+
+    def seek(self, position_s: float) -> PlaybackState:
+        target = min(
+            self.frame_count - 1,
+            max(0, int(np.floor(float(position_s) * self.fps + 1e-9))),
+        )
+        reason = (
+            PlaybackDiscontinuity.RESTART
+            if self.eof and target == 0
+            else PlaybackDiscontinuity.SEEK
+        )
+        self.steps = target
+        self.current_frame = target
+        self.eof = False
+        self.pending_discontinuity = reason
+        return self.playback_state
+
+    def step_relative(self, delta_frames: int) -> PlaybackState:
+        target = min(
+            self.frame_count - 1,
+            max(0, max(self.current_frame, 0) + int(delta_frames)),
+        )
+        self.steps = target
+        self.current_frame = target
+        self.eof = False
+        self.pending_discontinuity = PlaybackDiscontinuity.STEP
+        return self.playback_state
+
+    def set_rate(self, rate: float) -> PlaybackState:
+        self.rate = float(rate)
+        return self.playback_state
+
+    def set_loop(
+        self,
+        enabled: bool,
+        start_s: float,
+        end_s: float | None,
+    ) -> PlaybackState:
+        self.loop_enabled = bool(enabled)
+        self.loop_start_s = float(start_s)
+        self.loop_end_s = end_s
+        return self.playback_state
 
 
 def test_source_spec_requires_paths_for_video_and_copies_metadata(tmp_path: Path) -> None:
@@ -306,3 +394,105 @@ def test_non_snapshot_pipeline_result_fails_closed_and_invalidates_robot() -> No
         event.code == "PIPELINE_STEP_FAILED" and "PipelineSnapshot" in str(event.details)
         for event in events
     )
+
+
+def test_seek_autopauses_builds_preview_and_never_exposes_safe_command() -> None:
+    clock = [6.0]
+    robot = _RobotInvalidationSpy()
+    pipeline: _SeekablePipeline | None = None
+
+    def factory(config: SessionConfig) -> _SeekablePipeline:
+        nonlocal pipeline
+        pipeline = _SeekablePipeline(config, clock)
+        return pipeline
+
+    session = TeleopSession(
+        SessionConfig(_source()),
+        factory,
+        robot_output=robot,  # type: ignore[arg-type]
+        clock=lambda: clock[0],
+    )
+    session.request_start()
+    session.request_seek(0.2)
+
+    preview = session.step()
+
+    assert preview.status is SessionStatus.PAUSED
+    assert preview.frame is not None and int(preview.frame.image_bgr[0, 0, 0]) == 2
+    assert preview.safe_command is None
+    assert preview.playback is not None
+    assert preview.playback.frame_index == 2
+    assert preview.playback.discontinuity_reason is PlaybackDiscontinuity.SEEK
+    assert robot.reasons == ["playback_seek"]
+    assert pipeline is not None and pipeline.closed == 0
+
+
+def test_seekable_eof_retains_pipeline_and_step_back_recovers_preview() -> None:
+    clock = [7.0]
+    pipeline: _SeekablePipeline | None = None
+
+    def factory(config: SessionConfig) -> _SeekablePipeline:
+        nonlocal pipeline
+        pipeline = _SeekablePipeline(config, clock, frame_count=2)
+        return pipeline
+
+    session = TeleopSession(SessionConfig(_source()), factory, clock=lambda: clock[0])
+    session.start()
+    assert session.step().status is SessionStatus.RUNNING
+    assert session.step().status is SessionStatus.RUNNING
+    ended = session.step()
+
+    assert ended.status is SessionStatus.ENDED
+    assert ended.playback is not None and ended.playback.eof
+    assert pipeline is not None and pipeline.closed == 0
+
+    session.request_step_frame(-1)
+    recovered = session.step()
+    assert recovered.status is SessionStatus.PAUSED
+    assert recovered.playback is not None and recovered.playback.frame_index == 0
+    assert recovered.safe_command is None
+    assert pipeline.closed == 0
+
+
+def test_playback_commands_on_nonseekable_source_only_warn() -> None:
+    clock = [8.0]
+    session = TeleopSession(
+        SessionConfig(_source()),
+        lambda config: _Pipeline(config, clock),
+        clock=lambda: clock[0],
+    )
+    session.request_start()
+    session.request_seek(1.0)
+
+    snapshot = session.step()
+    codes = [event.code for event in session.drain_events()]
+
+    assert snapshot.status is SessionStatus.RUNNING
+    assert "PLAYBACK_UNSUPPORTED" in codes
+    assert "SESSION_COMMAND_FAILED" not in codes
+
+
+def test_session_forwards_rate_and_loop_to_optional_pipeline() -> None:
+    clock = [9.0]
+    pipeline: _SeekablePipeline | None = None
+
+    def factory(config: SessionConfig) -> _SeekablePipeline:
+        nonlocal pipeline
+        pipeline = _SeekablePipeline(config, clock)
+        return pipeline
+
+    session = TeleopSession(SessionConfig(_source()), factory, clock=lambda: clock[0])
+    session.request_start()
+    session.request_seek(0.0)
+    session.step()
+    session.request_set_playback_rate(1.5)
+    session.request_set_loop(True, 0.1, 0.3)
+    updated = session.step()
+
+    assert pipeline is not None
+    assert pipeline.rate == 1.5
+    assert pipeline.loop_enabled
+    assert pipeline.loop_start_s == pytest.approx(0.1)
+    assert pipeline.loop_end_s == pytest.approx(0.3)
+    assert updated.playback is not None and updated.playback.rate == 1.5
+    assert updated.safe_command is None

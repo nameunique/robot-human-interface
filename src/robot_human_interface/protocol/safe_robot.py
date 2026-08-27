@@ -466,18 +466,41 @@ class SafeRobotController:
         acknowledgement: OperatorSafetyAcknowledgement,
         *,
         send_velocities: bool | None = None,
+        expected_command_generation: int | None = None,
         now_s: float | None = None,
     ) -> bool:
-        """Arm output without sending; the next due ``tick`` performs I/O."""
+        """Arm output without sending; the next due ``tick`` performs I/O.
+
+        ``expected_command_generation`` lets the worker bind an operator arm
+        decision to the exact safe command used by its authoritative readiness
+        check.  This closes the check/use gap if another producer replaces or
+        invalidates the retained command before the controller lock is taken.
+        """
 
         if not isinstance(acknowledgement, OperatorSafetyAcknowledgement):
             raise TypeError("acknowledgement must be OperatorSafetyAcknowledgement")
         if send_velocities is not None and type(send_velocities) is not bool:
             raise ValueError("send_velocities must be a boolean or None")
+        if expected_command_generation is not None:
+            if (
+                isinstance(expected_command_generation, bool)
+                or int(expected_command_generation) != expected_command_generation
+                or int(expected_command_generation) < 0
+            ):
+                raise ValueError(
+                    "expected_command_generation must be a non-negative integer or None"
+                )
+            expected_command_generation = int(expected_command_generation)
         now = self._now(now_s)
         with self._lock:
             if not acknowledgement.complete:
                 self._last_disarm_reason = "operator_confirmation_incomplete"
+                return False
+            if (
+                expected_command_generation is not None
+                and expected_command_generation != self._command_generation
+            ):
+                self._last_disarm_reason = "safe_command_generation_changed"
                 return False
             error = self._arm_error_locked(now)
             if error is not None:

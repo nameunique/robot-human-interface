@@ -56,7 +56,7 @@ class ResourceLocator(CoreResourceLocator):
                 title=display_names.get(path.stem, path.stem.replace("_", " ").title()),
                 kind="reference",
                 path=str(path.resolve()),
-                loop=True,
+                loop=False,
             )
             for path in paths
         )
@@ -93,7 +93,7 @@ class UserSourceStore:
                     title=path.stem,
                     kind="user",
                     path=str(path),
-                    loop=True,
+                    loop=False,
                 )
             )
         return tuple(items)
@@ -116,7 +116,7 @@ class UserSourceStore:
                     title=resolved.stem,
                     kind="user",
                     path=str(resolved),
-                    loop=True,
+                    loop=False,
                 )
             )
         self.save_paths(item.path for item in entries if item.path)

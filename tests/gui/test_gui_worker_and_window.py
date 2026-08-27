@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from threading import Event
 from time import monotonic
+from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -15,7 +16,7 @@ from PyQt6.QtCore import Qt
 
 from robot_human_interface.gui.main_window import MainWindow
 from robot_human_interface.gui.resources import ResourceLocator, SourceItem, UserSourceStore
-from robot_human_interface.gui.widgets import ArmConfirmationDialog
+from robot_human_interface.gui.widgets import ArmConfirmationDialog, TelemetryPanel
 from robot_human_interface.gui.worker import DemoSession, PipelineWorker, build_session
 
 
@@ -93,6 +94,41 @@ def test_arm_dialog_requires_both_physical_safety_acknowledgements(qtbot) -> Non
     dialog.estop_ack.setChecked(True)
     assert dialog.ok_button.isEnabled()
     assert not dialog.send_velocities
+
+
+def test_telemetry_labels_mujoco_actual_and_highlights_joint_limits(qtbot) -> None:
+    panel = TelemetryPanel()
+    qtbot.addWidget(panel)
+    count = panel.angles_table.rowCount()
+    snapshot = SimpleNamespace(
+        tracking_quality=0.9,
+        raw_command=SimpleNamespace(positions_rad=(0.0,) * count),
+        safe_command=SimpleNamespace(positions_rad=(0.95,) * count),
+        balance_active=True,
+        free_base_active=True,
+        telemetry={
+            "joint_positions_rad": (0.0,) * count,
+            "joint_lower_limits_rad": (-1.0,) * count,
+            "joint_upper_limits_rad": (1.0,) * count,
+            "right_foot_position_m": (0.0, -0.1, 0.0),
+            "left_foot_position_m": (0.0, 0.1, 0.0),
+            "center_of_mass_position_m": (0.0, 0.0, 0.8),
+            "right_foot_in_contact": True,
+            "left_foot_in_contact": False,
+            "support_phase": "double_support",
+        },
+    )
+
+    panel.update_snapshot(snapshot)
+
+    assert "MUJOCO" in panel.angles_table.horizontalHeaderItem(3).text()
+    assert panel.angles_table.verticalHeaderItem(0).text() == "РУКИ"
+    assert panel.angles_table.verticalHeaderItem(6).text() == "НОГИ"
+    assert panel.angles_table.verticalHeaderItem(18).text() == "ГОЛОВА"
+    assert panel.angles_table.item(0, 2).background().color().alpha() > 0
+    assert "энкодеров" in panel.real_feedback_note.text()
+    assert panel.support_polygon._com == (0.0, 0.0)
+    assert panel.support_polygon.active_contact_count == 1
 
 
 def test_main_window_smoke_and_clean_close(qtbot, tmp_path: Path) -> None:

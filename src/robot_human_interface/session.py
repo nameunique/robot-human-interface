@@ -22,6 +22,7 @@ from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
 
+from robot_human_interface.playback import PlaybackDiscontinuity, PlaybackState
 from robot_human_interface.protocol import (
     FinalizedSafeCommand,
     OperatorSafetyAcknowledgement,
@@ -223,6 +224,7 @@ class PipelineSnapshot:
     safe_command: FinalizedSafeCommand | None = None
     tracking_quality: float = 0.0
     telemetry: Mapping[str, object] = field(default_factory=dict)
+    playback: PlaybackState | None = None
 
     def __post_init__(self) -> None:
         if isinstance(self.sequence, bool) or int(self.sequence) != self.sequence:
@@ -237,6 +239,10 @@ class PipelineSnapshot:
             raise ValueError("tracking_quality must be finite and within [0, 1]")
         if not isinstance(self.source, SourceSpec):
             raise TypeError("snapshot source must be a SourceSpec")
+        if self.playback is not None and not isinstance(
+            self.playback, PlaybackState
+        ):
+            raise TypeError("snapshot playback must be a PlaybackState or None")
         object.__setattr__(self, "sequence", int(self.sequence))
         object.__setattr__(self, "timestamp_s", timestamp)
         object.__setattr__(self, "status", SessionStatus(self.status))
@@ -297,6 +303,10 @@ class SessionCommandKind(str, Enum):
     ARM_ROBOT = "arm_robot"
     DISARM_ROBOT = "disarm_robot"
     DISCONNECT_ROBOT = "disconnect_robot"
+    SEEK = "seek"
+    STEP_FRAME = "step_frame"
+    SET_PLAYBACK_RATE = "set_playback_rate"
+    SET_LOOP = "set_loop"
 
 
 @dataclass(frozen=True, slots=True)
@@ -307,6 +317,12 @@ class SessionCommand:
     calibration_samples: int | None = None
     acknowledgement: OperatorSafetyAcknowledgement | None = None
     send_velocities: bool | None = None
+    position_s: float | None = None
+    frame_delta: int | None = None
+    playback_rate: float | None = None
+    loop_enabled: bool | None = None
+    loop_start_s: float | None = None
+    loop_end_s: float | None = None
 
     def __post_init__(self) -> None:
         timestamp = float(self.requested_at_s)
@@ -329,6 +345,40 @@ class SessionCommand:
             raise ValueError("arm_robot command requires a safety acknowledgement")
         if self.send_velocities is not None and type(self.send_velocities) is not bool:
             raise ValueError("send_velocities must be a boolean or None")
+        if kind is SessionCommandKind.SEEK:
+            if self.position_s is None:
+                raise ValueError("seek command requires position_s")
+            position = float(self.position_s)
+            if not math.isfinite(position) or position < 0.0:
+                raise ValueError("position_s must be finite and non-negative")
+            object.__setattr__(self, "position_s", position)
+        if kind is SessionCommandKind.STEP_FRAME:
+            if (
+                self.frame_delta is None
+                or isinstance(self.frame_delta, bool)
+                or int(self.frame_delta) != self.frame_delta
+                or int(self.frame_delta) not in {-1, 1}
+            ):
+                raise ValueError("step_frame command requires frame_delta -1 or +1")
+            object.__setattr__(self, "frame_delta", int(self.frame_delta))
+        if kind is SessionCommandKind.SET_PLAYBACK_RATE:
+            if self.playback_rate is None:
+                raise ValueError("set_playback_rate command requires playback_rate")
+            rate = float(self.playback_rate)
+            if rate not in {0.25, 0.5, 1.0, 1.5, 2.0}:
+                raise ValueError("playback_rate must be one of 0.25, 0.5, 1, 1.5, 2")
+            object.__setattr__(self, "playback_rate", rate)
+        if kind is SessionCommandKind.SET_LOOP:
+            if type(self.loop_enabled) is not bool:
+                raise ValueError("set_loop command requires loop_enabled")
+            start = 0.0 if self.loop_start_s is None else float(self.loop_start_s)
+            end = None if self.loop_end_s is None else float(self.loop_end_s)
+            if not math.isfinite(start) or start < 0.0:
+                raise ValueError("loop_start_s must be finite and non-negative")
+            if end is not None and (not math.isfinite(end) or end <= start):
+                raise ValueError("loop_end_s must be after loop_start_s or None")
+            object.__setattr__(self, "loop_start_s", start)
+            object.__setattr__(self, "loop_end_s", end)
         object.__setattr__(self, "kind", kind)
         object.__setattr__(self, "requested_at_s", timestamp)
         if self.calibration_samples is not None:
@@ -509,6 +559,28 @@ class TeleopSession:
     def request_disconnect_robot(self) -> None:
         self._request(SessionCommandKind.DISCONNECT_ROBOT)
 
+    def request_seek(self, position_s: float) -> None:
+        self._request(SessionCommandKind.SEEK, position_s=position_s)
+
+    def request_step_frame(self, delta_frames: int) -> None:
+        self._request(SessionCommandKind.STEP_FRAME, frame_delta=delta_frames)
+
+    def request_set_playback_rate(self, rate: float) -> None:
+        self._request(SessionCommandKind.SET_PLAYBACK_RATE, playback_rate=rate)
+
+    def request_set_loop(
+        self,
+        enabled: bool,
+        start_s: float = 0.0,
+        end_s: float | None = None,
+    ) -> None:
+        self._request(
+            SessionCommandKind.SET_LOOP,
+            loop_enabled=enabled,
+            loop_start_s=start_s,
+            loop_end_s=end_s,
+        )
+
     def _close_pipeline(self) -> None:
         pipeline, self._pipeline = self._pipeline, None
         if pipeline is None:
@@ -524,7 +596,26 @@ class TeleopSession:
                 error=str(error),
             )
 
-    def _set_terminal_snapshot(self, status: SessionStatus) -> None:
+    def _pipeline_playback_state(
+        self,
+        pipeline: SessionPipeline | None = None,
+    ) -> PlaybackState | None:
+        target = self._pipeline if pipeline is None else pipeline
+        if target is None:
+            return None
+        state = getattr(target, "playback_state", None)
+        if state is None:
+            return None
+        if not isinstance(state, PlaybackState):
+            raise TypeError("pipeline playback_state must be a PlaybackState")
+        return state
+
+    def _set_terminal_snapshot(
+        self,
+        status: SessionStatus,
+        *,
+        playback: PlaybackState | None = None,
+    ) -> None:
         self._sequence += 1
         self._latest_snapshot = PipelineSnapshot(
             self._sequence,
@@ -532,7 +623,88 @@ class TeleopSession:
             status,
             self._config.source,
             telemetry=self._latest_snapshot.telemetry,
+            playback=(
+                self._pipeline_playback_state()
+                if playback is None
+                else playback
+            ),
         )
+
+    def _unsupported_playback(self, operation: str) -> None:
+        self._emit(
+            SessionEventLevel.WARNING,
+            "playback",
+            "PLAYBACK_UNSUPPORTED",
+            "Источник не поддерживает эту команду воспроизведения",
+            operation=operation,
+            source_id=self.config.source.source_id,
+        )
+
+    def _playback_method(self, method_name: str) -> Callable[..., object] | None:
+        pipeline = self._pipeline
+        method = None if pipeline is None else getattr(pipeline, method_name, None)
+        if not callable(method):
+            self._unsupported_playback(method_name)
+            return None
+        return method
+
+    def _invalidate_for_playback(self, reason: str) -> None:
+        if self._robot_output is not None:
+            self._robot_output.invalidate(reason)
+
+    def _preview_after_jump(self, operation: str) -> None:
+        pipeline = self._pipeline
+        if pipeline is None:
+            self._unsupported_playback(operation)
+            return
+        with self._lock:
+            self._status = SessionStatus.PAUSED
+        produced = pipeline.step()
+        if produced is not None and not isinstance(produced, PipelineSnapshot):
+            raise TypeError("pipeline.step() must return PipelineSnapshot or None")
+        if produced is None:
+            playback = self._pipeline_playback_state(pipeline)
+            with self._lock:
+                self._status = SessionStatus.ENDED
+                self._set_terminal_snapshot(
+                    SessionStatus.ENDED,
+                    playback=playback,
+                )
+            return
+        playback = produced.playback or self._pipeline_playback_state(pipeline)
+        with self._lock:
+            self._sequence += 1
+            self._latest_snapshot = PipelineSnapshot(
+                self._sequence,
+                produced.timestamp_s,
+                SessionStatus.PAUSED,
+                self._config.source,
+                produced.frame,
+                produced.skeleton,
+                produced.raw_command,
+                None,
+                produced.tracking_quality,
+                produced.telemetry,
+                playback,
+            )
+
+    def _refresh_playback_snapshot(self, playback: PlaybackState) -> None:
+        with self._lock:
+            self._sequence += 1
+            current = self._latest_snapshot
+            self._latest_snapshot = PipelineSnapshot(
+                self._sequence,
+                self._now(),
+                self._status,
+                self._config.source,
+                current.frame,
+                current.skeleton,
+                current.raw_command,
+                None,
+                current.tracking_quality,
+                current.telemetry,
+                playback,
+            )
 
     def start(self) -> None:
         with self._lock:
@@ -540,6 +712,10 @@ class TeleopSession:
                 raise RuntimeError("session is closed")
             if self._status in {SessionStatus.RUNNING, SessionStatus.PAUSED}:
                 return
+        # A seekable pipeline is intentionally retained at EOF.  A lifecycle
+        # start still means a fresh pipeline; explicit seek/restart is the
+        # operation that reuses the retained decoder.
+        self._close_pipeline()
         try:
             pipeline = self._pipeline_factory(self.config)
             if not isinstance(pipeline, SessionPipeline):
@@ -665,6 +841,90 @@ class TeleopSession:
             self._status = SessionStatus.RUNNING
             self._set_terminal_snapshot(SessionStatus.RUNNING)
 
+    def seek(self, position_s: float) -> None:
+        method = self._playback_method("seek")
+        if method is None:
+            return
+        self._invalidate_for_playback("playback_seek")
+        state = method(float(position_s))
+        if not isinstance(state, PlaybackState):
+            state = self._pipeline_playback_state()
+        if not isinstance(state, PlaybackState):
+            raise TypeError("seek must produce a PlaybackState")
+        self._preview_after_jump("seek")
+        self._emit(
+            SessionEventLevel.INFO,
+            "playback",
+            "PLAYBACK_SEEKED",
+            "Позиция видео изменена",
+            position_s=state.position_s,
+        )
+
+    def step_frame(self, delta_frames: int) -> None:
+        method = self._playback_method("step_relative")
+        if method is None:
+            return
+        self._invalidate_for_playback("playback_step")
+        state = method(int(delta_frames))
+        if not isinstance(state, PlaybackState):
+            state = self._pipeline_playback_state()
+        if not isinstance(state, PlaybackState):
+            raise TypeError("step_relative must produce a PlaybackState")
+        self._preview_after_jump("step_relative")
+        self._emit(
+            SessionEventLevel.INFO,
+            "playback",
+            "PLAYBACK_FRAME_STEPPED",
+            "Выполнен переход на соседний кадр",
+            delta_frames=int(delta_frames),
+            frame_index=state.frame_index,
+        )
+
+    def set_playback_rate(self, rate: float) -> None:
+        method = self._playback_method("set_rate")
+        if method is None:
+            return
+        self._invalidate_for_playback("playback_rate_changed")
+        state = method(float(rate))
+        if not isinstance(state, PlaybackState):
+            state = self._pipeline_playback_state()
+        if not isinstance(state, PlaybackState):
+            raise TypeError("set_rate must produce a PlaybackState")
+        self._refresh_playback_snapshot(state)
+        self._emit(
+            SessionEventLevel.INFO,
+            "playback",
+            "PLAYBACK_RATE_CHANGED",
+            "Скорость воспроизведения изменена",
+            rate=state.rate,
+        )
+
+    def set_loop(
+        self,
+        enabled: bool,
+        start_s: float = 0.0,
+        end_s: float | None = None,
+    ) -> None:
+        method = self._playback_method("set_loop")
+        if method is None:
+            return
+        self._invalidate_for_playback("playback_loop_changed")
+        state = method(bool(enabled), float(start_s), end_s)
+        if not isinstance(state, PlaybackState):
+            state = self._pipeline_playback_state()
+        if not isinstance(state, PlaybackState):
+            raise TypeError("set_loop must produce a PlaybackState")
+        self._refresh_playback_snapshot(state)
+        self._emit(
+            SessionEventLevel.INFO,
+            "playback",
+            "PLAYBACK_LOOP_CHANGED",
+            "Настройки повтора видео изменены",
+            enabled=state.loop_enabled,
+            start_s=state.loop_start_s,
+            end_s=state.loop_end_s,
+        )
+
     def _viewer_call(self, method_name: str, code: str, message: str) -> None:
         pipeline = self._pipeline
         if pipeline is None:
@@ -698,6 +958,22 @@ class TeleopSession:
             self.pause()
         elif kind is SessionCommandKind.RESUME:
             self.resume()
+        elif kind is SessionCommandKind.SEEK:
+            assert command.position_s is not None
+            self.seek(command.position_s)
+        elif kind is SessionCommandKind.STEP_FRAME:
+            assert command.frame_delta is not None
+            self.step_frame(command.frame_delta)
+        elif kind is SessionCommandKind.SET_PLAYBACK_RATE:
+            assert command.playback_rate is not None
+            self.set_playback_rate(command.playback_rate)
+        elif kind is SessionCommandKind.SET_LOOP:
+            assert command.loop_enabled is not None
+            self.set_loop(
+                command.loop_enabled,
+                0.0 if command.loop_start_s is None else command.loop_start_s,
+                command.loop_end_s,
+            )
         elif kind is SessionCommandKind.OPEN_VIEWER:
             self.open_viewer()
         elif kind is SessionCommandKind.CLOSE_VIEWER:
@@ -820,10 +1096,17 @@ class TeleopSession:
         if produced is None:
             if self._robot_output is not None:
                 self._robot_output.invalidate("source_ended")
-            self._close_pipeline()
+            playback = self._pipeline_playback_state(pipeline)
+            # Keep seekable file resources alive at EOF so the operator may
+            # step backwards or restart without rebuilding MediaPipe/MuJoCo.
+            if playback is None or not playback.seekable:
+                self._close_pipeline()
             with self._lock:
                 self._status = SessionStatus.ENDED
-                self._set_terminal_snapshot(SessionStatus.ENDED)
+                self._set_terminal_snapshot(
+                    SessionStatus.ENDED,
+                    playback=playback,
+                )
             self._emit(
                 SessionEventLevel.INFO,
                 "source",
@@ -835,11 +1118,20 @@ class TeleopSession:
         assert isinstance(produced, PipelineSnapshot)
 
         telemetry = dict(produced.telemetry)
+        playback = produced.playback or self._pipeline_playback_state(pipeline)
+        safe_command = produced.safe_command
+        if playback is not None and playback.discontinuity_reason is not None:
+            self._invalidate_for_playback(
+                f"playback_{playback.discontinuity_reason.value}"
+            )
+            # Defence in depth for third-party seekable pipelines: no frame
+            # carrying a time discontinuity may cross the robot boundary.
+            safe_command = None
         if self._robot_output is not None:
-            if produced.safe_command is not None:
+            if safe_command is not None:
                 try:
                     self._robot_output.submit_safe_command(
-                        produced.safe_command,
+                        safe_command,
                         free_base=self.config.free_base,
                         balance_enabled=self.config.balance_enabled,
                         received_at_s=self._now(),
@@ -866,9 +1158,10 @@ class TeleopSession:
                 produced.frame,
                 produced.skeleton,
                 produced.raw_command,
-                produced.safe_command,
+                safe_command,
                 produced.tracking_quality,
                 telemetry,
+                playback,
             )
         return self.latest_snapshot
 
@@ -928,6 +1221,8 @@ def create_default_session(
 __all__ = [
     "PipelineFactory",
     "PipelineSnapshot",
+    "PlaybackDiscontinuity",
+    "PlaybackState",
     "SessionCommand",
     "SessionCommandKind",
     "SessionConfig",
