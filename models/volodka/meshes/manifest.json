@@ -1,0 +1,2965 @@
+{
+  "schema_version": "humanoid-cad-visual-assets-v1",
+  "profile_id": "volodka-cad-major-parts-v0",
+  "source": {
+    "file_name": "Корпус+стопы_новые.stp",
+    "sha256": "2C83764334CEE0DF530EC3BEEBCE13A99BE3890D9796D3A3476F901ED40DEE94",
+    "length_unit": "mm"
+  },
+  "runtime_from_cad": {
+    "axis_mapping": "runtime_xyz = (cad_z, cad_x, cad_y + ground_offset)",
+    "main_body_assembly": {
+      "ground_offset_mm": 13.25,
+      "matrix_mm": [
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          13.25
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "authority": "dimensioned_2024_manufacturing_drawing"
+    },
+    "root_foot_occurrences": {
+      "ground_offset_mm": 8.995078663874,
+      "matrix_mm": [
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          8.995078663874
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "authority": "reviewed_new_foot_floor_bounds"
+    },
+    "root_foot_lowering_relative_to_main_mm": 4.254921336125999,
+    "status": "pdf_passport_joint_datum_with_independent_root_foot_grounding"
+  },
+  "partition": {
+    "status": "provisional_visual_mapping",
+    "selected_top_level_occurrence_count": 73,
+    "selected_occurrences": [
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 331,
+        "definition_name": "XL430-W250-T_No Spacer:11",
+        "body_name": "base_link",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            6.938893903907271e-16,
+            7.354350000760749e-16,
+            1.0,
+            37.0000000000003
+          ],
+          [
+            1.0,
+            1.2345939482108594e-15,
+            -6.93889390390728e-16,
+            312.75
+          ],
+          [
+            -1.23459394821086e-15,
+            1.0,
+            -7.35435000076074e-16,
+            -1.00000000000024
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 332,
+        "definition_name": "XL430-W250-T_No Spacer:11",
+        "body_name": "base_link",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -4.50423381415264e-16,
+            1.0,
+            -1.53013182587929e-14,
+            40.0000000000002
+          ],
+          [
+            6.954605601105909e-16,
+            -1.53013182587929e-14,
+            -1.0,
+            219.999999999999
+          ],
+          [
+            -1.0,
+            -4.504233814152747e-16,
+            -6.95460560110584e-16,
+            -7.97811997567469e-14
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 338,
+        "definition_name": "XL430-W250-T_No Spacer:11",
+        "body_name": "base_link",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            6.47624295461127e-15,
+            -1.0,
+            -1.53013182587929e-14,
+            -39.9999999999998
+          ],
+          [
+            -6.954605601105921e-16,
+            1.5301318258792896e-14,
+            -1.0,
+            219.999999999999
+          ],
+          [
+            1.0,
+            6.47624295461128e-15,
+            -6.95460560110493e-16,
+            -1.52757469083933e-14
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 344,
+        "definition_name": "XL430-W250-T_No Spacer:11",
+        "body_name": "base_link",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -1.249000902703289e-15,
+            7.354350000760826e-16,
+            -1.0,
+            -36.9999999999997
+          ],
+          [
+            -1.0,
+            1.234593948210859e-15,
+            1.24900090270329e-15,
+            312.75
+          ],
+          [
+            1.23459394821086e-15,
+            1.0,
+            7.35435000076081e-16,
+            -1.00000000000015
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 345,
+        "definition_name": "XL430-W250-T_No Spacer:11",
+        "body_name": "base_link",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.0,
+            -3.0456877023632563e-16,
+            4.87488371215525e-16,
+            -6.93889390390722e-13
+          ],
+          [
+            -4.874883712155254e-16,
+            -1.3246649952925098e-15,
+            1.0,
+            309.3
+          ],
+          [
+            -3.04568770236325e-16,
+            -1.0,
+            -1.32466499529251e-15,
+            -14.8000000000002
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 403,
+        "definition_name": "КТ.0011.00.00.053_Защита платы:1",
+        "body_name": "base_link",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.0,
+            1.3884198094304301e-14,
+            -1.36609223384058e-15,
+            2.00949224909309e-12
+          ],
+          [
+            1.38841980943043e-14,
+            -1.0,
+            -8.07921190248216e-16,
+            280.875000000006
+          ],
+          [
+            -1.3660922338405913e-15,
+            8.07921190248197e-16,
+            -1.0,
+            -58.4500000000001
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 404,
+        "definition_name": "КТ.0011.00.14_Нижний торс:1",
+        "body_name": "base_link",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -1.0,
+            7.08560082244279e-16,
+            -2.86157111453144e-16,
+            2.57060321369315e-13
+          ],
+          [
+            7.08560082244279e-16,
+            1.0,
+            -1.17961196366441e-16,
+            219.999999999999
+          ],
+          [
+            2.861571114531439e-16,
+            -1.179611963664412e-16,
+            -1.0,
+            -6.86799791534877e-14
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 408,
+        "definition_name": "КТ.0011.00.06_Хаб для дхл:1",
+        "body_name": "base_link",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -2.45518499464027e-16,
+            -1.0,
+            3.02639817183064e-16,
+            -6.66156199817989e-13
+          ],
+          [
+            -1.0,
+            2.4551849946402716e-16,
+            4.32009402382871e-16,
+            312.0
+          ],
+          [
+            -4.320094023828711e-16,
+            -3.026398171830639e-16,
+            -1.0,
+            -50.5500000000004
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 409,
+        "definition_name": "PR_SENS_MEMS:1",
+        "body_name": "base_link",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -1.18957454688176e-15,
+            -1.0,
+            2.89498788419191e-14,
+            45.9999965800003
+          ],
+          [
+            -7.104462967003336e-16,
+            2.89498788419191e-14,
+            1.0,
+            200.924999999998
+          ],
+          [
+            -1.0,
+            1.1895745468817394e-15,
+            -7.10446296700368e-16,
+            26.55000224
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 410,
+        "definition_name": "Robotis_LB-012_LIPO Battery 11.1V 1800mAh:1",
+        "body_name": "base_link",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.0,
+            -2.2551405187698477e-16,
+            4.95919752833721e-16,
+            1.48530691631993e-32
+          ],
+          [
+            -4.959197528337209e-16,
+            5.223290890779091e-16,
+            1.0,
+            253.999999999999
+          ],
+          [
+            -2.25514051876985e-16,
+            -1.0,
+            5.22329089077909e-16,
+            -1.80000000000011
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 413,
+        "definition_name": "КТ.0011.00.00.012_Кронштейн платы:1",
+        "body_name": "base_link",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -1.0,
+            6.484835394787071e-16,
+            1.36609223384058e-15,
+            2.24503566567438e-12
+          ],
+          [
+            -6.48483539478706e-16,
+            -1.0,
+            8.07921190248213e-16,
+            280.875000000006
+          ],
+          [
+            1.3660922338405806e-15,
+            8.079211902482121e-16,
+            1.0,
+            -31.4500000000001
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 426,
+        "definition_name": "КТ.0011.00.00.011_Верхний торс:1",
+        "body_name": "base_link",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -1.0,
+            -6.746293003752213e-16,
+            5.72314222906292e-16,
+            -6.56841764490928e-13
+          ],
+          [
+            6.74629300375222e-16,
+            -1.0,
+            1.22818422099159e-15,
+            319.749999999996
+          ],
+          [
+            5.723142229062912e-16,
+            1.2281842209915905e-15,
+            1.0,
+            -1.00000000000019
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 430,
+        "definition_name": "КТ.0011.00.00.055_Усиление торса:1",
+        "body_name": "base_link",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.0190562176986814e-16,
+            1.436785190905995e-16,
+            -1.0,
+            58.0
+          ],
+          [
+            1.48769517245082e-14,
+            1.0,
+            1.43678519090601e-16,
+            267.25
+          ],
+          [
+            1.0,
+            -1.48769517245082e-14,
+            1.01905621769866e-16,
+            -24.4499999999999
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 431,
+        "definition_name": "КТ.0011.00.00.056_Усиление торса отражение:1",
+        "body_name": "base_link",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.8062282351843206e-15,
+            1.3844639478604588e-15,
+            -1.0,
+            -57.9999999999995
+          ],
+          [
+            6.44302589468401e-16,
+            1.0,
+            1.38446394786046e-15,
+            267.25
+          ],
+          [
+            1.0,
+            -6.443025894684035e-16,
+            1.80622823518432e-15,
+            -24.4499999999999
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 334,
+        "definition_name": "XL430-W250-T_No Spacer:11",
+        "body_name": "left_leg_link2",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            39.9999999999995
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            174.749999999999
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            -42.2500000000002
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 356,
+        "definition_name": "КТ.0011.00.00.014_Ось вращения ноги:1",
+        "body_name": "left_leg_link1",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -6.70829830301276e-16,
+            1.0,
+            -1.53013182587929e-14,
+            39.9999999999999
+          ],
+          [
+            6.533844896551072e-16,
+            -1.53013182587929e-14,
+            -1.0,
+            200.999999999999
+          ],
+          [
+            -1.0,
+            -6.708298303012859e-16,
+            -6.53384489655097e-16,
+            -9.66394540475908e-14
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 333,
+        "definition_name": "XL430-W250-T_No Spacer:11",
+        "body_name": "left_leg_link2",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -2.002800056316068e-16,
+            1.52092155563935e-14,
+            1.0,
+            39.9999999999997
+          ],
+          [
+            5.38234859192791e-16,
+            1.0,
+            -1.52092155563935e-14,
+            174.749999999999
+          ],
+          [
+            -1.0,
+            5.382348591927879e-16,
+            -2.00280005631615e-16,
+            4.16110398099743e-14
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 335,
+        "definition_name": "XL430-W250-T_No Spacer:11",
+        "body_name": "left_leg_link4",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -1.1424375198382633e-14,
+            4.32304550294627e-15,
+            1.0,
+            39.9999999999984
+          ],
+          [
+            -1.0,
+            3.850786230137495e-14,
+            -1.14243751983828e-14,
+            95.3774606680612
+          ],
+          [
+            -3.8507862301375e-14,
+            -1.0,
+            4.32304550294583e-15,
+            -10.0000000000002
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 358,
+        "definition_name": "КТ.0011.00.00.002_Ахил:3",
+        "body_name": "left_leg_link2",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -1.0,
+            1.52444518515772e-14,
+            -1.79965883667096e-16,
+            39.9999999999991
+          ],
+          [
+            1.52444518515772e-14,
+            1.0,
+            8.83094572735605e-16,
+            139.499999999999
+          ],
+          [
+            1.7996588366710945e-16,
+            8.830945727356023e-16,
+            -1.0,
+            -2.93384263089969e-13
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 362,
+        "definition_name": "КТ.0011.00.00.005_Ось ступни:3",
+        "body_name": "left_leg_link2",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            2.0028000563157397e-16,
+            -1.53757490100873e-14,
+            1.0,
+            40.0
+          ],
+          [
+            -1.95255652015639e-15,
+            -1.0,
+            -1.53757490100873e-14,
+            174.749999999999
+          ],
+          [
+            1.0,
+            -1.9525565201563867e-15,
+            -2.00280005631604e-16,
+            1.50000000000066
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 370,
+        "definition_name": "Robotis_HN11-I101_Подшипниковая опора XL430:1",
+        "body_name": "left_leg_link3",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -1.683918719240214e-16,
+            1.52092155563935e-14,
+            1.0,
+            39.9999999999995
+          ],
+          [
+            3.03646038614163e-16,
+            1.0,
+            -1.52092155563935e-14,
+            174.749999999999
+          ],
+          [
+            -1.0,
+            3.0364603861416046e-16,
+            -1.68391871924026e-16,
+            4.16750944603966e-14
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 366,
+        "definition_name": "КТ.0011.00.00.003_Голень:4",
+        "body_name": "left_leg_link3",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.9614744753985282e-16,
+            1.52092155563936e-14,
+            -1.0,
+            39.9999999999985
+          ],
+          [
+            -2.08637398757206e-16,
+            1.0,
+            1.52092155563936e-14,
+            94.749999999999
+          ],
+          [
+            1.0,
+            2.0863739875720301e-16,
+            1.96147447539856e-16,
+            2.08796620390119e-14
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 378,
+        "definition_name": "КТ.0011.00.00.058_П-скоба:3",
+        "body_name": "left_leg_link3",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.0,
+            4.610318097461622e-15,
+            1.5064315404622504e-14,
+            39.9999999999989
+          ],
+          [
+            -1.563602794038256e-14,
+            0.17364817766693003,
+            0.9848077530122081,
+            125.562612740094
+          ],
+          [
+            1.9243860884201392e-15,
+            -0.9848077530122081,
+            0.17364817766693003,
+            7.26335345718504
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 336,
+        "definition_name": "XL430-W250-T_No Spacer:11",
+        "body_name": "left_leg_link5",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -4.8876623315797e-15,
+            -1.576502252864796e-14,
+            1.0,
+            39.9999999999968
+          ],
+          [
+            1.20677084378434e-14,
+            -1.0,
+            -1.57650225286479e-14,
+            16.00492133612
+          ],
+          [
+            1.0,
+            1.2067708437843322e-14,
+            4.88766233157989e-15,
+            -1.79870581976826e-12
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 359,
+        "definition_name": "КТ.0011.00.00.002_Ахил:3",
+        "body_name": "left_leg_link5",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.0,
+            -1.6383906318882234e-14,
+            3.17585256041712e-15,
+            39.9999999999967
+          ],
+          [
+            -1.63839063188822e-14,
+            -1.0,
+            -1.09137670681426e-14,
+            51.254921336122
+          ],
+          [
+            3.1758525604172988e-15,
+            1.0913767068142548e-14,
+            -1.0,
+            -2.19949699856774e-13
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 369,
+        "definition_name": "Robotis_HN11-I101_Подшипниковая опора XL430:1",
+        "body_name": "left_leg_link4",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.9596475771877403e-15,
+            -1.514435062070532e-14,
+            1.0,
+            39.9999999999982
+          ],
+          [
+            0.11738422280642005,
+            -0.9930865743912425,
+            -1.52696829871188e-14,
+            95.3774606680613
+          ],
+          [
+            0.9930865743912425,
+            0.11738422280642005,
+            -1.68391871924052e-16,
+            -10.0000000000002
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 375,
+        "definition_name": "КТ.0011.00.00.004_Бедро:4",
+        "body_name": "left_leg_link4",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            4.3264495163280844e-15,
+            1.54648051788056e-14,
+            1.0,
+            39.9999999999977
+          ],
+          [
+            3.11278286728033e-16,
+            1.0,
+            -1.54648051788056e-14,
+            96.004921336124
+          ],
+          [
+            -1.0,
+            3.112782867280999e-16,
+            4.32644951632808e-15,
+            -1.46758689029023e-12
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 379,
+        "definition_name": "КТ.0011.00.00.058_П-скоба:3",
+        "body_name": "left_leg_link4",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.0,
+            -1.1670891982719177e-15,
+            -1.57893252151616e-14,
+            39.9999999999971
+          ],
+          [
+            -1.57893252151616e-14,
+            1.4952734934504244e-16,
+            -1.0,
+            68.1274606680606
+          ],
+          [
+            1.16708919827192e-15,
+            1.0,
+            1.49527349345024e-16,
+            26.2499999999986
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 337,
+        "definition_name": "XL430-W250-T_No Spacer:11",
+        "body_name": "left_leg_link5",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -1.0,
+            -1.5237232134784632e-14,
+            -3.25615358694777e-15,
+            39.9999999999979
+          ],
+          [
+            1.52372321347846e-14,
+            -1.0,
+            9.36981320181206e-15,
+            16.0049213361192
+          ],
+          [
+            -3.256153586947913e-15,
+            9.369813201812011e-15,
+            1.0,
+            -42.2500000000037
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 363,
+        "definition_name": "КТ.0011.00.00.005_Ось ступни:3",
+        "body_name": "left_leg_link5",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -5.218610408422997e-15,
+            1.5765022528647934e-14,
+            -1.0,
+            39.9999999999966
+          ],
+          [
+            6.48267978565707e-15,
+            1.0,
+            1.57650225286479e-14,
+            16.0049213361165
+          ],
+          [
+            1.0,
+            -6.482679785656988e-15,
+            -5.2186104084231e-15,
+            0.999999999997264
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 368,
+        "definition_name": "Robotis_HN11-I101_Подшипниковая опора XL430:1",
+        "body_name": "left_leg_link5",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -4.4488778385321e-15,
+            -1.5626475953433057e-14,
+            1.0,
+            39.9999999999969
+          ],
+          [
+            1.2829653195119e-14,
+            -1.0,
+            -1.5626475953433e-14,
+            16.00492133612
+          ],
+          [
+            1.0,
+            1.2829653195118931e-14,
+            4.4488778385323e-15,
+            -1.79876987441868e-12
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "root_assembly",
+        "ordinal": 3,
+        "definition_name": "Стопа левая",
+        "body_name": "left_leg_link6",
+        "runtime_transform_scope": "root_foot_occurrences",
+        "cad_world_transform_mm": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            40.0000000000002
+          ],
+          [
+            0.0,
+            -1.0,
+            -1.22464679914735e-16,
+            -5.99507866387366
+          ],
+          [
+            0.0,
+            1.22464679914735e-16,
+            -1.0,
+            0.999999999996476
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 340,
+        "definition_name": "XL430-W250-T_No Spacer:11",
+        "body_name": "right_leg_link2",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            -40.0000000000005
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            174.750000000002
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            -42.2499999999982
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 357,
+        "definition_name": "КТ.0011.00.00.014_Ось вращения ноги:1",
+        "body_name": "right_leg_link1",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -2.14631638814441e-15,
+            1.0,
+            -1.3580472570624e-14,
+            -40.0000000000001
+          ],
+          [
+            1.6125590802475627e-14,
+            -1.3580472570623966e-14,
+            -1.0,
+            200.999999999999
+          ],
+          [
+            -1.0,
+            -2.1463163881446287e-15,
+            -1.61255908024756e-14,
+            -3.21629291058782e-14
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 339,
+        "definition_name": "XL430-W250-T_No Spacer:11",
+        "body_name": "right_leg_link2",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            2.043612674917907e-15,
+            7.69675397669558e-16,
+            -1.0,
+            -40.0000000000004
+          ],
+          [
+            -1.61465314046266e-14,
+            1.0,
+            7.69675397669525e-16,
+            174.750000000002
+          ],
+          [
+            1.0,
+            1.61465314046266e-14,
+            2.04361267491792e-15,
+            1.85131697592736e-12
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 341,
+        "definition_name": "XL430-W250-T_No Spacer:11",
+        "body_name": "right_leg_link4",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -7.7715611723762e-16,
+            -1.2650236031021223e-15,
+            -1.0,
+            -40.0000000000005
+          ],
+          [
+            1.0,
+            1.57857089216234e-14,
+            -7.7715611723764e-16,
+            95.377460668064
+          ],
+          [
+            1.57857089216234e-14,
+            -1.0,
+            1.26502360310211e-15,
+            -9.99999999999946
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 360,
+        "definition_name": "КТ.0011.00.00.002_Ахил:3",
+        "body_name": "right_leg_link2",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -1.0,
+            9.159339953157823e-16,
+            -1.62758844567734e-15,
+            -40.0000000000004
+          ],
+          [
+            9.15933995315756e-16,
+            1.0,
+            1.62693465132444e-14,
+            139.500000000002
+          ],
+          [
+            1.627588445677355e-15,
+            1.62693465132444e-14,
+            -1.0,
+            1.38064601835584e-12
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 364,
+        "definition_name": "КТ.0011.00.00.005_Ось ступни:3",
+        "body_name": "right_leg_link2",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            2.0437239996914943e-15,
+            -9.084532757476798e-16,
+            1.0,
+            -40.0000000000002
+          ],
+          [
+            -1.75608530655902e-14,
+            -1.0,
+            -9.08453275747644e-16,
+            174.750000000002
+          ],
+          [
+            1.0,
+            -1.7560853065590197e-14,
+            -2.04372399969151e-15,
+            1.50000000000187
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 372,
+        "definition_name": "Robotis_HN11-I101_Подшипниковая опора XL430:1",
+        "body_name": "right_leg_link3",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.2620886021752055e-15,
+            8.881784197001147e-16,
+            -1.0,
+            -40.0000000000004
+          ],
+          [
+            -1.64366313764368e-14,
+            1.0,
+            8.88178419700094e-16,
+            174.750000000002
+          ],
+          [
+            1.0,
+            1.64366313764368e-14,
+            1.26208860217522e-15,
+            1.85125292127694e-12
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 367,
+        "definition_name": "КТ.0011.00.00.003_Голень:4",
+        "body_name": "right_leg_link3",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.266871729951089e-15,
+            6.661338147750819e-16,
+            -1.0,
+            -39.8000000000004
+          ],
+          [
+            -1.64761288650622e-14,
+            1.0,
+            6.66133814775061e-16,
+            94.7500000000016
+          ],
+          [
+            1.0,
+            1.64761288650622e-14,
+            1.2668717299511e-15,
+            5.29061957878993e-13
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 381,
+        "definition_name": "КТ.0011.00.00.058_П-скоба:3",
+        "body_name": "right_leg_link3",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.0,
+            1.028040611013136e-15,
+            1.0945746266546199e-15,
+            -39.6000000000004
+          ],
+          [
+            -1.256462957249957e-15,
+            0.17364817766694898,
+            0.9848077530122048,
+            125.562612740097
+          ],
+          [
+            8.223514748980848e-16,
+            -0.9848077530122048,
+            0.17364817766694898,
+            7.26335345718546
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 343,
+        "definition_name": "XL430-W250-T_No Spacer:11",
+        "body_name": "right_leg_link5",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -7.882764359699045e-16,
+            -6.938893903907169e-16,
+            -1.0,
+            -40.000000000001
+          ],
+          [
+            1.51932862388984e-14,
+            -1.0,
+            6.93889390390705e-16,
+            16.0049213361262
+          ],
+          [
+            -1.0,
+            -1.51932862388984e-14,
+            7.88276435969915e-16,
+            -6.64662891590326e-13
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 361,
+        "definition_name": "КТ.0011.00.00.002_Ахил:3",
+        "body_name": "right_leg_link5",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.0,
+            -6.458589587275246e-16,
+            -1.16687310574968e-16,
+            -40.0000000000011
+          ],
+          [
+            -6.45858958727523e-16,
+            -1.0,
+            1.36826923494992e-14,
+            51.2549213361262
+          ],
+          [
+            -1.1668731057497682e-16,
+            -1.36826923494992e-14,
+            -1.0,
+            -6.37757569352336e-14
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 373,
+        "definition_name": "Robotis_HN11-I101_Подшипниковая опора XL430:1",
+        "body_name": "right_leg_link4",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            9.992007221626034e-16,
+            -1.2621613692626591e-15,
+            -1.0,
+            -40.0000000000005
+          ],
+          [
+            1.0,
+            2.09832151654152e-14,
+            9.99200722162577e-16,
+            95.377460668064
+          ],
+          [
+            2.09832151654152e-14,
+            -1.0,
+            1.26216136926268e-15,
+            -9.99999999999945
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 376,
+        "definition_name": "КТ.0011.00.00.004_Бедро:4",
+        "body_name": "right_leg_link4",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -6.982672870811945e-16,
+            5.328005272227131e-16,
+            1.0,
+            -40.0000000000009
+          ],
+          [
+            1.59195748321619e-14,
+            1.0,
+            -5.32800527222702e-16,
+            96.0049213361258
+          ],
+          [
+            -1.0,
+            1.59195748321619e-14,
+            -6.98267287081203e-16,
+            6.28554111868271e-13
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 380,
+        "definition_name": "КТ.0011.00.00.058_П-скоба:3",
+        "body_name": "right_leg_link4",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.0,
+            7.466190677043428e-16,
+            -5.20983773872369e-16,
+            -40.000000000001
+          ],
+          [
+            -5.209837738723573e-16,
+            -1.57363249522451e-14,
+            -1.0,
+            68.1274606680635
+          ],
+          [
+            -7.46619067704351e-16,
+            1.0,
+            -1.57363249522451e-14,
+            26.2500000000002
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 342,
+        "definition_name": "XL430-W250-T_No Spacer:11",
+        "body_name": "right_leg_link5",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -1.0,
+            -5.551115123126007e-16,
+            3.63862840443503e-17,
+            -39.9999999999999
+          ],
+          [
+            5.551115123126e-16,
+            -1.0,
+            -1.8890382197092e-14,
+            16.0049213361272
+          ],
+          [
+            3.6386284044360786e-17,
+            -1.8890382197092e-14,
+            1.0,
+            -42.2500000000007
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 365,
+        "definition_name": "КТ.0011.00.00.005_Ось ступни:3",
+        "body_name": "right_leg_link5",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.398149209258727e-15,
+            6.661338147750971e-16,
+            -1.0,
+            -40.0000000000011
+          ],
+          [
+            -1.94182916859184e-14,
+            1.0,
+            6.6613381477507e-16,
+            16.004921336126
+          ],
+          [
+            1.0,
+            1.94182916859184e-14,
+            1.39814920925874e-15,
+            0.999999999999398
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 371,
+        "definition_name": "Robotis_HN11-I101_Подшипниковая опора XL430:1",
+        "body_name": "right_leg_link5",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -5.957141208694419e-16,
+            -2.6645352591003516e-15,
+            -1.0,
+            -40.0000000000016
+          ],
+          [
+            1.95930193959867e-14,
+            -1.0,
+            2.66453525910034e-15,
+            16.0049213361262
+          ],
+          [
+            -1.0,
+            -1.9593019395986696e-14,
+            5.95714120869494e-16,
+            -6.64662891590326e-13
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "root_assembly",
+        "ordinal": 2,
+        "definition_name": "Стопа правая",
+        "body_name": "right_leg_link6",
+        "runtime_transform_scope": "root_foot_occurrences",
+        "cad_world_transform_mm": [
+          [
+            -1.0,
+            -1.22464679914735e-16,
+            0.0,
+            -40.0000000000018
+          ],
+          [
+            1.22464679914735e-16,
+            -1.0,
+            0.0,
+            -5.9950786638741
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            1.00000000000135
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 346,
+        "definition_name": "Robotis_Dynamixel XL430-W250-T (с подшипником) No Spacer:1",
+        "body_name": "left_arm_link2",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            83.0000000000002
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            294.720562748477
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            -1.0000000000002
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 384,
+        "definition_name": "КТ.0011.00.00.007_Скоба косая:1",
+        "body_name": "left_arm_link1",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -1.0,
+            8.090442509449993e-16,
+            -1.39638013607831e-15,
+            83.0000000000002
+          ],
+          [
+            8.09044250945001e-16,
+            1.0,
+            -1.23459394821086e-15,
+            294.720562748477
+          ],
+          [
+            1.396380136078309e-15,
+            -1.2345939482108612e-15,
+            -1.0,
+            -1.00000000000027
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 347,
+        "definition_name": "Robotis_Dynamixel XL430-W250-T (с подшипником) No Spacer:4",
+        "body_name": "left_arm_link3",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            82.9999999999997
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            224.220562748476
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            -0.999999999999627
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 353,
+        "definition_name": "КТ.0011.00.00.019_Кронштейн привода одинарный:5",
+        "body_name": "left_arm_link2",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.5606856409543104e-15,
+            4.321395616131736e-16,
+            -1.0,
+            83.0000000000002
+          ],
+          [
+            8.71279716644985e-16,
+            1.0,
+            4.32139561613175e-16,
+            262.720562748477
+          ],
+          [
+            1.0,
+            -8.712797166449857e-16,
+            1.56068564095431e-15,
+            -1.00000000000011
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 349,
+        "definition_name": "КТ.0011.00.00.022_Скоба короткая:2",
+        "body_name": "left_arm_link2",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -3.6131065056513016e-15,
+            4.996003610812969e-16,
+            1.0,
+            82.9999999999997
+          ],
+          [
+            -2.54458146167888e-15,
+            1.0,
+            -4.99600361081306e-16,
+            224.220562748475
+          ],
+          [
+            -1.0,
+            -2.544581461678882e-15,
+            -3.6131065056513e-15,
+            -1.00000000000044
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 352,
+        "definition_name": "КТ.0011.00.00.019_Кронштейн привода одинарный:5",
+        "body_name": "left_arm_link3",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            9.122192799569119e-15,
+            4.127840931355018e-14,
+            -1.0,
+            83.0000000000027
+          ],
+          [
+            2.4200913949844e-15,
+            1.0,
+            4.12784093135502e-14,
+            192.220562748476
+          ],
+          [
+            1.0,
+            -2.4200913949847766e-15,
+            9.12219279956902e-15,
+            -1.00000000000841
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 382,
+        "definition_name": "КТ.0011.00.00.009_Перчатка:2",
+        "body_name": "left_arm_link3",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -1.0,
+            -8.639769903717544e-15,
+            2.47024622978907e-15,
+            83.0000000000021
+          ],
+          [
+            2.4702462297890457e-15,
+            2.8173618334505614e-15,
+            1.0,
+            177.720562748477
+          ],
+          [
+            -8.63976990371755e-15,
+            1.0,
+            -2.81736183345054e-15,
+            -1.00000000000815
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 386,
+        "definition_name": "Robotis_Dynamixel XL430-W250-T (с подшипником) No Spacer:2",
+        "body_name": "right_arm_link2",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            -82.9999999999997
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            294.720562748477
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            -1.00000000000009
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 385,
+        "definition_name": "КТ.0011.00.00.007_Скоба косая:1",
+        "body_name": "right_arm_link1",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            -82.9999999999997
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            294.720562748477
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            -1.00000000000001
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 348,
+        "definition_name": "Robotis_Dynamixel XL430-W250-T (с подшипником) No Spacer:4",
+        "body_name": "right_arm_link3",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            -82.9999999999997
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            224.220562748477
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            -0.599999999999785
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 355,
+        "definition_name": "КТ.0011.00.00.019_Кронштейн привода одинарный:5",
+        "body_name": "right_arm_link2",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.8408346863253825e-15,
+            -6.882334147429925e-15,
+            -1.0,
+            -82.9999999999996
+          ],
+          [
+            2.52517187613049e-15,
+            1.0,
+            -6.88233414742992e-15,
+            262.720562748477
+          ],
+          [
+            1.0,
+            -2.5251718761304775e-15,
+            1.8408346863254e-15,
+            -0.799999999999971
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 350,
+        "definition_name": "КТ.0011.00.00.022_Скоба короткая:2",
+        "body_name": "right_arm_link2",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -1.840834686325363e-15,
+            -7.363870975344907e-15,
+            1.0,
+            -82.9999999999994
+          ],
+          [
+            -3.66030504244008e-15,
+            1.0,
+            7.3638709753449e-15,
+            224.220562748477
+          ],
+          [
+            -1.0,
+            -3.6603050424400665e-15,
+            -1.84083468632539e-15,
+            -0.799999999999867
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 354,
+        "definition_name": "КТ.0011.00.00.019_Кронштейн привода одинарный:5",
+        "body_name": "right_arm_link3",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.0669701878064303e-13,
+            8.342315376148743e-15,
+            -1.0,
+            -83.0000000000013
+          ],
+          [
+            3.53581497574535e-15,
+            1.0,
+            8.34231537614912e-15,
+            192.220562748477
+          ],
+          [
+            1.0,
+            -3.5358149757462404e-15,
+            1.06697018780643e-13,
+            -0.600000000000656
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 383,
+        "definition_name": "КТ.0011.00.00.009_Перчатка:2",
+        "body_name": "right_arm_link3",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.0,
+            -1.0644151021501903e-13,
+            6.4045990733068e-15,
+            -83.0000000000013
+          ],
+          [
+            -6.404599073307219e-15,
+            -3.933085414210589e-15,
+            1.0,
+            177.720562748477
+          ],
+          [
+            -1.06441510215019e-13,
+            -1.0,
+            -3.93308541421127e-15,
+            -0.600000000001347
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 388,
+        "definition_name": "XL430-W250-T_Front Down + Back Low:20",
+        "body_name": "head_link2",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.1682808288847185e-15,
+            -6.343910911658062e-16,
+            1.0,
+            -5.68434188608081e-13
+          ],
+          [
+            1.34898744142004e-14,
+            -1.0,
+            -6.34391091165822e-16,
+            354.3
+          ],
+          [
+            1.0,
+            1.34898744142004e-14,
+            -1.16828082888471e-15,
+            -14.8000000000002
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 390,
+        "definition_name": "КТ.0011.00.00.054_Проставка фланца привода:1",
+        "body_name": "head_link1",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.6541398171715567e-16,
+            5.111113887393788e-16,
+            -1.0,
+            -6.83091996576773e-13
+          ],
+          [
+            1.32466499529251e-15,
+            1.0,
+            5.11111388739379e-16,
+            330.3
+          ],
+          [
+            1.0,
+            -1.32466499529251e-15,
+            1.65413981717155e-16,
+            -14.8000000000002
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 351,
+        "definition_name": "КТ.0011.00.00.022_Скоба короткая:2",
+        "body_name": "head_link1",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -1.0,
+            -1.2212185409673683e-15,
+            1.334994514967e-15,
+            -6.70880186172783e-13
+          ],
+          [
+            1.22121854096737e-15,
+            -1.0,
+            1.37061676846798e-15,
+            354.3
+          ],
+          [
+            1.3349945149669984e-15,
+            1.3706167684679816e-15,
+            1.0,
+            -14.8000000000002
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 374,
+        "definition_name": "Robotis_HN11-I101_Подшипниковая опора XL430:1",
+        "body_name": "head_link2",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.3301966626566175e-15,
+            -8.60617251819929e-16,
+            1.0,
+            -5.48450174164829e-13
+          ],
+          [
+            2.03319158304815e-14,
+            -1.0,
+            -8.60617251819956e-16,
+            354.3
+          ],
+          [
+            1.0,
+            2.03319158304815e-14,
+            -1.3301966626566e-15,
+            -14.8000000000002
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 389,
+        "definition_name": "AR-TCAM-03__Tracking Cam v3:1",
+        "body_name": "head_link2",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -0.9999999999999991,
+            -4.371138279968268e-08,
+            -1.2537594459238902e-15,
+            -1.51988868157815e-05
+          ],
+          [
+            -4.37113827996824e-08,
+            0.9999999999999953,
+            -8.742276128078082e-08,
+            372.209999210539
+          ],
+          [
+            5.0751292296733716e-15,
+            -8.742276128078068e-08,
+            -0.9999999999999962,
+            5.83056508981093
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 395,
+        "definition_name": "КТ.0011.00.00.013_Кронштейн камеры:1",
+        "body_name": "head_link2",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.0,
+            -1.3260641045648536e-15,
+            7.07667919475861e-16,
+            -5.38458166943201e-13
+          ],
+          [
+            -7.076679194758864e-16,
+            -1.9152101640803e-14,
+            1.0,
+            340.75
+          ],
+          [
+            -1.32606410456484e-15,
+            -1.0,
+            -1.9152101640803e-14,
+            21.0262379212494
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 427,
+        "definition_name": "КТ.0011.00.00.015_Корпус головы:1",
+        "body_name": "head_link2",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            -1.0,
+            -1.6425038657336648e-15,
+            1.83454408302767e-15,
+            -5.86197757002083e-13
+          ],
+          [
+            1.64250386573369e-15,
+            -1.0,
+            1.37828801522389e-14,
+            392.05
+          ],
+          [
+            1.8345440830276474e-15,
+            1.3782880152238904e-14,
+            1.0,
+            -0.550000000000624
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 428,
+        "definition_name": "КТ.0011.00.00.017_Кронштейн головы:1",
+        "body_name": "head_link2",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            -5.46229728115578e-13
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            398.55
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            -29.050000000001
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "scope": "main_body_assembly",
+        "ordinal": 429,
+        "definition_name": "КТ.0011.00.00.052_Стекло камеры:1",
+        "body_name": "head_link2",
+        "runtime_transform_scope": "main_body_assembly",
+        "cad_world_transform_mm": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            -1.51988863317243e-05
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            372.250000000001
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            40.1999999999995
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      }
+    ],
+    "omitted_policy": "all root-level foot screws/nuts, loose internal fasteners and unselected internals omitted; obsolete main-assembly Ступня occurrences 377/387 excluded; each terminal LINK6 contains only its new root-level solid Стопа occurrence 2/3",
+    "joint_datum_risk": "dimensioned PDF/passport is authoritative for the installed feet; independent root-foot grounding knowingly breaks the native STEP mounting mate by 4.254921 mm; residual shaft-line asymmetry is at most 0.401 mm and hardware tolerances remain unmeasured"
+  },
+  "tessellation": {
+    "linear_deflection_mm": 0.65,
+    "angular_deflection_rad": 0.5,
+    "relative": false
+  },
+  "assets": [
+    {
+      "body_name": "base_link",
+      "mesh_name": "cad_base_link",
+      "geom_name": "cad_visual_base_link",
+      "visual_role": "structure",
+      "file": "base_link.stl",
+      "sha256": "D9E781E092CBF7B41CE42C79792B89EB99FE3EE6C49861AE979A6102E49E9932",
+      "size_bytes": 6125384,
+      "triangle_count": 122506,
+      "brep_solid_count": 220,
+      "brep_face_count": 7086,
+      "null_triangulation_face_count": 0,
+      "triangulated_face_triangle_count": 122506,
+      "body_local_brep_bounds_mm": [
+        -62.22048024676373,
+        -60.00036270682628,
+        -3.575362706827719,
+        22.450362706826677,
+        60.000362706826756,
+        129.30036271104044
+      ]
+    },
+    {
+      "body_name": "left_leg_link1",
+      "mesh_name": "cad_left_leg_link1",
+      "geom_name": "cad_visual_left_leg_link1",
+      "visual_role": "joint",
+      "file": "left_leg_link1.stl",
+      "sha256": "E52AD72955591448BE3A2100C542A1F159B71BA3A85483092360AFD698E48F70",
+      "size_bytes": 75084,
+      "triangle_count": 1500,
+      "brep_solid_count": 1,
+      "brep_face_count": 39,
+      "null_triangulation_face_count": 0,
+      "triangulated_face_triangle_count": 1500,
+      "body_local_brep_bounds_mm": [
+        -15.400105105260026,
+        -23.250065436483432,
+        -36.750000100000875,
+        14.600098741304201,
+        24.750062042356124,
+        9.99992474908339e-08
+      ]
+    },
+    {
+      "body_name": "left_leg_link2",
+      "mesh_name": "cad_left_leg_link2",
+      "geom_name": "cad_visual_left_leg_link2",
+      "visual_role": "joint",
+      "file": "left_leg_link2.stl",
+      "sha256": "8AF2CF22F1A50BE688143AB0EACC490587508B2DC9D82BE94BA7C1C548F98928",
+      "size_bytes": 1913184,
+      "triangle_count": 38262,
+      "brep_solid_count": 34,
+      "brep_face_count": 1695,
+      "null_triangulation_face_count": 0,
+      "triangulated_face_triangle_count": 38262,
+      "body_local_brep_bounds_mm": [
+        -16.600046738150944,
+        -44.75022511851784,
+        -59.250072709477735,
+        21.400011975955458,
+        11.250055413146626,
+        22.250059949593467
+      ]
+    },
+    {
+      "body_name": "left_leg_link3",
+      "mesh_name": "cad_left_leg_link3",
+      "geom_name": "cad_visual_left_leg_link3",
+      "visual_role": "accent",
+      "file": "left_leg_link3.stl",
+      "sha256": "69B95F22FBDB1A75232E900032F3C05E345A3FC9F57ED2CDDB6F1C78BEF08500",
+      "size_bytes": 465284,
+      "triangle_count": 9304,
+      "brep_solid_count": 5,
+      "brep_face_count": 312,
+      "null_triangulation_face_count": 0,
+      "triangulated_face_triangle_count": 9304,
+      "body_local_brep_bounds_mm": [
+        -11.000090512138636,
+        -10.249983748994161,
+        -21.600378872212374,
+        91.0000871852168,
+        44.06236261367797,
+        20.80004850569817
+      ]
+    },
+    {
+      "body_name": "left_leg_link4",
+      "mesh_name": "cad_left_leg_link4",
+      "geom_name": "cad_visual_left_leg_link4",
+      "visual_role": "structure",
+      "file": "left_leg_link4.stl",
+      "sha256": "3359A79A665E0E4C15EDA85D6B8A6FFF51D15284E85C5C5B1D726DC977D1B23A",
+      "size_bytes": 1302034,
+      "triangle_count": 26039,
+      "brep_solid_count": 21,
+      "brep_face_count": 1109,
+      "null_triangulation_face_count": 0,
+      "triangulated_face_triangle_count": 26039,
+      "body_local_brep_bounds_mm": [
+        -15.294777252686819,
+        -36.706302575187486,
+        -20.799608450856013,
+        85.98292613019316,
+        12.694611444822797,
+        21.60076677844792
+      ]
+    },
+    {
+      "body_name": "left_leg_link5",
+      "mesh_name": "cad_left_leg_link5",
+      "geom_name": "cad_visual_left_leg_link5",
+      "visual_role": "joint",
+      "file": "left_leg_link5.stl",
+      "sha256": "66690D319D51F8F15AA6EBC1804AFAE89C3E1EC2E31176F8A15F16B2FC501D7C",
+      "size_bytes": 2093184,
+      "triangle_count": 41862,
+      "brep_solid_count": 37,
+      "brep_face_count": 1829,
+      "null_triangulation_face_count": 0,
+      "triangulated_face_triangle_count": 41862,
+      "body_local_brep_bounds_mm": [
+        -42.05651923754896,
+        -63.15289103417927,
+        -21.400720378943376,
+        18.528530209525588,
+        22.329958657694696,
+        19.59939233065269
+      ]
+    },
+    {
+      "body_name": "left_leg_link6",
+      "mesh_name": "cad_left_leg_link6",
+      "geom_name": "cad_visual_left_leg_link6",
+      "visual_role": "foot",
+      "file": "left_leg_link6.stl",
+      "sha256": "9BFA939CFF444BCC5981214AAFF3E327C84BAE8AD5FF48EEA968F80076158F8B",
+      "size_bytes": 99084,
+      "triangle_count": 1980,
+      "brep_solid_count": 1,
+      "brep_face_count": 65,
+      "null_triangulation_face_count": 0,
+      "triangulated_face_triangle_count": 1980,
+      "body_local_brep_bounds_mm": [
+        18.253918132987618,
+        -32.09970049157593,
+        -68.2177020717887,
+        29.254737922946273,
+        47.40101999907136,
+        64.3000164742282
+      ]
+    },
+    {
+      "body_name": "right_leg_link1",
+      "mesh_name": "cad_right_leg_link1",
+      "geom_name": "cad_visual_right_leg_link1",
+      "visual_role": "joint",
+      "file": "right_leg_link1.stl",
+      "sha256": "963BEC767FD5BABC465F1F0B64FCD7E0D1BAAA142B13F53CC30D648B47A0F572",
+      "size_bytes": 75084,
+      "triangle_count": 1500,
+      "brep_solid_count": 1,
+      "brep_face_count": 39,
+      "null_triangulation_face_count": 0,
+      "triangulated_face_triangle_count": 1500,
+      "body_local_brep_bounds_mm": [
+        -14.60010510526726,
+        -23.250062042369784,
+        -36.75000010000055,
+        15.40009874129701,
+        24.75006543647005,
+        9.999951993956415e-08
+      ]
+    },
+    {
+      "body_name": "right_leg_link2",
+      "mesh_name": "cad_right_leg_link2",
+      "geom_name": "cad_visual_right_leg_link2",
+      "visual_role": "joint",
+      "file": "right_leg_link2.stl",
+      "sha256": "ADA64D91B67318EFDF3C9AFD45C3C307081508286C64FB0B4390A53E43757D11",
+      "size_bytes": 1913184,
+      "triangle_count": 38262,
+      "brep_solid_count": 34,
+      "brep_face_count": 1695,
+      "null_triangulation_face_count": 0,
+      "triangulated_face_triangle_count": 38262,
+      "body_local_brep_bounds_mm": [
+        -21.400011975956144,
+        -44.75022511852362,
+        -59.25007519248501,
+        16.600046738115186,
+        11.250055413140228,
+        22.250057466585293
+      ]
+    },
+    {
+      "body_name": "right_leg_link3",
+      "mesh_name": "cad_right_leg_link3",
+      "geom_name": "cad_visual_right_leg_link3",
+      "visual_role": "accent",
+      "file": "right_leg_link3.stl",
+      "sha256": "A628EA70A2063DDB4C04CA9259C9D9A1BBF532290C5FE2FE2F852335E442F12F",
+      "size_bytes": 465284,
+      "triangle_count": 9304,
+      "brep_solid_count": 5,
+      "brep_face_count": 312,
+      "null_triangulation_face_count": 0,
+      "triangulated_face_triangle_count": 9304,
+      "body_local_brep_bounds_mm": [
+        -11.000088034376311,
+        -10.250022947392559,
+        -21.000378872219144,
+        91.00008966297976,
+        44.06236331157285,
+        21.400048505692883
+      ]
+    },
+    {
+      "body_name": "right_leg_link4",
+      "mesh_name": "cad_right_leg_link4",
+      "geom_name": "cad_visual_right_leg_link4",
+      "visual_role": "structure",
+      "file": "right_leg_link4.stl",
+      "sha256": "0180BA6552ED9CCDB78DD73B9F722510A4C92607509CCE2ADC0369B9F0AD744F",
+      "size_bytes": 1302034,
+      "triangle_count": 26039,
+      "brep_solid_count": 21,
+      "brep_face_count": 1109,
+      "null_triangulation_face_count": 0,
+      "triangulated_face_triangle_count": 26039,
+      "body_local_brep_bounds_mm": [
+        -15.294773821441558,
+        -36.70630853451904,
+        -21.599608450824817,
+        85.98292956143987,
+        12.69460548549223,
+        20.800766778480174
+      ]
+    },
+    {
+      "body_name": "right_leg_link5",
+      "mesh_name": "cad_right_leg_link5",
+      "geom_name": "cad_visual_right_leg_link5",
+      "visual_role": "joint",
+      "file": "right_leg_link5.stl",
+      "sha256": "097E1AC682F0A753B83CADD8F245011BADECB089326BA4AEBB60DC4603BA4A2F",
+      "size_bytes": 2093184,
+      "triangle_count": 41862,
+      "brep_solid_count": 37,
+      "brep_face_count": 1829,
+      "null_triangulation_face_count": 0,
+      "triangulated_face_triangle_count": 41862,
+      "body_local_brep_bounds_mm": [
+        -42.05651739130472,
+        -63.152878532963385,
+        -19.600739334384322,
+        18.52853205576604,
+        22.329971158908563,
+        21.399373375211304
+      ]
+    },
+    {
+      "body_name": "right_leg_link6",
+      "mesh_name": "cad_right_leg_link6",
+      "geom_name": "cad_visual_right_leg_link6",
+      "visual_role": "foot",
+      "file": "right_leg_link6.stl",
+      "sha256": "098416994A9A1C23BBCCD129BE303873DE75426D50FFE85276AD1F3F70815776",
+      "size_bytes": 131384,
+      "triangle_count": 2626,
+      "brep_solid_count": 1,
+      "brep_face_count": 91,
+      "null_triangulation_face_count": 0,
+      "triangulated_face_triangle_count": 2626,
+      "body_local_brep_bounds_mm": [
+        18.253772138313415,
+        -47.399909492399175,
+        -68.21774319557343,
+        29.255009932016026,
+        32.10122900199211,
+        64.30039335418749
+      ]
+    },
+    {
+      "body_name": "left_arm_link1",
+      "mesh_name": "cad_left_arm_link1",
+      "geom_name": "cad_visual_left_arm_link1",
+      "visual_role": "joint",
+      "file": "left_arm_link1.stl",
+      "sha256": "823838C65DD0DA0B8073D31C4AF180563BDE0DB3383F9BE245BEB8DFB1C9B47C",
+      "size_bytes": 172084,
+      "triangle_count": 3440,
+      "brep_solid_count": 1,
+      "brep_face_count": 61,
+      "null_triangulation_face_count": 0,
+      "triangulated_face_triangle_count": 3440,
+      "body_local_brep_bounds_mm": [
+        -21.200000100000295,
+        -27.657002279134083,
+        -92.62756502761125,
+        21.200000099999755,
+        14.000000099999923,
+        -55.99999990000017
+      ]
+    },
+    {
+      "body_name": "left_arm_link2",
+      "mesh_name": "cad_left_arm_link2",
+      "geom_name": "cad_visual_left_arm_link2",
+      "visual_role": "accent",
+      "file": "left_arm_link2.stl",
+      "sha256": "82C1D12B403CCE977F4C29A74B55775B069463FBA34B15A442FC661ABEE9167A",
+      "size_bytes": 1332434,
+      "triangle_count": 26647,
+      "brep_solid_count": 21,
+      "brep_face_count": 1032,
+      "null_triangulation_face_count": 0,
+      "triangulated_face_triangle_count": 26647,
+      "body_local_brep_bounds_mm": [
+        -11.25056618919294,
+        -14.250003440715753,
+        -21.20000344071505,
+        74.89944069223948,
+        14.250003440716117,
+        21.20000344071415
+      ]
+    },
+    {
+      "body_name": "left_arm_link3",
+      "mesh_name": "cad_left_arm_link3",
+      "geom_name": "cad_visual_left_arm_link3",
+      "visual_role": "structure",
+      "file": "left_arm_link3.stl",
+      "sha256": "7B1E5967E0F6A0FE0A1B82A9148E0C083F5650A58035739D835033AFB4072683",
+      "size_bytes": 1358434,
+      "triangle_count": 27167,
+      "brep_solid_count": 21,
+      "brep_face_count": 1079,
+      "null_triangulation_face_count": 0,
+      "triangulated_face_triangle_count": 27167,
+      "body_local_brep_bounds_mm": [
+        -11.250566189191973,
+        -17.000003441007394,
+        -21.000003444928456,
+        113.15007578684839,
+        14.250003440716265,
+        20.00000344071406
+      ]
+    },
+    {
+      "body_name": "right_arm_link1",
+      "mesh_name": "cad_right_arm_link1",
+      "geom_name": "cad_visual_right_arm_link1",
+      "visual_role": "joint",
+      "file": "right_arm_link1.stl",
+      "sha256": "8FF6D0978EEF1A89DAF7F10AA0AAB6B821084EEEC45516ECF96CCB0213E8855B",
+      "size_bytes": 172084,
+      "triangle_count": 3440,
+      "brep_solid_count": 1,
+      "brep_face_count": 61,
+      "null_triangulation_face_count": 0,
+      "triangulated_face_triangle_count": 3440,
+      "body_local_brep_bounds_mm": [
+        -21.200000100000015,
+        -27.657002279134026,
+        55.99999989999968,
+        21.200000099999993,
+        14.000000099999903,
+        92.62756502761073
+      ]
+    },
+    {
+      "body_name": "right_arm_link2",
+      "mesh_name": "cad_right_arm_link2",
+      "geom_name": "cad_visual_right_arm_link2",
+      "visual_role": "accent",
+      "file": "right_arm_link2.stl",
+      "sha256": "759F6582FC3A75E7DDA93AD8645C788B3C582508973C7575EE5B6FFB372FC477",
+      "size_bytes": 1332434,
+      "triangle_count": 26647,
+      "brep_solid_count": 21,
+      "brep_face_count": 1032,
+      "null_triangulation_face_count": 0,
+      "triangulated_face_triangle_count": 26647,
+      "body_local_brep_bounds_mm": [
+        -11.250566189192975,
+        -14.250003440715625,
+        -21.000003440714472,
+        74.89944069223753,
+        14.250003440716245,
+        21.400003440714706
+      ]
+    },
+    {
+      "body_name": "right_arm_link3",
+      "mesh_name": "cad_right_arm_link3",
+      "geom_name": "cad_visual_right_arm_link3",
+      "visual_role": "structure",
+      "file": "right_arm_link3.stl",
+      "sha256": "5752800F9852A62D53DC2FC4C00B4275B1A17B25E03D75D9B83F5D509D3B215E",
+      "size_bytes": 1358434,
+      "triangle_count": 27167,
+      "brep_solid_count": 21,
+      "brep_face_count": 1079,
+      "null_triangulation_face_count": 0,
+      "triangulated_face_triangle_count": 27167,
+      "body_local_brep_bounds_mm": [
+        -11.250566189192947,
+        -14.250003440716231,
+        -21.4000034449283,
+        113.1500757868485,
+        17.00000344100839,
+        19.600003440714218
+      ]
+    },
+    {
+      "body_name": "head_link1",
+      "mesh_name": "cad_head_link1",
+      "geom_name": "cad_visual_head_link1",
+      "visual_role": "joint",
+      "file": "head_link1.stl",
+      "sha256": "89462F174318C720CDE56A1746F437DA50CF793833C790F05EFA37BFF516A3FA",
+      "size_bytes": 200084,
+      "triangle_count": 4000,
+      "brep_solid_count": 2,
+      "brep_face_count": 60,
+      "null_triangulation_face_count": 0,
+      "triangulated_face_triangle_count": 4000,
+      "body_local_brep_bounds_mm": [
+        -13.000000100000227,
+        -21.200000100000807,
+        -2.000000100000015,
+        13.000000099999857,
+        21.200000099999457,
+        28.400000100000035
+      ]
+    },
+    {
+      "body_name": "head_link2",
+      "mesh_name": "cad_head_link2",
+      "geom_name": "cad_visual_head_link2",
+      "visual_role": "sensor",
+      "file": "head_link2.stl",
+      "sha256": "8AF38B4C6E5964E87F8FD3D4A7A41144CCA636B55C9AE7BFF1A572B740450788",
+      "size_bytes": 5041834,
+      "triangle_count": 100835,
+      "brep_solid_count": 384,
+      "brep_face_count": 14024,
+      "null_triangulation_face_count": 7,
+      "triangulated_face_triangle_count": 100835,
+      "body_local_brep_bounds_mm": [
+        -49.669740174488716,
+        -13.260679180714549,
+        -42.100675322070785,
+        59.38503483369567,
+        60.332531173970295,
+        42.100705722155354
+      ]
+    }
+  ],
+  "body_count": 21,
+  "total_triangle_count": 580389,
+  "total_null_triangulation_face_count": 7,
+  "total_size_bytes": 29021214,
+  "step_load_seconds": 25.760996799999702
+}

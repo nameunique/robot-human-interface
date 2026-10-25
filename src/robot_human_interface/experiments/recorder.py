@@ -456,6 +456,10 @@ def _sanitize_string(value: str) -> str:
 def _serializable(value: object) -> object:
     """Convert arbitrary metadata to safe builtins and redact absolute paths."""
 
+    # SourceKind and other string/int enums must become plain values before
+    # the builtin checks, otherwise PyYAML rejects real SessionConfig exports.
+    if isinstance(value, Enum):
+        return _serializable(value.value)
     if value is None or isinstance(value, (bool, int)):
         return value
     if isinstance(value, float):
@@ -464,8 +468,6 @@ def _serializable(value: object) -> object:
         return _sanitize_string(value)
     if isinstance(value, Path):
         return value.name
-    if isinstance(value, Enum):
-        return _serializable(value.value)
     if isinstance(value, np.generic):
         return _serializable(value.item())
     if isinstance(value, np.ndarray):
@@ -583,12 +585,22 @@ def _default_artifact_files(
             for model in sorted(model_directory.iterdir()):
                 if model.is_file():
                     result[f"model/{model.name}"] = model
-        mujoco_directory = repo_root / "models" / "humanoid"
+        from robot_human_interface.model_profiles import get_model_profile
+
+        # Older standalone recorder callers have no SessionConfig and refer
+        # to the legacy model. Application sessions always declare a profile.
+        profile_name = (
+            session_config.get("model_profile", "unity_legacy")
+            if isinstance(session_config, Mapping)
+            else getattr(session_config, "model_profile", "unity_legacy")
+        )
+        model_name = get_model_profile(profile_name).model_directory
+        mujoco_directory = repo_root / "models" / model_name
         if mujoco_directory.is_dir():
             for model_input in sorted(mujoco_directory.rglob("*")):
                 if model_input.is_file():
                     relative = model_input.relative_to(mujoco_directory).as_posix()
-                    result[f"model/humanoid/{relative}"] = model_input
+                    result[f"model/{model_name}/{relative}"] = model_input
 
     source: object | None = None
     if isinstance(session_config, Mapping):

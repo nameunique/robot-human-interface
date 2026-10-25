@@ -103,7 +103,9 @@ jobs:
         run: >-
           uv run --locked --no-sync python -c
           "from robot_human_interface.simulation import HumanoidSimulation;
-          sim = HumanoidSimulation('fixed'); state = sim.step(2);
+          from robot_human_interface.model_profiles import get_model_profile;
+          profile = get_model_profile();
+          sim = HumanoidSimulation(profile.scene_path('fixed'), joint_config_path=profile.joints_path()); state = sim.step(2);
           assert state.is_finite; sim.close(); print('MuJoCo smoke OK')"
 
       - name: MuJoCo model smoke under Xvfb on Ubuntu
@@ -111,5 +113,7 @@ jobs:
         run: >-
           xvfb-run -a uv run --locked --no-sync python -c
           "from robot_human_interface.simulation import HumanoidSimulation;
-          sim = HumanoidSimulation('fixed'); state = sim.step(2);
+          from robot_human_interface.model_profiles import get_model_profile;
+          profile = get_model_profile();
+          sim = HumanoidSimulation(profile.scene_path('fixed'), joint_config_path=profile.joints_path()); state = sim.step(2);
           assert state.is_finite; sim.close(); print('MuJoCo smoke OK')"

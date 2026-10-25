@@ -68,6 +68,7 @@ class FinalizedSafeCommand:
     balance_active: bool
     stage: str = FINAL_SAFETY_STAGE
     _proof: object = field(default=None, repr=False, compare=False)
+    hardware_mapping_verified: bool = True
 
     def __post_init__(self) -> None:
         if self._proof is not _FINAL_COMMAND_PROOF:
@@ -80,6 +81,8 @@ class FinalizedSafeCommand:
             raise ValueError("finalized command must use canonical Unity joint order")
         if type(self.free_base_active) is not bool or type(self.balance_active) is not bool:
             raise ValueError("finalized safety mode flags must be booleans")
+        if type(self.hardware_mapping_verified) is not bool:
+            raise ValueError("hardware_mapping_verified must be a boolean")
         if self.stage != FINAL_SAFETY_STAGE:
             raise ValueError("unknown final safety stage")
         copied = RobotJointCommand(
@@ -127,6 +130,7 @@ class FinalizedSafeCommand:
             self._command,
             free_base_active=self.free_base_active,
             balance_active=self.balance_active,
+            hardware_mapping_verified=self.hardware_mapping_verified,
         )
 
 
@@ -135,6 +139,7 @@ def finalize_safe_command(
     *,
     free_base_active: bool,
     balance_active: bool,
+    hardware_mapping_verified: bool = True,
 ) -> FinalizedSafeCommand:
     """Mint provenance after the final balance/support command is selected."""
 
@@ -145,6 +150,7 @@ def finalize_safe_command(
         free_base_active,
         balance_active,
         _proof=_FINAL_COMMAND_PROOF,
+        hardware_mapping_verified=hardware_mapping_verified,
     )
 
 
@@ -433,6 +439,13 @@ class SafeRobotController:
 
         safe_copy = command.copy()
         with self._lock:
+            if (
+                self._state is RobotConnectionState.ARMED
+                and not command.hardware_mapping_verified
+            ):
+                error = ValueError("model-to-hardware joint mapping is not verified")
+                self._degrade_locked(error, "unverified_hardware_mapping")
+                raise error
             self._safe_command = safe_copy
             self._safe_payload = payload
             self._safe_received_s = now
@@ -446,6 +459,8 @@ class SafeRobotController:
             return f"robot state is {self._state.value}, not connected_disarmed"
         if self._safe_command is None or self._safe_payload is None:
             return "no validated safe command is available"
+        if not self._safe_command.hardware_mapping_verified:
+            return "model-to-hardware joint mapping is not verified"
         age = self._command_age_locked(now_s)
         if age is None or age > self.max_command_age_s:
             return "safe command is stale"
@@ -548,6 +563,15 @@ class SafeRobotController:
         now = self._now(now_s)
         with self._lock:
             if self._state is not RobotConnectionState.ARMED:
+                return False
+            if (
+                self._safe_command is None
+                or not self._safe_command.hardware_mapping_verified
+            ):
+                self._degrade_locked(
+                    RuntimeError("model-to-hardware joint mapping is not verified"),
+                    "unverified_hardware_mapping",
+                )
                 return False
             age = self._command_age_locked(now)
             if age is None or age > self.max_command_age_s:

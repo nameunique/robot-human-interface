@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 
 from robot_human_interface.playback import PlaybackState
+from robot_human_interface.model_profiles import get_model_profile
 from robot_human_interface.protocol import finalize_safe_command
 from robot_human_interface.resources import ResourceLocator
 from robot_human_interface.session import (
@@ -36,6 +37,7 @@ class DefaultTeleopPipeline:
             raise TypeError("config must be a SessionConfig")
         self.config = config
         self._resources = resources or ResourceLocator()
+        self.model_profile = get_model_profile(config.model_profile)
         self._source: Any | None = None
         self._pose: Any | None = None
         self._retargeter: Any | None = None
@@ -147,25 +149,33 @@ class DefaultTeleopPipeline:
                 if self.config.retargeting == "ik"
                 else GeometricRetargeter
             )
-            self._retargeter = retargeter_type.from_yaml(
-                joints_path=self._resources.config("joints.yaml"),
-                retargeting_path=self._resources.config("retargeting.yaml"),
-            )
+            retargeter_kwargs = {
+                "joints_path": self.model_profile.joints_path(self._resources),
+                "retargeting_path": self._resources.config("retargeting.yaml"),
+            }
+            if self.config.retargeting == "ik":
+                retargeter_kwargs["model_path"] = self.model_profile.scene_path(
+                    "fixed", self._resources
+                )
+            self._retargeter = retargeter_type.from_yaml(**retargeter_kwargs)
             self._simulation = HumanoidSimulation(
-                "free" if self.config.free_base else "fixed"
+                self.model_profile.scene_path(
+                    "free" if self.config.free_base else "fixed", self._resources
+                ),
+                joint_config_path=self.model_profile.joints_path(self._resources),
             )
             balance_enabled = bool(
                 self.config.free_base and self.config.balance_enabled
             )
             balance_config = load_standing_balance_config(
-                self._resources.config("balance.yaml")
+                self.model_profile.balance_path(self._resources)
             )
             self._balance_controller = StandingBalanceController.from_simulation(
                 self._simulation,
                 replace(balance_config, enabled=balance_enabled),
             )
             support_config = load_support_control_config(
-                self._resources.config("balance.yaml")
+                self.model_profile.balance_path(self._resources)
             )
             self._support_machine = SupportStateMachine.from_simulation(
                 self._simulation,
@@ -174,7 +184,7 @@ class DefaultTeleopPipeline:
             self._support_latch = SupportIntentLatch()
             self._support_estimator = HumanSupportIntentEstimator(
                 load_human_support_intent_config(
-                    self._resources.config("balance.yaml")
+                    self.model_profile.balance_path(self._resources)
                 )
             )
             self._support_intent_type = SupportIntent
@@ -397,6 +407,10 @@ class DefaultTeleopPipeline:
         upright = 1.0 - 2.0 * (quaternion[1] ** 2 + quaternion[2] ** 2)
         tilt_rad = float(np.arccos(np.clip(upright, -1.0, 1.0)))
         telemetry = {
+            "model_profile": self.model_profile.name,
+            "model_label": self.model_profile.label_ru,
+            "hardware_mapping_verified": self.model_profile.hardware_mapping_verified,
+            "hardware_block_reason": self.model_profile.hardware_block_reason,
             # Preserve the complete immutable MuJoCo state for research
             # recording.  GUI cards may still consume the individual keys.
             "humanoid_state": state,
@@ -438,6 +452,7 @@ class DefaultTeleopPipeline:
                 safe_command,
                 free_base_active=bool(self.config.free_base),
                 balance_active=balance_enabled,
+                hardware_mapping_verified=self.model_profile.hardware_mapping_verified,
             )
         )
         snapshot = PipelineSnapshot(

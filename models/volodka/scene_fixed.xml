@@ -1,0 +1,258 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mujoco model="volodka_teleop_assisted">
+  <compiler angle="radian" autolimits="true" inertiafromgeom="false" meshdir="meshes" />
+  <option timestep="0.002" gravity="0 0 -9.81" iterations="50" tolerance="1e-10" solver="Newton" integrator="implicitfast">
+    <flag energy="enable" warmstart="enable" />
+  </option>
+  <visual>
+    <global azimuth="135" elevation="-18" fovy="42" offwidth="1280" offheight="720" />
+    <headlight ambient="0.22 0.22 0.22" diffuse="0.58 0.58 0.58" specular="0.18 0.18 0.18" />
+    <rgba haze="0.82 0.86 0.90 1" />
+  </visual>
+  <asset>
+    <texture name="engineering_sky" type="skybox" builtin="gradient" rgb1="0.94 0.96 0.98" rgb2="0.55 0.62 0.7" width="512" height="3072" />
+    <texture name="engineering_floor_grid" type="2d" builtin="checker" rgb1="0.79 0.81 0.83" rgb2="0.69 0.72 0.75" mark="edge" markrgb="0.38 0.41 0.45" width="512" height="512" />
+    <material name="engineering_floor" texture="engineering_floor_grid" texrepeat="16 16" texuniform="true" specular="0.12" shininess="0.10" reflectance="0.03" />
+    <material name="robot_structure" rgba="0.16 0.18 0.21 1" specular="0.15" shininess="0.2" reflectance="0" />
+    <material name="robot_joint" rgba="0.42 0.45 0.5 1" specular="0.25" shininess="0.2" reflectance="0" />
+    <material name="robot_accent" rgba="0.05 0.34 0.64 1" specular="0.15" shininess="0.2" reflectance="0" />
+    <material name="robot_foot" rgba="0.2 0.22 0.25 1" specular="0.22" shininess="0.2" reflectance="0" />
+    <material name="robot_sensor" rgba="0.07 0.09 0.11 1" specular="0.15" shininess="0.35" reflectance="0" />
+    <material name="sole_support_debug" rgba="0.12 0.14 0.17 0.62" specular="0.15" shininess="0.2" reflectance="0" />
+    <material name="environment_collision_debug" rgba="0.95 0.45 0.05 0.24" specular="0" shininess="0" reflectance="0" />
+    <mesh name="cad_base_link" file="base_link.stl" scale="0.001 0.001 0.001" smoothnormal="true" maxhullvert="64" />
+    <mesh name="cad_left_leg_link1" file="left_leg_link1.stl" scale="0.001 0.001 0.001" smoothnormal="true" maxhullvert="64" />
+    <mesh name="cad_left_leg_link2" file="left_leg_link2.stl" scale="0.001 0.001 0.001" smoothnormal="true" maxhullvert="64" />
+    <mesh name="cad_left_leg_link3" file="left_leg_link3.stl" scale="0.001 0.001 0.001" smoothnormal="true" maxhullvert="64" />
+    <mesh name="cad_left_leg_link4" file="left_leg_link4.stl" scale="0.001 0.001 0.001" smoothnormal="true" maxhullvert="64" />
+    <mesh name="cad_left_leg_link5" file="left_leg_link5.stl" scale="0.001 0.001 0.001" smoothnormal="true" maxhullvert="64" />
+    <mesh name="cad_left_leg_link6" file="left_leg_link6.stl" scale="0.001 0.001 0.001" smoothnormal="true" maxhullvert="64" />
+    <mesh name="cad_right_leg_link1" file="right_leg_link1.stl" scale="0.001 0.001 0.001" smoothnormal="true" maxhullvert="64" />
+    <mesh name="cad_right_leg_link2" file="right_leg_link2.stl" scale="0.001 0.001 0.001" smoothnormal="true" maxhullvert="64" />
+    <mesh name="cad_right_leg_link3" file="right_leg_link3.stl" scale="0.001 0.001 0.001" smoothnormal="true" maxhullvert="64" />
+    <mesh name="cad_right_leg_link4" file="right_leg_link4.stl" scale="0.001 0.001 0.001" smoothnormal="true" maxhullvert="64" />
+    <mesh name="cad_right_leg_link5" file="right_leg_link5.stl" scale="0.001 0.001 0.001" smoothnormal="true" maxhullvert="64" />
+    <mesh name="cad_right_leg_link6" file="right_leg_link6.stl" scale="0.001 0.001 0.001" smoothnormal="true" maxhullvert="64" />
+    <mesh name="cad_left_arm_link1" file="left_arm_link1.stl" scale="0.001 0.001 0.001" smoothnormal="true" maxhullvert="64" />
+    <mesh name="cad_left_arm_link2" file="left_arm_link2.stl" scale="0.001 0.001 0.001" smoothnormal="true" maxhullvert="64" />
+    <mesh name="cad_left_arm_link3" file="left_arm_link3.stl" scale="0.001 0.001 0.001" smoothnormal="true" maxhullvert="64" />
+    <mesh name="cad_right_arm_link1" file="right_arm_link1.stl" scale="0.001 0.001 0.001" smoothnormal="true" maxhullvert="64" />
+    <mesh name="cad_right_arm_link2" file="right_arm_link2.stl" scale="0.001 0.001 0.001" smoothnormal="true" maxhullvert="64" />
+    <mesh name="cad_right_arm_link3" file="right_arm_link3.stl" scale="0.001 0.001 0.001" smoothnormal="true" maxhullvert="64" />
+    <mesh name="cad_head_link1" file="head_link1.stl" scale="0.001 0.001 0.001" smoothnormal="true" maxhullvert="64" />
+    <mesh name="cad_head_link2" file="head_link2.stl" scale="0.001 0.001 0.001" smoothnormal="true" maxhullvert="64" />
+  </asset>
+  <worldbody>
+    <light name="key_light" pos="-0.6 -0.8 1.2" dir="0.45 0.55 -1" directional="true" castshadow="false" ambient="0.10 0.10 0.10" diffuse="0.72 0.72 0.72" specular="0.18 0.18 0.18" />
+    <light name="fill_light" pos="0.5 0.7 0.8" dir="-0.35 -0.45 -1" directional="true" castshadow="false" ambient="0.06 0.06 0.07" diffuse="0.35 0.38 0.42" specular="0.05 0.05 0.05" />
+    <geom name="ground" type="plane" size="2 2 0.05" material="engineering_floor" contype="0" conaffinity="0" group="0" />
+    <body name="torso" pos="0 0 0.21425" quat="1 0 0 0">
+      <freejoint name="base_free" />
+      <inertial pos="-0.0128 0 0.06975" mass="0.7093" fullinertia="0.00172965701308 0.00113597291308 0.000889225766667 0 0 0" />
+      <geom name="cad_visual_base_link" type="mesh" mesh="cad_base_link" material="robot_structure" contype="0" conaffinity="0" group="1" />
+      <geom name="environment__base_link__cad_envelope" pos="-0.01988505877 4.99600361081e-16 0.0628625000021" quat="1 0 0 0" contype="0" conaffinity="0" type="box" size="0.0423354214768 0.0600003627068 0.0664378627089" material="environment_collision_debug" group="2" />
+      <body name="rotat_axis_ll" pos="0 0.0396 0" quat="0.707105281184 0 0 -0.707108281186">
+        <joint name="rotat_axis_ll" type="hinge" axis="0 0 1" range="-0.69799999999999995 0.69799999999999995" limited="true" damping="0.050000000000000003" armature="0.01" frictionloss="0" ref="0" />
+        <inertial pos="-0.0004 -0.0013 -0.00875" mass="0.0437" fullinertia="4.0825359375e-06 4.0825359375e-06 3.1464e-06 0 0 0" />
+        <geom name="cad_visual_left_leg_link1" type="mesh" mesh="cad_left_leg_link1" material="robot_joint" contype="0" conaffinity="0" group="1" />
+        <geom name="environment__left_leg_link1__cad_envelope" pos="-0.000400003181978 0.000749998302937 -0.018375" quat="1 0 0 0" contype="0" conaffinity="0" type="box" size="0.0150001019233 0.0240000637394 0.0183750001" material="environment_collision_debug" group="2" />
+        <body name="motors_thigh_ll" pos="0 0 -0.02625" quat="-2.59734103283e-06 -2.59735103283e-06 0.707108281181 0.70710528118">
+          <joint name="motors_thigh_ll" type="hinge" axis="0 0 1" range="-0.61073353740028347 0.78526646259971644" limited="true" damping="0.050000000000000003" armature="0.01" frictionloss="0" ref="0.087266462599716474" />
+          <inertial pos="-0.0005 -0.0141 -0.0201" mass="0.1552" fullinertia="4.10633333333e-05 3.32789554096e-05 2.52443779238e-05 0 0 -1.10968791679e-05" />
+          <geom name="cad_visual_left_leg_link2" type="mesh" mesh="cad_left_leg_link2" material="robot_joint" contype="0" conaffinity="0" group="1" />
+          <geom name="environment__left_leg_link2__cad_envelope" pos="0.0023999826189 -0.0167500848527 -0.0185000063799" quat="1 0 0 0" contype="0" conaffinity="0" type="box" size="0.0190000293571 0.0280001402658 0.0407500663295" material="environment_collision_debug" group="2" />
+          <body name="knee_ll" pos="0 0 0" quat="0.467712594865 0.530323540631 -0.467716594862 -0.530323540631">
+            <joint name="knee_ll" type="hinge" axis="0 0 1" range="-0.035307809441587734 2.0596921905584122" limited="true" damping="0.050000000000000003" armature="0.01" frictionloss="0" ref="0.48869219055841229" />
+            <inertial pos="0.042623 0.021697 -0.0004" mass="0.0485" fullinertia="3.492e-06 2.76126666667e-05 2.76126666667e-05 0 0 0" />
+            <geom name="cad_visual_left_leg_link3" type="mesh" mesh="cad_left_leg_link3" material="robot_accent" contype="0" conaffinity="0" group="1" />
+            <geom name="environment__left_leg_link3__cad_envelope" pos="0.0399999983365 0.0169061894323 -0.000400165183257" quat="1 0 0 0" contype="0" conaffinity="0" type="box" size="0.0510000888487 0.0271561731813 0.021200213689" material="environment_collision_debug" group="2" />
+            <body name="shin_ll" pos="0.08 0 0" quat="-3.64441097233e-06 0.99216026471 0.124972033343 -4.59049122475e-07">
+              <joint name="shin_ll" type="hinge" axis="0 0 1" range="0.61039816339744823 3.4033981633974482" limited="true" damping="0.050000000000000003" armature="0.01" frictionloss="0" ref="0.78539816339744828" />
+              <inertial pos="0.022241 -0.012315 -0.0004" mass="0.1579" fullinertia="1.776375e-05 9.30952083333e-05 9.30952083333e-05 0 0 0" />
+              <geom name="cad_visual_left_leg_link4" type="mesh" mesh="cad_left_leg_link4" material="robot_structure" contype="0" conaffinity="0" group="1" />
+              <geom name="environment__left_leg_link4__cad_envelope" pos="0.0353440744388 -0.0120058455652 0.000400579163796" quat="1 0 0 0" contype="0" conaffinity="0" type="box" size="0.0506388516914 0.02470045701 0.0212001876147" material="environment_collision_debug" group="2" />
+              <body name="motors_feet_ll" pos="0.08 0 0" quat="-3.64441097233e-06 0.99216026471 0.124972033343 -4.59049122475e-07">
+                <joint name="motors_feet_ll" type="hinge" axis="0 0 1" range="-0.95993414960113399 1.6580658503988659" limited="true" damping="0.050000000000000003" armature="0.01" frictionloss="0" ref="0.3490658503988659" />
+                <inertial pos="-0.011411 -0.021796 0.0008" mass="0.1552" fullinertia="3.59856348201e-05 2.25376985132e-05 4.10633333333e-05 -9.69884469318e-06 0 0" />
+                <geom name="cad_visual_left_leg_link5" type="mesh" mesh="cad_left_leg_link5" material="robot_joint" contype="0" conaffinity="0" group="1" />
+                <geom name="environment__left_leg_link5__cad_envelope" pos="-0.011763994514 -0.0204114661882 -0.000900664024145" quat="1 0 0 0" contype="0" conaffinity="0" type="box" size="0.0302925247235 0.0427414248459 0.0205000563548" material="environment_collision_debug" group="2" />
+                <body name="foot_ll" pos="0 0 0" quat="0.705718030869 -0.705721030869 -0.0442713019365 0.0442712019365">
+                  <joint name="foot_ll" type="hinge" axis="0 0 1" range="-1.1342664625997163 0.69773353740028354" limited="true" damping="0.050000000000000003" armature="0.01" frictionloss="0" ref="-0.087266462599716474" />
+                  <inertial pos="0.02505 0.0063 -0.0027" mass="0.3165" fullinertia="0.00060415234375 0.0004474255 0.00016010284375 0 0 0" />
+                  <geom name="cad_visual_left_leg_link6" type="mesh" mesh="cad_left_leg_link6" material="robot_foot" contype="0" conaffinity="0" group="1" />
+                  <geom name="environment__left_leg_link6__cad_envelope" pos="0.0232519590665 0.00765065975375 -0.00195884279878" quat="1 0 0 0" contype="0" conaffinity="0" type="box" size="0.00499804093351 0.0397503602453 0.066258859273" material="environment_collision_debug" group="2" />
+                  <geom name="foot_ll_geom" type="box" pos="0.02875 0.00725 -0.002" size="0.0005 0.03875 0.065" material="sole_support_debug" contype="0" conaffinity="0" group="2" />
+                  <site name="left_foot_contact" pos="0.029250000000000002 0.0072500000000000004 -0.002" size="0.002" group="5" />
+                  <site name="left_toe_ik" pos="0.029250000000000002 0.0072500000000000004 0.063" size="0.002" group="5" />
+                </body>
+                <site name="left_ankle_ik" pos="0 0 0" size="0.002" group="5" />
+              </body>
+              <site name="left_knee_ik" pos="0 0 0" size="0.002" group="5" />
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="rotat_axis_rl" pos="0 -0.0396 0" quat="0.707105281184 0 0 -0.707108281186">
+        <joint name="rotat_axis_rl" type="hinge" axis="-0 -0 -1" range="-0.69799999999999995 0.69799999999999995" limited="true" damping="0.050000000000000003" armature="0.01" frictionloss="0" ref="0" />
+        <inertial pos="0.0004 -0.0013 -0.00875" mass="0.0437" fullinertia="4.0825359375e-06 4.0825359375e-06 3.1464e-06 0 0 0" />
+        <geom name="cad_visual_right_leg_link1" type="mesh" mesh="cad_right_leg_link1" material="robot_joint" contype="0" conaffinity="0" group="1" />
+        <geom name="environment__right_leg_link1__cad_envelope" pos="0.000399996818015 0.00075000169705 -0.018375" quat="1 0 0 0" contype="0" conaffinity="0" type="box" size="0.0150001019233 0.0240000637394 0.0183750001" material="environment_collision_debug" group="2" />
+        <body name="motors_thigh_rl" pos="0 0 -0.02625" quat="-2.59734103283e-06 -2.59735103283e-06 0.707108281181 0.70710528118">
+          <joint name="motors_thigh_rl" type="hinge" axis="-0 -0 -1" range="-0.61073353740028347 0.78526646259971644" limited="true" damping="0.050000000000000003" armature="0.01" frictionloss="0" ref="0.087266462599716474" />
+          <inertial pos="0.0005 -0.0141 -0.0201" mass="0.1552" fullinertia="4.10633333333e-05 3.32789554096e-05 2.52443779238e-05 0 0 -1.10968791679e-05" />
+          <geom name="cad_visual_right_leg_link2" type="mesh" mesh="cad_right_leg_link2" material="robot_joint" contype="0" conaffinity="0" group="1" />
+          <geom name="environment__right_leg_link2__cad_envelope" pos="-0.00239998261892 -0.0167500848527 -0.018500008863" quat="1 0 0 0" contype="0" conaffinity="0" type="box" size="0.019000029357 0.0280001402658 0.0407500663295" material="environment_collision_debug" group="2" />
+          <body name="knee_rl" pos="0 0 0" quat="0.467712594865 0.530323540631 -0.467716594862 -0.530323540631">
+            <joint name="knee_rl" type="hinge" axis="0 0 1" range="-0.035307809441587734 2.0596921905584122" limited="true" damping="0.050000000000000003" armature="0.01" frictionloss="0" ref="0.48869219055841229" />
+            <inertial pos="0.042623 0.021697 0.0004" mass="0.0485" fullinertia="3.492e-06 2.76126666667e-05 2.76126666667e-05 0 0 0" />
+            <geom name="cad_visual_right_leg_link3" type="mesh" mesh="cad_right_leg_link3" material="robot_accent" contype="0" conaffinity="0" group="1" />
+            <geom name="environment__right_leg_link3__cad_envelope" pos="0.0400000008143 0.0169061701821 0.000199834816737" quat="1 0 0 0" contype="0" conaffinity="0" type="box" size="0.0510000888487 0.0271561931295 0.021200213689" material="environment_collision_debug" group="2" />
+            <body name="shin_rl" pos="0.08 0 0" quat="-3.64441097233e-06 0.99216026471 0.124972033343 -4.59049122475e-07">
+              <joint name="shin_rl" type="hinge" axis="0 0 1" range="0.61039816339744823 3.4033981633974482" limited="true" damping="0.050000000000000003" armature="0.01" frictionloss="0" ref="0.78539816339744828" />
+              <inertial pos="0.022241 -0.012315 0.0004" mass="0.1579" fullinertia="1.776375e-05 9.30952083333e-05 9.30952083333e-05 0 0 0" />
+              <geom name="cad_visual_right_leg_link4" type="mesh" mesh="cad_right_leg_link4" material="robot_structure" contype="0" conaffinity="0" group="1" />
+              <geom name="environment__right_leg_link4__cad_envelope" pos="0.03534407787 -0.0120058515245 -0.000399420836173" quat="1 0 0 0" contype="0" conaffinity="0" type="box" size="0.0506388516914 0.02470045701 0.0212001876147" material="environment_collision_debug" group="2" />
+              <body name="motors_feet_rl" pos="0.08 0 0" quat="-3.64441097233e-06 0.99216026471 0.124972033343 -4.59049122475e-07">
+                <joint name="motors_feet_rl" type="hinge" axis="0 0 1" range="-0.95993414960113399 1.6580658503988659" limited="true" damping="0.050000000000000003" armature="0.01" frictionloss="0" ref="0.3490658503988659" />
+                <inertial pos="-0.011411 -0.021796 -0.0008" mass="0.1552" fullinertia="3.59856348201e-05 2.25376985132e-05 4.10633333333e-05 -9.69884469318e-06 0 0" />
+                <geom name="cad_visual_right_leg_link5" type="mesh" mesh="cad_right_leg_link5" material="robot_joint" contype="0" conaffinity="0" group="1" />
+                <geom name="environment__right_leg_link5__cad_envelope" pos="-0.0117639926678 -0.020411453687 0.000899317020414" quat="1 0 0 0" contype="0" conaffinity="0" type="box" size="0.0302925247235 0.0427414248459 0.0205000563548" material="environment_collision_debug" group="2" />
+                <body name="foot_rl" pos="0 0 0" quat="0.705718030869 -0.705721030869 -0.0442713019365 0.0442712019365">
+                  <joint name="foot_rl" type="hinge" axis="-0 -0 -1" range="-0.87226646259971652 0.95973353740028344" limited="true" damping="0.050000000000000003" armature="0.01" frictionloss="0" ref="-0.087266462599716474" />
+                  <inertial pos="0.02505 -0.0063 -0.0027" mass="0.3165" fullinertia="0.00060415234375 0.0004474255 0.00016010284375 0 0 0" />
+                  <geom name="cad_visual_right_leg_link6" type="mesh" mesh="cad_right_leg_link6" material="robot_foot" contype="0" conaffinity="0" group="1" />
+                  <geom name="environment__right_leg_link6__cad_envelope" pos="0.0232518860692 -0.0076493402452 -0.00195867492069" quat="1 0 0 0" contype="0" conaffinity="0" type="box" size="0.00499811393084 0.0397505692472 0.0662590682749" material="environment_collision_debug" group="2" />
+                  <geom name="foot_rl_geom" type="box" pos="0.02875 -0.00725 -0.002" size="0.0005 0.03875 0.065" material="sole_support_debug" contype="0" conaffinity="0" group="2" />
+                  <site name="right_foot_contact" pos="0.029250000000000002 -0.0072500000000000004 -0.002" size="0.002" group="5" />
+                  <site name="right_toe_ik" pos="0.029250000000000002 -0.0072500000000000004 0.063" size="0.002" group="5" />
+                </body>
+                <site name="right_ankle_ik" pos="0 0 0" size="0.002" group="5" />
+              </body>
+              <site name="right_knee_ik" pos="0 0 0" size="0.002" group="5" />
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="shoulder_lh" pos="-0.001 0 0.11175" quat="0.707106781187 0.707106781187 0 0">
+        <joint name="shoulder_lh" type="hinge" axis="0 0 1" range="-1.0464012244017011 2.093598775598299" limited="true" damping="0.050000000000000003" armature="0.01" frictionloss="0" ref="0.52359877559829882" />
+        <inertial pos="0 -0.005 -0.0678" mass="0.0152" fullinertia="9.27326666667e-06 9.27326666667e-06 1.0944e-06 0 0 0" />
+        <geom name="cad_visual_left_arm_link1" type="mesh" mesh="cad_left_arm_link1" material="robot_joint" contype="0" conaffinity="0" group="1" />
+        <geom name="environment__left_arm_link1__cad_envelope" pos="0 -0.00682850108957 -0.0743137824638" quat="1 0 0 0" contype="0" conaffinity="0" type="box" size="0.0212000001 0.0208285011896 0.0183137825638" material="environment_collision_debug" group="2" />
+        <body name="elbow_lh" pos="0 -0.01803 -0.083" quat="0.5 -0.5 0.5 -0.5">
+          <joint name="elbow_lh" type="hinge" axis="0 0 1" range="-1.3082006122008507 1.8317993877991494" limited="true" damping="0.050000000000000003" armature="0.01" frictionloss="0" ref="0.26179938779914941" />
+          <inertial pos="0.02177 -0.0001 -0.0014" mass="0.0898" fullinertia="1.01025e-05 4.22452875e-05 4.22452875e-05 0 0 0" />
+          <geom name="cad_visual_left_arm_link2" type="mesh" mesh="cad_left_arm_link2" material="robot_accent" contype="0" conaffinity="0" group="1" />
+          <geom name="environment__left_arm_link2__cad_envelope" pos="0.0318244372515 0 -5.01335084557e-16" quat="1 0 0 0" contype="0" conaffinity="0" type="box" size="0.0430750034407 0.0142500034407 0.0212000034407" material="environment_collision_debug" group="2" />
+          <body name="wrist_lh" pos="0.0705 0 0" quat="0 1 0 0">
+            <joint name="wrist_lh" type="hinge" axis="0 0 1" range="-1.3082006122008507 1.8317993877991494" limited="true" damping="0.050000000000000003" armature="0.01" frictionloss="0" ref="0.26179938779914941" />
+            <inertial pos="0.02842 -0.0017 0.0013" mass="0.0976" fullinertia="7.0272e-06 0.000111076933333 0.000111076933333 0 0 0" />
+            <geom name="cad_visual_left_arm_link3" type="mesh" mesh="cad_left_arm_link3" material="robot_structure" contype="0" conaffinity="0" group="1" />
+            <geom name="environment__left_arm_link3__cad_envelope" pos="0.0509497547988 -0.00137500000015 -0.000500000002107" quat="1 0 0 0" contype="0" conaffinity="0" type="box" size="0.062200320988 0.0156250034409 0.0205000034428" material="environment_collision_debug" group="2" />
+            <site name="left_elbow_ik" pos="0 0 0" size="0.002" group="5" />
+            <site name="left_wrist_ik" pos="0.10000000000000001 0 0" size="0.002" group="5" />
+            <site name="left_hand_ik" pos="0.112 0 0" size="0.002" group="5" />
+          </body>
+          <site name="left_shoulder_ik" pos="0 0 0" size="0.002" group="5" />
+        </body>
+      </body>
+      <body name="shoulder_rh" pos="-0.001 0 0.11175" quat="0.707106781187 0.707106781187 0 0">
+        <joint name="shoulder_rh" type="hinge" axis="0 0 1" range="-1.0464012244017011 2.093598775598299" limited="true" damping="0.050000000000000003" armature="0.01" frictionloss="0" ref="0.52359877559829882" />
+        <inertial pos="0 -0.005 0.0678" mass="0.0152" fullinertia="9.27326666667e-06 9.27326666667e-06 1.0944e-06 0 0 0" />
+        <geom name="cad_visual_right_arm_link1" type="mesh" mesh="cad_right_arm_link1" material="robot_joint" contype="0" conaffinity="0" group="1" />
+        <geom name="environment__right_arm_link1__cad_envelope" pos="0 -0.00682850108957 0.0743137824638" quat="1 0 0 0" contype="0" conaffinity="0" type="box" size="0.0212000001 0.0208285011896 0.0183137825638" material="environment_collision_debug" group="2" />
+        <body name="elbow_rh" pos="0 -0.01803 0.083" quat="0.5 -0.5 0.5 -0.5">
+          <joint name="elbow_rh" type="hinge" axis="-0 -0 -1" range="-1.3082006122008507 1.8317993877991494" limited="true" damping="0.050000000000000003" armature="0.01" frictionloss="0" ref="0.26179938779914941" />
+          <inertial pos="0.02177 0.0001 -0.0014" mass="0.0898" fullinertia="1.01025e-05 4.22452875e-05 4.22452875e-05 0 0 0" />
+          <geom name="cad_visual_right_arm_link2" type="mesh" mesh="cad_right_arm_link2" material="robot_accent" contype="0" conaffinity="0" group="1" />
+          <geom name="environment__right_arm_link2__cad_envelope" pos="0.0318244372515 0 0.000200000000001" quat="1 0 0 0" contype="0" conaffinity="0" type="box" size="0.0430750034407 0.0142500034407 0.0212000034407" material="environment_collision_debug" group="2" />
+          <body name="wrist_rh" pos="0.0705 0 0" quat="0 1 0 0">
+            <joint name="wrist_rh" type="hinge" axis="-0 -0 -1" range="-1.3082006122008507 1.8317993877991494" limited="true" damping="0.050000000000000003" armature="0.01" frictionloss="0" ref="0.26179938779914941" />
+            <inertial pos="0.02842 0.0017 0.0013" mass="0.0976" fullinertia="7.0272e-06 0.000111076933333 0.000111076933333 0 0 0" />
+            <geom name="cad_visual_right_arm_link3" type="mesh" mesh="cad_right_arm_link3" material="robot_structure" contype="0" conaffinity="0" group="1" />
+            <geom name="environment__right_arm_link3__cad_envelope" pos="0.0509497547988 0.00137500000015 -0.000900000002107" quat="1 0 0 0" contype="0" conaffinity="0" type="box" size="0.062200320988 0.0156250034409 0.0205000034428" material="environment_collision_debug" group="2" />
+            <site name="right_elbow_ik" pos="0 0 0" size="0.002" group="5" />
+            <site name="right_wrist_ik" pos="0.10000000000000001 0 0" size="0.002" group="5" />
+            <site name="right_hand_ik" pos="0.112 0 0" size="0.002" group="5" />
+          </body>
+          <site name="right_shoulder_ik" pos="0 0 0" size="0.002" group="5" />
+        </body>
+      </body>
+      <body name="neck" pos="-0.0148 0 0.1293" quat="1 0 0 0">
+        <joint name="neck" type="hinge" axis="0 0 1" range="-1.5700000000000001 1.5700000000000001" limited="true" damping="0.050000000000000003" armature="0.01" frictionloss="0" ref="0" />
+        <inertial pos="0 0 0.00815" mass="0.0151" fullinertia="1.1023e-06 1.1023e-06 7.55e-07 0 0 0" />
+        <geom name="cad_visual_head_link1" type="mesh" mesh="cad_head_link1" material="robot_joint" contype="0" conaffinity="0" group="1" />
+        <geom name="environment__head_link1__cad_envelope" pos="0 -4.99600361081e-16 0.0132" quat="1 0 0 0" contype="0" conaffinity="0" type="box" size="0.0130000001 0.0212000001 0.0152000001" material="environment_collision_debug" group="2" />
+        <body name="head" pos="0 0 0.024" quat="0.707106781187 0.707106781187 0 0">
+          <joint name="head" type="hinge" axis="0 0 1" range="-1.5700000000000001 1.5700000000000001" limited="true" damping="0.050000000000000003" armature="0.01" frictionloss="0" ref="0" />
+          <inertial pos="0.0159 0.02425 0.0006" mass="0.2106" fullinertia="0.000107055 9.696375e-05 0.00011626875 0 0 0" />
+          <geom name="cad_visual_head_link2" type="mesh" mesh="cad_head_link2" material="robot_sensor" contype="0" conaffinity="0" group="1" />
+          <geom name="environment__head_link2__cad_envelope" pos="0.0048576473296 0.0235359259966 1.52000419994e-08" quat="1 0 0 0" contype="0" conaffinity="0" type="box" size="0.0545273875041 0.0367966051773 0.0421006905221" material="environment_collision_debug" group="2" />
+          <site name="head_nose_ik" pos="0.044999999999999998 0.025000000000000001 0" size="0.002" group="5" />
+        </body>
+      </body>
+      <site name="imu_site" pos="0 0 0.070000000000000007" size="0.002" group="5" />
+    </body>
+    <body name="standing_carriage" pos="0 0 0.21425">
+      <joint name="standing_vertical" type="slide" axis="0 0 1" limited="false" damping="0.1" />
+      <inertial pos="0 0 0" mass="0.000001" diaginertia="1e-9 1e-9 1e-9" />
+    </body>
+  </worldbody>
+  <contact>
+    <pair name="floor__left_sole_contact" geom1="ground" geom2="foot_ll_geom" condim="3" friction="0.35 0.35 0 0 0" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" margin="0" gap="0" />
+    <pair name="floor__right_sole_contact" geom1="ground" geom2="foot_rl_geom" condim="3" friction="0.35 0.35 0 0 0" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" margin="0" gap="0" />
+    <pair name="floor__environment__base_link__cad_envelope" geom1="ground" geom2="environment__base_link__cad_envelope" condim="3" friction="0.35 0.35 0 0 0" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" margin="0" gap="0" />
+    <pair name="floor__environment__left_leg_link1__cad_envelope" geom1="ground" geom2="environment__left_leg_link1__cad_envelope" condim="3" friction="0.35 0.35 0 0 0" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" margin="0" gap="0" />
+    <pair name="floor__environment__left_leg_link2__cad_envelope" geom1="ground" geom2="environment__left_leg_link2__cad_envelope" condim="3" friction="0.35 0.35 0 0 0" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" margin="0" gap="0" />
+    <pair name="floor__environment__left_leg_link3__cad_envelope" geom1="ground" geom2="environment__left_leg_link3__cad_envelope" condim="3" friction="0.35 0.35 0 0 0" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" margin="0" gap="0" />
+    <pair name="floor__environment__left_leg_link4__cad_envelope" geom1="ground" geom2="environment__left_leg_link4__cad_envelope" condim="3" friction="0.35 0.35 0 0 0" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" margin="0" gap="0" />
+    <pair name="floor__environment__left_leg_link5__cad_envelope" geom1="ground" geom2="environment__left_leg_link5__cad_envelope" condim="3" friction="0.35 0.35 0 0 0" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" margin="0" gap="0" />
+    <pair name="floor__environment__left_leg_link6__cad_envelope" geom1="ground" geom2="environment__left_leg_link6__cad_envelope" condim="3" friction="0.35 0.35 0 0 0" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" margin="0" gap="0" />
+    <pair name="floor__environment__right_leg_link1__cad_envelope" geom1="ground" geom2="environment__right_leg_link1__cad_envelope" condim="3" friction="0.35 0.35 0 0 0" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" margin="0" gap="0" />
+    <pair name="floor__environment__right_leg_link2__cad_envelope" geom1="ground" geom2="environment__right_leg_link2__cad_envelope" condim="3" friction="0.35 0.35 0 0 0" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" margin="0" gap="0" />
+    <pair name="floor__environment__right_leg_link3__cad_envelope" geom1="ground" geom2="environment__right_leg_link3__cad_envelope" condim="3" friction="0.35 0.35 0 0 0" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" margin="0" gap="0" />
+    <pair name="floor__environment__right_leg_link4__cad_envelope" geom1="ground" geom2="environment__right_leg_link4__cad_envelope" condim="3" friction="0.35 0.35 0 0 0" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" margin="0" gap="0" />
+    <pair name="floor__environment__right_leg_link5__cad_envelope" geom1="ground" geom2="environment__right_leg_link5__cad_envelope" condim="3" friction="0.35 0.35 0 0 0" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" margin="0" gap="0" />
+    <pair name="floor__environment__right_leg_link6__cad_envelope" geom1="ground" geom2="environment__right_leg_link6__cad_envelope" condim="3" friction="0.35 0.35 0 0 0" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" margin="0" gap="0" />
+    <pair name="floor__environment__left_arm_link1__cad_envelope" geom1="ground" geom2="environment__left_arm_link1__cad_envelope" condim="3" friction="0.35 0.35 0 0 0" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" margin="0" gap="0" />
+    <pair name="floor__environment__left_arm_link2__cad_envelope" geom1="ground" geom2="environment__left_arm_link2__cad_envelope" condim="3" friction="0.35 0.35 0 0 0" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" margin="0" gap="0" />
+    <pair name="floor__environment__left_arm_link3__cad_envelope" geom1="ground" geom2="environment__left_arm_link3__cad_envelope" condim="3" friction="0.35 0.35 0 0 0" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" margin="0" gap="0" />
+    <pair name="floor__environment__right_arm_link1__cad_envelope" geom1="ground" geom2="environment__right_arm_link1__cad_envelope" condim="3" friction="0.35 0.35 0 0 0" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" margin="0" gap="0" />
+    <pair name="floor__environment__right_arm_link2__cad_envelope" geom1="ground" geom2="environment__right_arm_link2__cad_envelope" condim="3" friction="0.35 0.35 0 0 0" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" margin="0" gap="0" />
+    <pair name="floor__environment__right_arm_link3__cad_envelope" geom1="ground" geom2="environment__right_arm_link3__cad_envelope" condim="3" friction="0.35 0.35 0 0 0" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" margin="0" gap="0" />
+    <pair name="floor__environment__head_link1__cad_envelope" geom1="ground" geom2="environment__head_link1__cad_envelope" condim="3" friction="0.35 0.35 0 0 0" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" margin="0" gap="0" />
+    <pair name="floor__environment__head_link2__cad_envelope" geom1="ground" geom2="environment__head_link2__cad_envelope" condim="3" friction="0.35 0.35 0 0 0" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" margin="0" gap="0" />
+  </contact>
+  <custom>
+    <text name="position_reference_profile_id" data="legacy_mjcf_position_reference_v0" />
+    <numeric name="robot_forward_axis" data="1 0 0" />
+    <numeric name="head_forward_axis" data="1 0 0" />
+    <text name="physical_model_profile" data="volodka" />
+    <text name="hardware_mapping_status" data="unverified_simulation_only" />
+  </custom>
+  <actuator>
+    <position name="shoulder_rh" joint="shoulder_rh" group="0" kp="8" kv="0.80000000000000004" forcelimited="true" forcerange="-1.5 1.5" ctrllimited="true" ctrlrange="-1.0464012244017011 2.093598775598299" />
+    <position name="shoulder_lh" joint="shoulder_lh" group="0" kp="8" kv="0.80000000000000004" forcelimited="true" forcerange="-1.5 1.5" ctrllimited="true" ctrlrange="-1.0464012244017011 2.093598775598299" />
+    <position name="elbow_rh" joint="elbow_rh" group="0" kp="8" kv="0.80000000000000004" forcelimited="true" forcerange="-1.5 1.5" ctrllimited="true" ctrlrange="-1.3082006122008507 1.8317993877991494" />
+    <position name="elbow_lh" joint="elbow_lh" group="0" kp="8" kv="0.80000000000000004" forcelimited="true" forcerange="-1.5 1.5" ctrllimited="true" ctrlrange="-1.3082006122008507 1.8317993877991494" />
+    <position name="wrist_rh" joint="wrist_rh" group="0" kp="8" kv="0.80000000000000004" forcelimited="true" forcerange="-1.5 1.5" ctrllimited="true" ctrlrange="-1.3082006122008507 1.8317993877991494" />
+    <position name="wrist_lh" joint="wrist_lh" group="0" kp="8" kv="0.80000000000000004" forcelimited="true" forcerange="-1.5 1.5" ctrllimited="true" ctrlrange="-1.3082006122008507 1.8317993877991494" />
+    <position name="rotat_axis_rl" joint="rotat_axis_rl" group="0" kp="15" kv="1.5" forcelimited="true" forcerange="-1.5 1.5" ctrllimited="true" ctrlrange="-0.69799999999999995 0.69799999999999995" />
+    <position name="rotat_axis_ll" joint="rotat_axis_ll" group="0" kp="15" kv="1.5" forcelimited="true" forcerange="-1.5 1.5" ctrllimited="true" ctrlrange="-0.69799999999999995 0.69799999999999995" />
+    <position name="motors_thigh_rl" joint="motors_thigh_rl" group="0" kp="15" kv="1.5" forcelimited="true" forcerange="-1.5 1.5" ctrllimited="true" ctrlrange="-0.61073353740028347 0.78526646259971644" />
+    <position name="motors_thigh_ll" joint="motors_thigh_ll" group="0" kp="15" kv="1.5" forcelimited="true" forcerange="-1.5 1.5" ctrllimited="true" ctrlrange="-0.61073353740028347 0.78526646259971644" />
+    <position name="knee_rl" joint="knee_rl" group="0" kp="15" kv="1.5" forcelimited="true" forcerange="-1.5 1.5" ctrllimited="true" ctrlrange="-0.035307809441587734 2.0596921905584122" />
+    <position name="knee_ll" joint="knee_ll" group="0" kp="15" kv="1.5" forcelimited="true" forcerange="-1.5 1.5" ctrllimited="true" ctrlrange="-0.035307809441587734 2.0596921905584122" />
+    <position name="shin_rl" joint="shin_rl" group="0" kp="15" kv="1.5" forcelimited="true" forcerange="-1.5 1.5" ctrllimited="true" ctrlrange="0.61039816339744823 3.4033981633974482" />
+    <position name="shin_ll" joint="shin_ll" group="0" kp="15" kv="1.5" forcelimited="true" forcerange="-1.5 1.5" ctrllimited="true" ctrlrange="0.61039816339744823 3.4033981633974482" />
+    <position name="motors_feet_rl" joint="motors_feet_rl" group="0" kp="15" kv="1.5" forcelimited="true" forcerange="-1.5 1.5" ctrllimited="true" ctrlrange="-0.95993414960113399 1.6580658503988659" />
+    <position name="motors_feet_ll" joint="motors_feet_ll" group="0" kp="15" kv="1.5" forcelimited="true" forcerange="-1.5 1.5" ctrllimited="true" ctrlrange="-0.95993414960113399 1.6580658503988659" />
+    <position name="foot_rl" joint="foot_rl" group="0" kp="15" kv="1.5" forcelimited="true" forcerange="-1.5 1.5" ctrllimited="true" ctrlrange="-0.87226646259971652 0.95973353740028344" />
+    <position name="foot_ll" joint="foot_ll" group="0" kp="15" kv="1.5" forcelimited="true" forcerange="-1.5 1.5" ctrllimited="true" ctrlrange="-1.1342664625997163 0.69773353740028354" />
+    <position name="neck" joint="neck" group="0" kp="3" kv="0.29999999999999999" forcelimited="true" forcerange="-1.5 1.5" ctrllimited="true" ctrlrange="-1.5700000000000001 1.5700000000000001" />
+    <position name="head" joint="head" group="0" kp="3" kv="0.29999999999999999" forcelimited="true" forcerange="-1.5 1.5" ctrllimited="true" ctrlrange="-1.5700000000000001 1.5700000000000001" />
+  </actuator>
+  <statistic center="0 0 0.21" extent="0.65" />
+  <equality>
+    <weld name="fixed_base" body1="torso" body2="standing_carriage" solref="0.002 1" solimp="0.99 0.999 0.0001" />
+  </equality>
+</mujoco>

@@ -336,7 +336,7 @@ def test_video_path_uses_selected_bundled_demo(
 
 def test_headless_synthetic_runs_the_full_command_pipeline() -> None:
     args = build_parser().parse_args(
-        ["--source", "synthetic", "--headless", "--max-frames", "60"]
+        ["--model-profile", "unity_legacy", "--source", "synthetic", "--headless", "--max-frames", "60"]
     )
     stats = run_teleop(args)
     assert stats.source == "synthetic"
@@ -475,7 +475,7 @@ def test_teleop_holds_double_support_until_squat_interlock_releases(
 def test_bundled_mp4_runs_media_pipe_retargeting_and_mujoco() -> None:
     assert DEMO_VIDEO_PATH.is_file()
     args = build_parser().parse_args(
-        ["--source", "mp4", "--headless", "--max-frames", "90"]
+        ["--model-profile", "unity_legacy", "--source", "mp4", "--headless", "--max-frames", "90"]
     )
 
     stats = run_teleop(args)
@@ -515,6 +515,8 @@ def test_full_slow_mp4_lifts_both_legs_without_free_base_fall(
     monkeypatch.setattr(HumanoidSimulation, "apply_joint_command", record_apply)
     args = build_parser().parse_args(
         [
+            "--model-profile",
+            "unity_legacy",
             "--source",
             "mp4",
             "--demo-video",
@@ -651,6 +653,8 @@ def test_main_fails_closed_after_a_recovered_robot_output_error(
 def test_finite_source_settles_on_the_same_free_base_simulation() -> None:
     args = build_parser().parse_args(
         [
+            "--model-profile",
+            "unity_legacy",
             "--source",
             "synthetic",
             "--headless",
@@ -765,7 +769,7 @@ def test_finite_source_settles_on_the_same_free_base_simulation() -> None:
     ],
 )
 def test_invalid_runtime_options_are_rejected(arguments: list[str], message: str) -> None:
-    args = build_parser().parse_args(arguments)
+    args = build_parser().parse_args(["--model-profile", "unity_legacy", *arguments])
     with pytest.raises(ValueError, match=message):
         run_teleop(args)
 
@@ -860,7 +864,7 @@ def test_pause_is_rejected_while_physical_robot_output_is_active() -> None:
 
 def test_free_base_uses_motor_angle_balance_at_every_physics_tick() -> None:
     args = build_parser().parse_args(
-        ["--source", "synthetic", "--headless", "--free-base", "--max-frames", "300"]
+        ["--model-profile", "unity_legacy", "--source", "synthetic", "--headless", "--free-base", "--max-frames", "300"]
     )
 
     stats = run_teleop(args)
@@ -913,6 +917,8 @@ def test_optional_robot_output_receives_the_same_safe_motor_command(
     monkeypatch.setattr(teleop_module, "_make_robot_publisher", lambda args: publisher)
     args = build_parser().parse_args(
         [
+            "--model-profile",
+            "unity_legacy",
             "--source",
             "synthetic",
             "--headless",

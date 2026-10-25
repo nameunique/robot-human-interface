@@ -1968,6 +1968,17 @@ class PipelineWorker(QThread):
                 "safe command lacks final provenance or is marked stale",
             )
 
+        if not command.hardware_mapping_verified:
+            return _SnapshotSafetyFacts(
+                False,
+                ReadinessReason.HARDWARE_MAPPING_UNVERIFIED,
+                "Отправка на робота заблокирована: соответствие углов CAD-модели "
+                "реальным приводам ещё не проверено на аппаратном стенде.",
+                command,
+                command.free_base_active,
+                command.balance_active,
+            )
+
         flags = self._resolve_safety_flags(snapshot)
         if flags is None:
             return _SnapshotSafetyFacts(
@@ -2101,6 +2112,8 @@ class PipelineWorker(QThread):
                 ReadinessReason.PIPELINE_NOT_RUNNING,
                 "production pipeline is not running",
             )
+        if facts.reason_code is ReadinessReason.HARDWARE_MAPPING_UNVERIFIED:
+            return result(facts.reason_code, facts.reason)
         if controller_state is not RobotUiState.CONNECTED_DISARMED:
             return result(
                 ReadinessReason.ROBOT_NOT_CONNECTED,

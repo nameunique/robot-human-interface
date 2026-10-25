@@ -1,0 +1,60 @@
+# Simulation-only initial controller profile for the 3.0942 kg CAD model.
+# Not transferred hardware calibration or a guarantee against falling.
+# Kinematic signs follow joint_mapping.json; robot forward is native +X.
+standing_balance:
+  enabled: true
+  ankle_pitch_bias_rad: 0.0
+  arm_to_ankle_gain: 0.0
+  pitch_feedback_gain: -0.08
+  pitch_rate_feedback_s: -0.005
+  capture_recovery_direction: -1.0
+  capture_tracking_margin_start_m: 0.012
+  capture_tracking_margin_full_m: 0.035
+  capture_recovery_gain_rad_per_m: 1.0
+  capture_recovery_full_gain_rad_per_m: 2.0
+  capture_minimum_com_height_m: 0.06
+  capture_recovery_max_rad: 0.15
+  max_inverse_crouch_amplitude_rad: 0.08
+  # Equal 80 mm thigh/shin: symmetric angle manifold keeps soles parallel.
+  squat_max_depth_rad: 0.70
+  squat_hip_shape: 0.5
+  squat_ankle_shape: 0.5
+  squat_arm_shoulder_pitch_rad: 1.4782397712323851
+  squat_arm_elbow_rad: 0.2617993877991494
+  squat_arm_wrist_rad: 0.2617993877991494
+  squat_arm_to_ankle_gain: 0.0
+  squat_capture_resume_m: 0.015
+  squat_capture_hold_m: 0.025
+  squat_capture_return_m: 0.040
+  squat_max_absolute_capture_offset_x_m: 0.055
+  squat_max_absolute_capture_offset_y_m: 0.060
+  squat_neutral_max_base_speed_m_s: 0.04
+  squat_max_speed_rad_s: 0.45
+  upper_body_rate_limit_rad_s: 1.5
+  lower_body_rate_limit_rad_s: 0.8
+  lower_body_imitation_scale: 0.3
+  transverse_lower_body_imitation_scale: 0.0
+  swing_leg_imitation_scale: 0.65
+
+# Human-side dimensionless thresholds remain independent of robot size.
+human_support_intent:
+  calibration_frames: 30
+  calibration_max_observations: 150
+  confidence_threshold: 0.5
+
+# Contact-gated support sequencing is retained; these gains are a simulation
+# starting point, not the legacy robot's claimed validated envelope.
+support_control:
+  motion_profile: volodka_cad
+  # Preserve the tested CAD leg geometry during single support. Arbitrary
+  # video-driven swing poses need a separate collision-aware controller.
+  swing_reference_blend: 0.0
+  shift_duration_s: 2.0
+  lift_duration_s: 1.5
+  lower_duration_s: 3.0
+  support_loss_grace_s: 0.25
+  min_stance_force_n: 12.0
+  min_touchdown_force_n: 4.0
+  min_touchdown_total_force_n: 20.0
+  upper_body_rate_limit_rad_s: 1.5
+  lower_body_rate_limit_rad_s: 0.8

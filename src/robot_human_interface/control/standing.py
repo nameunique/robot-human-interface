@@ -108,6 +108,8 @@ class StandingBalanceConfig:
     squat_support_release_depth_rad: float = 2.0 * pi / 180.0
     squat_support_release_speed_rad_s: float = 5.0 * pi / 180.0
     squat_support_release_tracking_error_rad: float = 5.0 * pi / 180.0
+    # Native sagittal axes can be reversed between robot model profiles.
+    capture_recovery_direction: float = 1.0
 
     def __post_init__(self) -> None:
         if type(self.enabled) is not bool:
@@ -121,6 +123,8 @@ class StandingBalanceConfig:
             ),
             section="standing_balance",
         )
+        if self.capture_recovery_direction not in (-1.0, 1.0):
+            raise ValueError("capture_recovery_direction must be -1 or +1")
         if not 0.0 <= self.lower_body_imitation_scale <= 1.0:
             raise ValueError("lower_body_imitation_scale must be within [0, 1]")
         if not 0.0 <= self.transverse_lower_body_imitation_scale <= 1.0:
@@ -278,8 +282,8 @@ class StandingBalanceConfig:
             )
         ):
             raise ValueError("squat controller limits must be positive")
-        if not -1.0 < self.squat_ankle_shape < 0.0:
-            raise ValueError("squat ankle shape must be within (-1, 0)")
+        if not -1.0 < self.squat_ankle_shape < 1.0:
+            raise ValueError("squat ankle shape must be within (-1, 1)")
         if abs(
             self.squat_hip_shape - 1.0 + self.squat_ankle_shape
         ) > 1e-9:
@@ -1343,7 +1347,7 @@ class StandingBalanceController:
             recovery_gain *= self.config.squat_capture_recovery_gain_multiplier
         capture_recovery = float(
             np.clip(
-                recovery_gain * capture_point_error_x_m,
+                self.config.capture_recovery_direction * recovery_gain * capture_point_error_x_m,
                 -self.config.capture_recovery_max_rad,
                 self.config.capture_recovery_max_rad,
             )

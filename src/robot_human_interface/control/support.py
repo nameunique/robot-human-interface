@@ -93,18 +93,27 @@ class SupportControlConfig:
     upper_body_rate_limit_rad_s: float = 2.5
     lower_body_rate_limit_rad_s: float = 1.2
     cancel_on_stale_reference: bool = True
+    motion_profile: str = "unity_legacy"
 
     def __post_init__(self) -> None:
         if type(self.cancel_on_stale_reference) is not bool:
             raise ValueError(
                 "support_control.cancel_on_stale_reference must be a boolean"
             )
+        if not isinstance(self.motion_profile, str) or self.motion_profile not in {
+            "unity_legacy",
+            "volodka_cad",
+        }:
+            raise ValueError(
+                "support_control.motion_profile must be 'unity_legacy' or "
+                "'volodka_cad'"
+            )
         _require_real_config_fields(
             self,
             (
                 name
                 for name in type(self).__dataclass_fields__
-                if name != "cancel_on_stale_reference"
+                if name not in {"cancel_on_stale_reference", "motion_profile"}
             ),
             section="support_control",
         )
@@ -269,11 +278,43 @@ _RIGHT_SWING_LIFT = _degrees_profile((10, 12, 14), (20.0, 20.0, -20.0))
 _LEFT_SWING_SHIFT = _degrees_profile((8, 9, 16, 17), (-28.0, 28.0, 28.0, -28.0))
 _LEFT_SWING_LIFT = _degrees_profile((11, 13, 15), (20.0, 30.0, -10.0))
 
+# Symmetric profile for the 80 mm thigh/shin CAD model.  Its positive sagittal
+# API coordinates are hip flexion, knee flexion and toe-up ankle pitch, so the
+# flexion triangle shortens the swing leg while preserving sole pitch.
+_VOLODKA_RIGHT_SWING_SHIFT = _degrees_profile(
+    (8, 9, 16, 17), (27.5, -27.5, -27.5, 27.5)
+)
+_VOLODKA_RIGHT_SWING_LIFT = _degrees_profile((10, 12, 14), (42.5, 85.0, 42.5))
+_VOLODKA_LEFT_SWING_SHIFT = _degrees_profile(
+    (8, 9, 16, 17), (-27.5, 27.5, 27.5, -27.5)
+)
+_VOLODKA_LEFT_SWING_LIFT = _degrees_profile((11, 13, 15), (42.5, 85.0, 42.5))
 
-def support_offsets(intent: SupportIntent | str) -> tuple[FloatArray, FloatArray]:
+
+def support_offsets(
+    intent: SupportIntent | str,
+    profile: str = "unity_legacy",
+) -> tuple[FloatArray, FloatArray]:
     """Return copies of the verified ``(weight_shift, swing_lift)`` offsets."""
 
     accepted = SupportIntent(intent)
+    if not isinstance(profile, str) or profile not in {
+        "unity_legacy",
+        "volodka_cad",
+    }:
+        raise ValueError(f"unknown support motion profile: {profile!r}")
+    if profile == "volodka_cad":
+        if accepted is SupportIntent.RIGHT_SWING:
+            return (
+                _VOLODKA_RIGHT_SWING_SHIFT.copy(),
+                _VOLODKA_RIGHT_SWING_LIFT.copy(),
+            )
+        if accepted is SupportIntent.LEFT_SWING:
+            return (
+                _VOLODKA_LEFT_SWING_SHIFT.copy(),
+                _VOLODKA_LEFT_SWING_LIFT.copy(),
+            )
+        return np.zeros(len(JOINT_NAMES)), np.zeros(len(JOINT_NAMES))
     if accepted is SupportIntent.RIGHT_SWING:
         return _RIGHT_SWING_SHIFT.copy(), _RIGHT_SWING_LIFT.copy()
     if accepted is SupportIntent.LEFT_SWING:
@@ -1046,7 +1087,9 @@ class SupportStateMachine:
                 composed_positions[swing_indices] + reference_blend * reference_delta
             )
 
-        shift_offset, lift_offset = support_offsets(self._active_intent)
+        shift_offset, lift_offset = support_offsets(
+            self._active_intent, self.config.motion_profile
+        )
         applied_offset = (
             _smoothstep(self._shift_progress) * shift_offset
             + _smoothstep(self._swing_progress) * lift_profile_scale * lift_offset

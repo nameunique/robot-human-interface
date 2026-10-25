@@ -28,6 +28,10 @@ from .geometry import body_basis
 FloatArray = NDArray[np.float64]
 BoolArray = NDArray[np.bool_]
 
+_DEFAULT_ROBOT_FORWARD_AXIS = np.asarray((-1.0, 0.0, 0.0))
+_DEFAULT_ROBOT_RIGHT_AXIS = np.asarray((0.0, -1.0, 0.0))
+_DEFAULT_ROBOT_UP_AXIS = np.asarray((0.0, 0.0, 1.0))
+
 DIRECTION_NAMES: tuple[str, ...] = (
     "right_upper_arm",
     "left_upper_arm",
@@ -88,6 +92,53 @@ def _unit(vector: object) -> FloatArray:
     if not np.isfinite(norm) or norm < 1e-9:
         return np.full(3, np.nan, dtype=np.float64)
     return result / norm
+
+
+def model_numeric_vector(
+    model: mujoco.MjModel,
+    name: str,
+    default: object,
+) -> FloatArray:
+    """Read a finite unit-vector descriptor from an MJCF ``numeric``.
+
+    Older bundled models predate the descriptors, so every caller supplies an
+    explicit legacy default.  A present but malformed descriptor is rejected:
+    silently falling back would make a model appear geometrically plausible in
+    the viewer while evaluating it in the wrong anatomical frame.
+    """
+
+    identifier = int(mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_NUMERIC, name))
+    if identifier < 0:
+        vector = np.asarray(default, dtype=np.float64)
+    else:
+        size = int(model.numeric_size[identifier])
+        address = int(model.numeric_adr[identifier])
+        if size != 3:
+            raise ValueError(f"MuJoCo numeric {name!r} must contain exactly 3 values")
+        vector = np.asarray(model.numeric_data[address : address + size], dtype=np.float64)
+    unit = _unit(vector)
+    if not np.isfinite(unit).all():
+        raise ValueError(f"MuJoCo numeric {name!r} must be a finite non-zero vector")
+    return unit
+
+
+def model_anatomical_axes(
+    model: mujoco.MjModel,
+) -> tuple[FloatArray, FloatArray, FloatArray]:
+    """Return model-local forward/right/up axes used by direction metrics."""
+
+    forward = model_numeric_vector(
+        model, "robot_forward_axis", _DEFAULT_ROBOT_FORWARD_AXIS
+    )
+    right = model_numeric_vector(model, "robot_right_axis", _DEFAULT_ROBOT_RIGHT_AXIS)
+    up = model_numeric_vector(model, "robot_up_axis", _DEFAULT_ROBOT_UP_AXIS)
+    axes = np.vstack((forward, right, up))
+    gram = axes @ axes.T
+    if not np.allclose(gram, np.eye(3), atol=1e-6):
+        raise ValueError(
+            "robot_forward_axis, robot_right_axis and robot_up_axis must be orthonormal"
+        )
+    return forward, right, up
 
 
 @dataclass(frozen=True, slots=True)
@@ -314,20 +365,31 @@ def robot_anatomical_directions(
 ) -> AnatomicalDirections:
     """Read robot FK directions without mutating ``model`` or ``data``.
 
-    World vectors are transformed into the torso frame.  The inherited model's
-    physical front/left/up axes are ``-X/+Y/+Z``, hence anatomical right is
-    ``-Y``.  The result is invariant to free-base translation and rotation.
+    World vectors are transformed into the torso frame and then projected onto
+    model-declared anatomical axes.  Models without the optional MJCF
+    ``robot_*_axis`` numerics retain the inherited ``-X/-Y/+Z``
+    forward/right/up convention.  The result is invariant to free-base
+    translation and rotation.
     """
 
     torso_id = _required_id(model, mujoco.mjtObj.mjOBJ_BODY, "torso")
     torso_rotation = np.asarray(data.xmat[torso_id], dtype=np.float64).reshape(3, 3)
     world_to_base = torso_rotation.T
+    forward_axis, right_axis, up_axis = model_anatomical_axes(model)
     vectors = np.full((len(DIRECTION_NAMES), 3), np.nan, dtype=np.float64)
     valid = np.zeros(len(DIRECTION_NAMES), dtype=bool)
 
     def anatomical(world_vector: object) -> FloatArray:
         local = world_to_base @ np.asarray(world_vector, dtype=np.float64)
-        return _unit(np.asarray((-local[0], -local[1], local[2])))
+        return _unit(
+            np.asarray(
+                (
+                    np.dot(local, forward_axis),
+                    np.dot(local, right_axis),
+                    np.dot(local, up_axis),
+                )
+            )
+        )
 
     def install(name: str, world_vector: object) -> None:
         direction = anatomical(world_vector)
@@ -337,19 +399,34 @@ def robot_anatomical_directions(
             valid[output_index] = True
 
     body_names = {
-        "shoulder_rh", "elbow_rh", "wrist_rh",
-        "shoulder_lh", "elbow_lh", "wrist_lh",
         "knee_rl", "shin_rl", "motors_feet_rl",
         "knee_ll", "shin_ll", "motors_feet_ll",
     }
+    arm_uses_sites: dict[str, bool] = {}
+    for side, suffix in (("right", "rh"), ("left", "lh")):
+        shoulder_site = f"{side}_shoulder_ik"
+        uses_sites = int(
+            mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, shoulder_site)
+        ) >= 0
+        arm_uses_sites[side] = uses_sites
+        if not uses_sites:
+            body_names.update(
+                {f"shoulder_{suffix}", f"elbow_{suffix}", f"wrist_{suffix}"}
+            )
     body_ids = {
         name: _required_id(model, mujoco.mjtObj.mjOBJ_BODY, name)
         for name in body_names
     }
     site_names = {
+        "right_elbow_ik", "left_elbow_ik",
         "right_wrist_ik", "right_hand_ik", "left_wrist_ik", "left_hand_ik",
         "right_foot_contact", "right_toe_ik", "left_foot_contact", "left_toe_ik",
     }
+    site_names.update(
+        f"{side}_shoulder_ik"
+        for side, uses_sites in arm_uses_sites.items()
+        if uses_sites
+    )
     site_ids = {
         name: _required_id(model, mujoco.mjtObj.mjOBJ_SITE, name)
         for name in site_names
@@ -362,10 +439,27 @@ def robot_anatomical_directions(
         install(name, data.site_xpos[site_ids[distal]] - data.site_xpos[site_ids[proximal]])
 
     for side, suffix in (("right", "rh"), ("left", "lh")):
-        body_segment(f"{side}_upper_arm", f"shoulder_{suffix}", f"elbow_{suffix}")
-        body_segment(f"{side}_forearm", f"elbow_{suffix}", f"wrist_{suffix}")
+        if arm_uses_sites[side]:
+            site_segment(
+                f"{side}_upper_arm",
+                f"{side}_shoulder_ik",
+                f"{side}_elbow_ik",
+            )
+            site_segment(
+                f"{side}_forearm",
+                f"{side}_elbow_ik",
+                f"{side}_wrist_ik",
+            )
+            site_segment(
+                f"{side}_arm",
+                f"{side}_shoulder_ik",
+                f"{side}_wrist_ik",
+            )
+        else:
+            body_segment(f"{side}_upper_arm", f"shoulder_{suffix}", f"elbow_{suffix}")
+            body_segment(f"{side}_forearm", f"elbow_{suffix}", f"wrist_{suffix}")
+            body_segment(f"{side}_arm", f"shoulder_{suffix}", f"wrist_{suffix}")
         site_segment(f"{side}_hand", f"{side}_wrist_ik", f"{side}_hand_ik")
-        body_segment(f"{side}_arm", f"shoulder_{suffix}", f"wrist_{suffix}")
 
     # knee_* is the hip-pitch body; shin_* is the anatomical knee; and
     # motors_feet_* is the ankle-pitch body in this inherited Unity naming.
@@ -379,7 +473,10 @@ def robot_anatomical_directions(
 
     head_id = _required_id(model, mujoco.mjtObj.mjOBJ_BODY, "head")
     head_rotation = np.asarray(data.xmat[head_id], dtype=np.float64).reshape(3, 3)
-    direction = anatomical(head_rotation @ np.asarray((-1.0, 0.0, 0.0)))
+    head_forward_axis = model_numeric_vector(
+        model, "head_forward_axis", _DEFAULT_ROBOT_FORWARD_AXIS
+    )
+    direction = anatomical(head_rotation @ head_forward_axis)
     if np.isfinite(direction).all():
         vectors[_DIRECTION_INDEX["head"]] = direction
         valid[_DIRECTION_INDEX["head"]] = True

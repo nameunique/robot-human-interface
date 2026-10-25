@@ -50,6 +50,7 @@ class ReadinessReason(str, Enum):
     FREE_BASE_INACTIVE = "free_base_inactive"
     BALANCE_INACTIVE = "balance_inactive"
     CONTROLLER_NOT_READY = "controller_not_ready"
+    HARDWARE_MAPPING_UNVERIFIED = "hardware_mapping_unverified"
 
 
 @dataclass(frozen=True, slots=True)

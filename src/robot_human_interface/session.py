@@ -23,6 +23,7 @@ from typing import Any, Protocol, runtime_checkable
 import numpy as np
 
 from robot_human_interface.playback import PlaybackDiscontinuity, PlaybackState
+from robot_human_interface.model_profiles import DEFAULT_MODEL_PROFILE, get_model_profile
 from robot_human_interface.protocol import (
     FinalizedSafeCommand,
     OperatorSafetyAcknowledgement,
@@ -102,10 +103,12 @@ class SessionConfig:
     snapshot_rate_hz: float = 20.0
     calibration_samples: int = 30
     physics_steps_per_frame: int = 0
+    model_profile: str = DEFAULT_MODEL_PROFILE
 
     def __post_init__(self) -> None:
         if not isinstance(self.source, SourceSpec):
             raise TypeError("source must be a SourceSpec")
+        get_model_profile(self.model_profile)
         if type(self.free_base) is not bool or type(self.balance_enabled) is not bool:
             raise ValueError("free_base and balance_enabled must be booleans")
         mode = str(self.retargeting).strip().lower()

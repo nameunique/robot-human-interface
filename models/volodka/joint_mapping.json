@@ -1,0 +1,233 @@
+{
+  "schema_version": 1,
+  "formula": "q_native = sign * (q_api - api_home_rad)",
+  "hardware_mapping_verified": false,
+  "robot_forward_axis": [
+    1,
+    0,
+    0
+  ],
+  "landmark_status": "wrist/hand/nose are retargeting proxies, not CAD mass properties",
+  "joints": [
+    {
+      "api_name": "shoulder_rh",
+      "native_body": "right_arm_link1",
+      "native_joint": "right_shoulder_roll",
+      "sign": 1,
+      "api_home_rad": 0.5235987755982988,
+      "native_limits_rad": [
+        -1.57,
+        1.57
+      ]
+    },
+    {
+      "api_name": "shoulder_lh",
+      "native_body": "left_arm_link1",
+      "native_joint": "left_shoulder_roll",
+      "sign": 1,
+      "api_home_rad": 0.5235987755982988,
+      "native_limits_rad": [
+        -1.57,
+        1.57
+      ]
+    },
+    {
+      "api_name": "elbow_rh",
+      "native_body": "right_arm_link2",
+      "native_joint": "right_shoulder_yaw",
+      "sign": -1,
+      "api_home_rad": 0.2617993877991494,
+      "native_limits_rad": [
+        -1.57,
+        1.57
+      ]
+    },
+    {
+      "api_name": "elbow_lh",
+      "native_body": "left_arm_link2",
+      "native_joint": "left_shoulder_yaw",
+      "sign": 1,
+      "api_home_rad": 0.2617993877991494,
+      "native_limits_rad": [
+        -1.57,
+        1.57
+      ]
+    },
+    {
+      "api_name": "wrist_rh",
+      "native_body": "right_arm_link3",
+      "native_joint": "right_elbow",
+      "sign": -1,
+      "api_home_rad": 0.2617993877991494,
+      "native_limits_rad": [
+        -1.57,
+        1.57
+      ]
+    },
+    {
+      "api_name": "wrist_lh",
+      "native_body": "left_arm_link3",
+      "native_joint": "left_elbow",
+      "sign": 1,
+      "api_home_rad": 0.2617993877991494,
+      "native_limits_rad": [
+        -1.57,
+        1.57
+      ]
+    },
+    {
+      "api_name": "rotat_axis_rl",
+      "native_body": "right_leg_link1",
+      "native_joint": "right_hip_yaw",
+      "sign": -1,
+      "api_home_rad": 0.0,
+      "native_limits_rad": [
+        -0.698,
+        0.698
+      ]
+    },
+    {
+      "api_name": "rotat_axis_ll",
+      "native_body": "left_leg_link1",
+      "native_joint": "left_hip_yaw",
+      "sign": 1,
+      "api_home_rad": 0.0,
+      "native_limits_rad": [
+        -0.698,
+        0.698
+      ]
+    },
+    {
+      "api_name": "motors_thigh_rl",
+      "native_body": "right_leg_link2",
+      "native_joint": "right_hip_roll",
+      "sign": -1,
+      "api_home_rad": 0.08726646259971647,
+      "native_limits_rad": [
+        -0.698,
+        0.698
+      ]
+    },
+    {
+      "api_name": "motors_thigh_ll",
+      "native_body": "left_leg_link2",
+      "native_joint": "left_hip_roll",
+      "sign": 1,
+      "api_home_rad": 0.08726646259971647,
+      "native_limits_rad": [
+        -0.698,
+        0.698
+      ]
+    },
+    {
+      "api_name": "knee_rl",
+      "native_body": "right_leg_link3",
+      "native_joint": "right_hip_pitch",
+      "sign": 1,
+      "api_home_rad": 0.4886921905584123,
+      "native_limits_rad": [
+        -0.524,
+        1.571
+      ]
+    },
+    {
+      "api_name": "knee_ll",
+      "native_body": "left_leg_link3",
+      "native_joint": "left_hip_pitch",
+      "sign": 1,
+      "api_home_rad": 0.4886921905584123,
+      "native_limits_rad": [
+        -0.524,
+        1.571
+      ]
+    },
+    {
+      "api_name": "shin_rl",
+      "native_body": "right_leg_link4",
+      "native_joint": "right_knee",
+      "sign": 1,
+      "api_home_rad": 0.7853981633974483,
+      "native_limits_rad": [
+        -0.175,
+        2.618
+      ]
+    },
+    {
+      "api_name": "shin_ll",
+      "native_body": "left_leg_link4",
+      "native_joint": "left_knee",
+      "sign": 1,
+      "api_home_rad": 0.7853981633974483,
+      "native_limits_rad": [
+        -0.175,
+        2.618
+      ]
+    },
+    {
+      "api_name": "motors_feet_rl",
+      "native_body": "right_leg_link5",
+      "native_joint": "right_ankle_pitch",
+      "sign": 1,
+      "api_home_rad": 0.3490658503988659,
+      "native_limits_rad": [
+        -1.309,
+        1.309
+      ]
+    },
+    {
+      "api_name": "motors_feet_ll",
+      "native_body": "left_leg_link5",
+      "native_joint": "left_ankle_pitch",
+      "sign": 1,
+      "api_home_rad": 0.3490658503988659,
+      "native_limits_rad": [
+        -1.309,
+        1.309
+      ]
+    },
+    {
+      "api_name": "foot_rl",
+      "native_body": "right_leg_link6",
+      "native_joint": "right_ankle_roll",
+      "sign": -1,
+      "api_home_rad": -0.08726646259971647,
+      "native_limits_rad": [
+        -1.047,
+        0.785
+      ]
+    },
+    {
+      "api_name": "foot_ll",
+      "native_body": "left_leg_link6",
+      "native_joint": "left_ankle_roll",
+      "sign": 1,
+      "api_home_rad": -0.08726646259971647,
+      "native_limits_rad": [
+        -1.047,
+        0.785
+      ]
+    },
+    {
+      "api_name": "neck",
+      "native_body": "head_link1",
+      "native_joint": "head_neck_yaw",
+      "sign": 1,
+      "api_home_rad": 0.0,
+      "native_limits_rad": [
+        -1.57,
+        1.57
+      ]
+    },
+    {
+      "api_name": "head",
+      "native_body": "head_link2",
+      "native_joint": "head_neck_pitch",
+      "sign": 1,
+      "api_home_rad": 0.0,
+      "native_limits_rad": [
+        -1.57,
+        1.57
+      ]
+    }
+  ]
+}

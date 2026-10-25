@@ -80,6 +80,7 @@ class MainWindow(QMainWindow):
         self._settings = QSettings()
         self._log_dir = log_dir
         self._latest_snapshot: object | None = None
+        self._active_model_profile: str | None = None
         self._playback_state: object | None = None
         self._snapshot_received_at = 0.0
         self._pipeline_state = "STOPPED"
@@ -591,6 +592,15 @@ class MainWindow(QMainWindow):
         self.tracking_badge.set_status(f"TRACKING {round(quality * 100)}%", kind)
         telemetry = getattr(snapshot, "telemetry", {}) or {}
         if isinstance(telemetry, dict) or hasattr(telemetry, "get"):
+            model_profile = telemetry.get("model_profile")
+            if model_profile and model_profile != self._active_model_profile:
+                self._active_model_profile = str(model_profile)
+                model_label = str(telemetry.get("model_label", model_profile))
+                self.setWindowTitle(f"Humanoid Interface — {model_label}")
+                self.viewer_button.setToolTip(f"Физическая модель: {model_label}")
+                self._log("INFO", "PHYSICS", "MODEL_PROFILE_ACTIVE", f"Физическая модель: {model_label}")
+                if telemetry.get("hardware_block_reason"):
+                    self._log("WARNING", "SAFETY", "MODEL_HARDWARE_UNVERIFIED", str(telemetry["hardware_block_reason"]))
             timestamp = monotonic()
             try:
                 self.tilt_chart.append(float(telemetry.get("base_tilt_rad")), timestamp)

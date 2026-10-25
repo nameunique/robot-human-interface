@@ -1,0 +1,394 @@
+schema_version: 1
+robot_model: volodka_cad_teleop
+parameter_status: provisional
+source:
+  snapshot: models/volodka/physical_snapshot.json
+  adapter: models/volodka/joint_mapping.json
+  hardware_mapping_verified: false
+units:
+  internal_angle: rad
+  length: m
+  mass: kg
+coordinates:
+  robot_front_mujoco:
+  - 1
+  - 0
+  - 0
+  robot_left_mujoco:
+  - 0
+  - 1
+  - 0
+  robot_up_mujoco:
+  - 0
+  - 0
+  - 1
+  model_space_to_metre_scale: 1.0
+physical_parameters:
+  total_mass_kg: 3.0942
+  torso_mass_kg: 0.7093
+  inertia: upstream_rod_box_approximation
+  center_of_mass: upstream_CAD_passport
+  actuator_gains: unidentified_legacy_numerical_reference
+  self_collisions: false
+joint_order:
+- shoulder_rh
+- shoulder_lh
+- elbow_rh
+- elbow_lh
+- wrist_rh
+- wrist_lh
+- rotat_axis_rl
+- rotat_axis_ll
+- motors_thigh_rl
+- motors_thigh_ll
+- knee_rl
+- knee_ll
+- shin_rl
+- shin_ll
+- motors_feet_rl
+- motors_feet_ll
+- foot_rl
+- foot_ll
+- neck
+- head
+joints:
+- index: 0
+  name: shoulder_rh
+  parent: torso
+  axis: &id001
+  - 0.0
+  - 0.0
+  - 1.0
+  mujoco_axis: *id001
+  limit_rad:
+  - -1.0464012244017011
+  - 2.093598775598299
+  limit_deg:
+  - -59.95437383553924
+  - 119.95437383553926
+  home_rad: 0.5235987755982988
+  home_deg: 29.999999999999996
+  mass_kg: 0.0152
+- index: 1
+  name: shoulder_lh
+  parent: torso
+  axis: &id002
+  - 0.0
+  - 0.0
+  - 1.0
+  mujoco_axis: *id002
+  limit_rad:
+  - -1.0464012244017011
+  - 2.093598775598299
+  limit_deg:
+  - -59.95437383553924
+  - 119.95437383553926
+  home_rad: 0.5235987755982988
+  home_deg: 29.999999999999996
+  mass_kg: 0.0152
+- index: 2
+  name: elbow_rh
+  parent: shoulder_rh
+  axis: &id003
+  - -0.0
+  - -0.0
+  - -1.0
+  mujoco_axis: *id003
+  limit_rad:
+  - -1.3082006122008507
+  - 1.8317993877991494
+  limit_deg:
+  - -74.95437383553926
+  - 104.95437383553924
+  home_rad: 0.2617993877991494
+  home_deg: 14.999999999999998
+  mass_kg: 0.0898
+- index: 3
+  name: elbow_lh
+  parent: shoulder_lh
+  axis: &id004
+  - 0.0
+  - 0.0
+  - 1.0
+  mujoco_axis: *id004
+  limit_rad:
+  - -1.3082006122008507
+  - 1.8317993877991494
+  limit_deg:
+  - -74.95437383553926
+  - 104.95437383553924
+  home_rad: 0.2617993877991494
+  home_deg: 14.999999999999998
+  mass_kg: 0.0898
+- index: 4
+  name: wrist_rh
+  parent: elbow_rh
+  axis: &id005
+  - -0.0
+  - -0.0
+  - -1.0
+  mujoco_axis: *id005
+  limit_rad:
+  - -1.3082006122008507
+  - 1.8317993877991494
+  limit_deg:
+  - -74.95437383553926
+  - 104.95437383553924
+  home_rad: 0.2617993877991494
+  home_deg: 14.999999999999998
+  mass_kg: 0.0976
+- index: 5
+  name: wrist_lh
+  parent: elbow_lh
+  axis: &id006
+  - 0.0
+  - 0.0
+  - 1.0
+  mujoco_axis: *id006
+  limit_rad:
+  - -1.3082006122008507
+  - 1.8317993877991494
+  limit_deg:
+  - -74.95437383553926
+  - 104.95437383553924
+  home_rad: 0.2617993877991494
+  home_deg: 14.999999999999998
+  mass_kg: 0.0976
+- index: 6
+  name: rotat_axis_rl
+  parent: torso
+  axis: &id007
+  - -0.0
+  - -0.0
+  - -1.0
+  mujoco_axis: *id007
+  limit_rad:
+  - -0.698
+  - 0.698
+  limit_deg:
+  - -39.99245410013146
+  - 39.99245410013146
+  home_rad: 0.0
+  home_deg: 0.0
+  mass_kg: 0.0437
+- index: 7
+  name: rotat_axis_ll
+  parent: torso
+  axis: &id008
+  - 0.0
+  - 0.0
+  - 1.0
+  mujoco_axis: *id008
+  limit_rad:
+  - -0.698
+  - 0.698
+  limit_deg:
+  - -39.99245410013146
+  - 39.99245410013146
+  home_rad: 0.0
+  home_deg: 0.0
+  mass_kg: 0.0437
+- index: 8
+  name: motors_thigh_rl
+  parent: rotat_axis_rl
+  axis: &id009
+  - -0.0
+  - -0.0
+  - -1.0
+  mujoco_axis: *id009
+  limit_rad:
+  - -0.6107335374002835
+  - 0.7852664625997164
+  limit_deg:
+  - -34.99245410013146
+  - 44.99245410013146
+  home_rad: 0.08726646259971647
+  home_deg: 5.0
+  mass_kg: 0.1552
+- index: 9
+  name: motors_thigh_ll
+  parent: rotat_axis_ll
+  axis: &id010
+  - 0.0
+  - 0.0
+  - 1.0
+  mujoco_axis: *id010
+  limit_rad:
+  - -0.6107335374002835
+  - 0.7852664625997164
+  limit_deg:
+  - -34.99245410013146
+  - 44.99245410013146
+  home_rad: 0.08726646259971647
+  home_deg: 5.0
+  mass_kg: 0.1552
+- index: 10
+  name: knee_rl
+  parent: motors_thigh_rl
+  axis: &id011
+  - 0.0
+  - 0.0
+  - 1.0
+  mujoco_axis: *id011
+  limit_rad:
+  - -0.035307809441587734
+  - 2.0596921905584122
+  limit_deg:
+  - -2.0229884648551373
+  - 118.01166961505233
+  home_rad: 0.4886921905584123
+  home_deg: 28.0
+  mass_kg: 0.0485
+- index: 11
+  name: knee_ll
+  parent: motors_thigh_ll
+  axis: &id012
+  - 0.0
+  - 0.0
+  - 1.0
+  mujoco_axis: *id012
+  limit_rad:
+  - -0.035307809441587734
+  - 2.0596921905584122
+  limit_deg:
+  - -2.0229884648551373
+  - 118.01166961505233
+  home_rad: 0.4886921905584123
+  home_deg: 28.0
+  mass_kg: 0.0485
+- index: 12
+  name: shin_rl
+  parent: knee_rl
+  axis: &id013
+  - 0.0
+  - 0.0
+  - 1.0
+  mujoco_axis: *id013
+  limit_rad:
+  - 0.6103981633974482
+  - 3.403398163397448
+  limit_deg:
+  - 34.97323858521059
+  - 195.00035076524952
+  home_rad: 0.7853981633974483
+  home_deg: 45.0
+  mass_kg: 0.1579
+- index: 13
+  name: shin_ll
+  parent: knee_ll
+  axis: &id014
+  - 0.0
+  - 0.0
+  - 1.0
+  mujoco_axis: *id014
+  limit_rad:
+  - 0.6103981633974482
+  - 3.403398163397448
+  limit_deg:
+  - 34.97323858521059
+  - 195.00035076524952
+  home_rad: 0.7853981633974483
+  home_deg: 45.0
+  mass_kg: 0.1579
+- index: 14
+  name: motors_feet_rl
+  parent: shin_rl
+  axis: &id015
+  - 0.0
+  - 0.0
+  - 1.0
+  mujoco_axis: *id015
+  limit_rad:
+  - -0.959934149601134
+  - 1.658065850398866
+  limit_deg:
+  - -55.000175382624754
+  - 95.00017538262476
+  home_rad: 0.3490658503988659
+  home_deg: 20.0
+  mass_kg: 0.1552
+- index: 15
+  name: motors_feet_ll
+  parent: shin_ll
+  axis: &id016
+  - 0.0
+  - 0.0
+  - 1.0
+  mujoco_axis: *id016
+  limit_rad:
+  - -0.959934149601134
+  - 1.658065850398866
+  limit_deg:
+  - -55.000175382624754
+  - 95.00017538262476
+  home_rad: 0.3490658503988659
+  home_deg: 20.0
+  mass_kg: 0.1552
+- index: 16
+  name: foot_rl
+  parent: motors_feet_rl
+  axis: &id017
+  - -0.0
+  - -0.0
+  - -1.0
+  mujoco_axis: *id017
+  limit_rad:
+  - -0.8722664625997165
+  - 0.9597335374002834
+  limit_deg:
+  - -49.97718691776963
+  - 54.98868115019719
+  home_rad: -0.08726646259971647
+  home_deg: -5.0
+  mass_kg: 0.3165
+- index: 17
+  name: foot_ll
+  parent: motors_feet_ll
+  axis: &id018
+  - 0.0
+  - 0.0
+  - 1.0
+  mujoco_axis: *id018
+  limit_rad:
+  - -1.1342664625997163
+  - 0.6977335374002835
+  limit_deg:
+  - -64.98868115019718
+  - 39.97718691776962
+  home_rad: -0.08726646259971647
+  home_deg: -5.0
+  mass_kg: 0.3165
+- index: 18
+  name: neck
+  parent: torso
+  axis: &id019
+  - 0.0
+  - 0.0
+  - 1.0
+  mujoco_axis: *id019
+  limit_rad:
+  - -1.57
+  - 1.57
+  limit_deg:
+  - -89.95437383553924
+  - 89.95437383553924
+  home_rad: 0.0
+  home_deg: 0.0
+  mass_kg: 0.0151
+- index: 19
+  name: head
+  parent: neck
+  axis: &id020
+  - 0.0
+  - 0.0
+  - 1.0
+  mujoco_axis: *id020
+  limit_rad:
+  - -1.57
+  - 1.57
+  limit_deg:
+  - -89.95437383553924
+  - 89.95437383553924
+  home_rad: 0.0
+  home_deg: 0.0
+  mass_kg: 0.2106

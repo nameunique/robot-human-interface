@@ -27,6 +27,7 @@ from robot_human_interface.skeleton import (
 )
 
 from .geometry import BodyBasis, UPPER_BODY_REQUIRED, WHOLE_BODY_REQUIRED, body_basis
+from .fidelity import model_anatomical_axes, model_numeric_vector
 from .retargeter import (
     DEFAULT_JOINT_SPECS,
     JointSpec,
@@ -80,6 +81,8 @@ _CALIBRATION_LANDMARKS = UPPER_BODY_REQUIRED + (
     L.LEFT_ANKLE,
     L.RIGHT_ANKLE,
 )
+
+_LEGACY_HEAD_FORWARD_AXIS = np.asarray((-1.0, 0.0, 0.0))
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,6 +153,15 @@ class MujocoIKRetargeter:
         self.model_path = path.resolve()
         self.model = mujoco.MjModel.from_xml_path(str(self.model_path))
         self.data = mujoco.MjData(self.model)
+        (
+            self._robot_forward_axis,
+            self._robot_right_axis,
+            self._robot_up_axis,
+        ) = model_anatomical_axes(self.model)
+        self._head_forward_axis = model_numeric_vector(
+            self.model, "head_forward_axis", _LEGACY_HEAD_FORWARD_AXIS
+        )
+        self._position_residual_scale_m = self._model_position_residual_scale()
         self._lower = np.asarray([item.lower_rad for item in self.joint_specs])
         self._upper = np.asarray([item.upper_rad for item in self.joint_specs])
         self._home = np.asarray([item.start_rad + item.zero_offset_rad for item in self.joint_specs])
@@ -165,11 +177,22 @@ class MujocoIKRetargeter:
             name: self._id(mujoco.mjtObj.mjOBJ_SITE, name)
             for name in ("right_foot_contact", "left_foot_contact")
         })
-        self._body_ids = {
-            name: self._id(mujoco.mjtObj.mjOBJ_BODY, name)
-            for name in (
-                "shoulder_rh", "shoulder_lh", "knee_rl", "knee_ll", "head"
+        self._arm_root_site_names: dict[str, str] = {}
+        for side in ("right", "left"):
+            name = f"{side}_shoulder_ik"
+            identifier = int(
+                mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_SITE, name)
             )
+            if identifier >= 0:
+                self._site_ids[name] = identifier
+                self._arm_root_site_names[side] = name
+        body_names = {"knee_rl", "knee_ll", "head"}
+        if "right" not in self._arm_root_site_names:
+            body_names.add("shoulder_rh")
+        if "left" not in self._arm_root_site_names:
+            body_names.add("shoulder_lh")
+        self._body_ids = {
+            name: self._id(mujoco.mjtObj.mjOBJ_BODY, name) for name in body_names
         }
         self._set_q(self._home)
         self._home_sites = {
@@ -179,6 +202,14 @@ class MujocoIKRetargeter:
         self._home_roots = {
             name: self.data.xpos[identifier].copy()
             for name, identifier in self._body_ids.items()
+        }
+        self._home_arm_roots = {
+            side: (
+                self._home_sites[self._arm_root_site_names[side]].copy()
+                if side in self._arm_root_site_names
+                else self._home_roots["shoulder_rh" if side == "right" else "shoulder_lh"].copy()
+            )
+            for side in ("right", "left")
         }
         self._home_vectors = self._make_home_vectors()
         self._home_foot_offsets = {
@@ -200,6 +231,38 @@ class MujocoIKRetargeter:
             ),
         }
         self.reset()
+
+    def _model_position_residual_scale(self) -> float:
+        """Return the model length used to make marker residuals dimensionless.
+
+        Legacy tuning used metre-valued residuals directly and must remain
+        bit-for-bit compatible.  Descriptor-aware models are substantially
+        smaller, so their marker errors are normalized by model extent instead
+        of being overwhelmed by angle regularization.  An explicit positive
+        ``ik_position_scale`` numeric takes precedence.
+        """
+
+        numeric_id = int(
+            mujoco.mj_name2id(
+                self.model, mujoco.mjtObj.mjOBJ_NUMERIC, "ik_position_scale"
+            )
+        )
+        if numeric_id >= 0:
+            size = int(self.model.numeric_size[numeric_id])
+            address = int(self.model.numeric_adr[numeric_id])
+            if size != 1:
+                raise ValueError("MuJoCo numeric 'ik_position_scale' must be scalar")
+            scale = float(self.model.numeric_data[address])
+        else:
+            descriptor_id = int(
+                mujoco.mj_name2id(
+                    self.model, mujoco.mjtObj.mjOBJ_NUMERIC, "robot_forward_axis"
+                )
+            )
+            scale = float(self.model.stat.extent) if descriptor_id >= 0 else 1.0
+        if not np.isfinite(scale) or scale <= 1e-8:
+            raise ValueError("IK position residual scale must be finite and positive")
+        return scale
 
     @classmethod
     def from_yaml(
@@ -322,11 +385,12 @@ class MujocoIKRetargeter:
     def _make_home_vectors(self) -> dict[str, FloatArray]:
         s = self._home_sites
         r = self._home_roots
+        head_rotation = self.data.xmat[self._body_ids["head"]].reshape(3, 3)
         return {
-            "right_upper": s["right_elbow_ik"] - r["shoulder_rh"],
+            "right_upper": s["right_elbow_ik"] - self._home_arm_roots["right"],
             "right_forearm": s["right_wrist_ik"] - s["right_elbow_ik"],
             "right_hand": s["right_hand_ik"] - s["right_wrist_ik"],
-            "left_upper": s["left_elbow_ik"] - r["shoulder_lh"],
+            "left_upper": s["left_elbow_ik"] - self._home_arm_roots["left"],
             "left_forearm": s["left_wrist_ik"] - s["left_elbow_ik"],
             "left_hand": s["left_hand_ik"] - s["left_wrist_ik"],
             # In the inherited Unity naming knee_* is the hip-pitch body and
@@ -342,7 +406,7 @@ class MujocoIKRetargeter:
             # Pose fidelity measures the physical head forward axis.  The
             # visual nose marker is intentionally above that axis, so using
             # head->nose as the IK direction injects a false pitch offset.
-            "face": np.array((-1.0, 0.0, 0.0)),
+            "face": head_rotation @ self._head_forward_axis,
         }
 
     def _frame_is_valid(self, frame: SkeletonFrame) -> bool:
@@ -527,12 +591,12 @@ class MujocoIKRetargeter:
             return {}, {}
 
         def transform(vector: FloatArray, basis: BodyBasis) -> FloatArray | None:
-            # Human anatomical forward/right/up -> robot -X/-Y/+Z.
-            return _unit(np.array((
-                -np.dot(vector, basis.forward),
-                -np.dot(vector, basis.lateral_right),
-                np.dot(vector, basis.vertical_up),
-            )))
+            # Human anatomical components -> the model-declared local basis.
+            return _unit(
+                np.dot(vector, basis.forward) * self._robot_forward_axis
+                + np.dot(vector, basis.lateral_right) * self._robot_right_axis
+                + np.dot(vector, basis.vertical_up) * self._robot_up_axis
+            )
 
         core = (L.LEFT_SHOULDER, L.RIGHT_SHOULDER, L.LEFT_HIP, L.RIGHT_HIP)
         records: dict[str, tuple[FloatArray, tuple[L, ...]]] = {}
@@ -682,13 +746,15 @@ class MujocoIKRetargeter:
         image_lifts_m: Mapping[str, float] | None = None,
     ) -> list[tuple[str, FloatArray, float]]:
         targets: list[tuple[str, FloatArray, float]] = []
-        for side, shoulder, hip in (
-            ("right", "shoulder_rh", "knee_rl"),
-            ("left", "shoulder_lh", "knee_ll"),
+        for side, hip in (
+            ("right", "knee_rl"),
+            ("left", "knee_ll"),
         ):
             upper, forearm, hand = (f"{side}_{part}" for part in ("upper", "forearm", "hand"))
             if upper in directions:
-                elbow_target = self._home_roots[shoulder] + self._aligned(upper, directions[upper])
+                elbow_target = self._home_arm_roots[side] + self._aligned(
+                    upper, directions[upper]
+                )
                 targets.append((f"{side}_elbow_ik", elbow_target, confidences[upper]))
                 if forearm in directions:
                     wrist_target = elbow_target + self._aligned(forearm, directions[forearm])
@@ -772,7 +838,7 @@ class MujocoIKRetargeter:
         def current_direction(name: str) -> FloatArray:
             if name == "face":
                 rotation = self.data.xmat[self._body_ids["head"]].reshape(3, 3)
-                return rotation @ np.array((-1.0, 0.0, 0.0))
+                return rotation @ self._head_forward_axis
             side, part = name.split("_", 1)
             suffix = "rl" if side == "right" else "ll"
             knee = self.data.site_xpos[self._site_ids[f"{side}_knee_ik"]]
@@ -794,7 +860,11 @@ class MujocoIKRetargeter:
             values: list[FloatArray] = []
             for name, target, confidence in targets:
                 weight = np.sqrt(_SITE_WEIGHTS[name] * confidence)
-                values.append(weight * (self.data.site_xpos[self._site_ids[name]] - target))
+                values.append(
+                    weight
+                    * (self.data.site_xpos[self._site_ids[name]] - target)
+                    / self._position_residual_scale_m
+                )
             if image_lifts_m is not None:
                 for side, lift_m in image_lifts_m.items():
                     leg_confidence = min(
@@ -821,11 +891,13 @@ class MujocoIKRetargeter:
                                 np.sqrt(
                                     _IMAGE_ANKLE_HEIGHT_WEIGHT * leg_confidence
                                 )
-                                * ankle_error,
+                                * ankle_error
+                                / self._position_residual_scale_m,
                                 np.sqrt(
                                     _IMAGE_TOE_HEIGHT_WEIGHT * leg_confidence
                                 )
-                                * toe_error,
+                                * toe_error
+                                / self._position_residual_scale_m,
                             ]
                         )
                     )

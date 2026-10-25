@@ -347,6 +347,33 @@ def test_default_artifacts_hash_recursive_mujoco_inputs_without_paths(
     assert str(tmp_path.resolve()) not in manifest_path.read_text(encoding="utf-8")
 
 
+def test_default_artifacts_hash_selected_cad_model(tmp_path: Path) -> None:
+    from robot_human_interface.session import SessionConfig, SourceKind, SourceSpec
+
+    model_root = tmp_path / "models" / "volodka"
+    (model_root / "meshes").mkdir(parents=True)
+    (model_root / "scene_free.xml").write_text("<mujoco/>", encoding="utf-8")
+    (model_root / "meshes" / "body.stl").write_bytes(b"cad-mesh")
+    legacy_root = tmp_path / "models" / "humanoid"
+    legacy_root.mkdir()
+    (legacy_root / "robot.xml").write_text("<mujoco/>", encoding="utf-8")
+    config = SessionConfig(SourceSpec(SourceKind.SYNTHETIC, "cad", "CAD"))
+    recorder = ExperimentRecorder(
+        tmp_path / "experiments", utc_now=lambda: NOW,
+        repo_root=tmp_path, recover_partials=False,
+    )
+    recorder.start(_spec(), session_config=config, run_id="cad-model-artifacts")
+    summary = recorder.stop("test")
+    manifest_path = summary.path / "manifest.yaml"
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["session_config"]["model_profile"] == "volodka"
+    assert manifest["files"]["model/volodka/meshes/body.stl"]["sha256"] == sha256_file(
+        model_root / "meshes" / "body.stl"
+    )
+    assert not any(key.startswith("model/humanoid/") for key in manifest["files"])
+    assert str(tmp_path.resolve()) not in manifest_path.read_text(encoding="utf-8")
+
+
 def test_git_dirty_hash_includes_untracked_file_contents(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -303,7 +303,7 @@ def test_close_is_idempotent_and_rejects_new_queued_commands() -> None:
         session.request_start()
 
 
-def test_default_session_runs_the_real_synthetic_balance_pipeline() -> None:
+def test_legacy_session_runs_the_real_synthetic_balance_pipeline() -> None:
     config = SessionConfig(
         SourceSpec(
             SourceKind.SYNTHETIC,
@@ -314,6 +314,7 @@ def test_default_session_runs_the_real_synthetic_balance_pipeline() -> None:
             fps=120.0,
         ),
         physics_steps_per_frame=1,
+        model_profile="unity_legacy",
     )
     session = create_default_session(config)
 

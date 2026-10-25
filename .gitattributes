@@ -1,0 +1,6 @@
+# Preserve byte-exact imported artifacts referenced by import_provenance.json.
+# Newline conversion would invalidate their SHA-256 on clone/checkout.
+models/volodka/source_scene.xml -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+models/volodka/physical_snapshot.json -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+models/volodka/meshes/manifest.json -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+models/volodka/meshes/*.stl -text

@@ -2,4 +2,6 @@ include README.md
 recursive-include assets *.md *.mp4 *.task
 recursive-include config *.yaml
 recursive-include docs *.md
-recursive-include models *.obj *.xml
+recursive-include models *.obj *.xml *.stl *.json *.md
+include tools/import_humanoid_model.py
+include tools/build_volodka_adapter.py

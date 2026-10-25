@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "source_project": "humanoid_model",
+  "source_files_sha256": {
+    "refactor/clean/src/physical_model/__init__.py": "ac827a7fd73e0f02493445e642af06775160eecd2ed8d80d7811876c94b9be56",
+    "refactor/clean/src/physical_model/humanoid.py": "71e7d55132c39fac0291aed322b69f2e370cec39dcfd48e52df385b25d9aec5e",
+    "refactor/clean/src/physical_model/humanoid_scene.py": "f86af82de7e5bff2e7e4e90402ea26618b5837935463f63178537286eba682f5",
+    "refactor/clean/src/physical_model/inertia.py": "966aea1e6c008d9613c875f4e1063d64fe9dc981cf2c63484a8b9be47fa9a3f0",
+    "refactor/clean/src/physical_model/materials.py": "3927185a6c01f66e3ff030647b0f39518dd11ac7590ebf7675d04e478badb36a",
+    "refactor/clean/src/physical_model/passport.py": "aa7c62f6a0b60d52d1f91e1910e4f5c68a7b7589de4f7788840b0da6c3d6c349",
+    "refactor/clean/src/physical_model/provenance.py": "a41bdd120bbc3ce91bd37826df2190aa7e3acaad98b845f05e9f9fd9a68379ee",
+    "refactor/clean/src/physical_model/scene_geometry.py": "da921eccc407a992b7567c369c0a9dea7b6f7847be5f769d4833049d60692ea5",
+    "refactor/clean/src/physical_model/surfaces.py": "15e9fa105e830c2cbb2afd64437fc7619500993f047b65e5bcdf43ff616f2ed0",
+    "refactor/clean/src/mujoco_runtime/cad_visual.py": "aa29193a4c1ab5b2f595c4827928ca3703a7a7cb918cb5736dcb83f597d93eb4",
+    "refactor/clean/src/mujoco_runtime/model_builder.py": "35dd27d30921970a4ca7f4712d8fa52284d172a09e625f1d3c1375038e984da5",
+    "refactor/clean/src/mujoco_runtime/numerics.py": "677b2c4cd2d07888d5f8a0ab3e9f9fc98c7b89b1b72a7a72d73aa75ae35db54e",
+    "refactor/clean/src/mujoco_runtime/reference_actuator.py": "aca879153282445bb37b6cecd4cb6aaa59800589dcb03f9851e0134b6868b23a",
+    "refactor/clean/src/mujoco_runtime/scene_style.py": "e6d7ab2c3b91215a91e995d5218ad0c8baae677764ef8d81faebd7dcd1451b38"
+  },
+  "cad_manifest_sha256": "a6448e56bdc560ad4d57c61f73c6e53a02ea6e3c819c60ba48dec2986db68264",
+  "source_scene_sha256": "a2f0ee0041cb59ff70edd62d77117b90a73935af7961e97235b60e0da46e5c80",
+  "snapshot_sha256": "9b85d1a4a4337a74ff6581f44ff02bddbf345f28ee92125a069d75fc6a47be2e",
+  "dynamic_mass_kg": 3.0941999999999994,
+  "robot_bodies": 21,
+  "actuators": 20,
+  "mesh_count": 21,
+  "cad_mass_and_com": "Upstream provenance claims; original drawing not included",
+  "inertia": "Finite rod/box approximations, not CAD inertia tensors",
+  "actuators_status": "Numerical reference; not identified AR-S430-01 dynamics",
+  "self_collision": false
+}

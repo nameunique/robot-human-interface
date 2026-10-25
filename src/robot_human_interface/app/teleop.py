@@ -12,6 +12,11 @@ from typing import Any, Sequence
 import numpy as np
 
 from robot_human_interface.resources import ResourceLocator
+from robot_human_interface.model_profiles import (
+    DEFAULT_MODEL_PROFILE,
+    MODEL_PROFILES,
+    get_model_profile,
+)
 
 PROJECT_ROOT = ResourceLocator().project_root
 WINDOW_NAME = "Robot human interface - camera skeleton"
@@ -471,6 +476,12 @@ def build_parser() -> argparse.ArgumentParser:
         default="visual",
         help="Initial MuJoCo rendering: imported robot meshes or joint skeleton.",
     )
+    parser.add_argument(
+        "--model-profile",
+        choices=tuple(MODEL_PROFILES),
+        default=DEFAULT_MODEL_PROFILE,
+        help="Physical model: volodka CAD (default) or the previous unity_legacy model.",
+    )
     parser.add_argument("--camera-index", type=int, default=int(camera_defaults.get("index", 0)))
     parser.add_argument(
         "--camera-backend",
@@ -576,6 +587,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _validate_args(args: argparse.Namespace) -> None:
+    profile = get_model_profile(getattr(args, "model_profile", DEFAULT_MODEL_PROFILE))
+    if str(args.robot_websocket_url).strip() and not profile.hardware_mapping_verified:
+        raise ValueError(profile.hardware_block_reason)
     if args.max_frames < 0:
         raise ValueError("--max-frames must be non-negative")
     if args.physics_steps_per_frame < 0:
@@ -636,6 +650,9 @@ def _make_robot_publisher(args: argparse.Namespace) -> Any | None:
     url = str(args.robot_websocket_url).strip()
     if not url:
         return None
+    profile = get_model_profile(getattr(args, "model_profile", DEFAULT_MODEL_PROFILE))
+    if not profile.hardware_mapping_verified:
+        raise ValueError(profile.hardware_block_reason)
     try:
         import websocket  # type: ignore[import-not-found]
     except ImportError:
@@ -653,7 +670,7 @@ def _make_robot_publisher(args: argparse.Namespace) -> Any | None:
 
     publisher = LatestCommandPublisher(
         WebSocketTransport(url, timeout_s=float(args.robot_websocket_timeout_s)),
-        LegacyWebSocketEncoder(joint_config_path=PROJECT_ROOT / "config" / "joints.yaml"),
+        LegacyWebSocketEncoder(joint_config_path=profile.joints_path()),
         rate_hz=10.0,
         repeat_latest=True,
     )
@@ -969,27 +986,35 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
     from robot_human_interface.simulation import HumanoidSimulation
     from robot_human_interface.skeleton import RobotJointCommand
 
+    profile = get_model_profile(getattr(args, "model_profile", DEFAULT_MODEL_PROFILE))
+    resources = ResourceLocator(PROJECT_ROOT)
     robot_publisher = _make_robot_publisher(args)
     source, pose = _make_perception(args)
     retargeter_type = (
         MujocoIKRetargeter if args.retargeting == "ik" else GeometricRetargeter
     )
-    retargeter = retargeter_type.from_yaml(
-        joints_path=PROJECT_ROOT / "config" / "joints.yaml",
-        retargeting_path=PROJECT_ROOT / "config" / "retargeting.yaml",
-    )
+    retargeter_kwargs = {
+        "joints_path": profile.joints_path(resources),
+        "retargeting_path": resources.config("retargeting.yaml"),
+    }
+    if args.retargeting == "ik":
+        retargeter_kwargs["model_path"] = profile.scene_path("fixed", resources)
+    retargeter = retargeter_type.from_yaml(**retargeter_kwargs)
     base_mode = "free" if args.free_base else "fixed"
-    simulation = HumanoidSimulation(base_mode)
+    simulation = HumanoidSimulation(
+        profile.scene_path(base_mode, resources),
+        joint_config_path=profile.joints_path(resources),
+    )
     balance_enabled = bool(args.free_base and args.balance_controller)
-    balance_config = load_standing_balance_config(PROJECT_ROOT / "config" / "balance.yaml")
+    balance_config = load_standing_balance_config(profile.balance_path(resources))
     balance_controller = StandingBalanceController.from_simulation(
         simulation, replace(balance_config, enabled=balance_enabled)
     )
-    support_config = load_support_control_config(PROJECT_ROOT / "config" / "balance.yaml")
+    support_config = load_support_control_config(profile.balance_path(resources))
     support_machine = SupportStateMachine.from_simulation(simulation, support_config)
     support_latch = SupportIntentLatch()
     support_intent_estimator = HumanSupportIntentEstimator(
-        load_human_support_intent_config(PROJECT_ROOT / "config" / "balance.yaml")
+        load_human_support_intent_config(profile.balance_path(resources))
     )
     support_enabled = balance_enabled
     robot_publisher_started = False
@@ -1006,6 +1031,10 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
     safe_command_max: np.ndarray | None = None
     initial_state = simulation.get_state()
     final_base_height = float(initial_state.base_position_m[2])
+    # Preserve the legacy ratios, not its metre-scale body height. A compact
+    # CAD robot must not be classified as fallen merely because it is shorter.
+    fall_height_m = final_base_height * (0.55 / 0.939255)
+    settling_height_m = final_base_height * (0.70 / 0.939255)
     minimum_base_height = final_base_height
     final_simulation_time = float(initial_state.simulation_time_s)
     first_frame_timestamp: float | None = None
@@ -1294,7 +1323,7 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
                     tilt_rad = float(np.arccos(np.clip(upright, -1.0, 1.0)))
                     maximum_tilt_rad = max(maximum_tilt_rad, tilt_rad)
                     fall_detected = bool(
-                        state.base_position_m[2] < 0.55
+                        state.base_position_m[2] < fall_height_m
                         or tilt_rad > np.radians(45.0)
                         or state.non_foot_ground_contact_count > 0
                     )
@@ -1440,7 +1469,7 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
                 )
                 maximum_tilt_rad = max(maximum_tilt_rad, tilt_rad)
                 fall_detected = bool(
-                    height_m < 0.55
+                    height_m < fall_height_m
                     or tilt_rad > np.radians(45.0)
                     or state.non_foot_ground_contact_count > 0
                 )
@@ -1495,7 +1524,7 @@ def run_teleop(args: argparse.Namespace) -> TeleopStats:
                 quiet_checks = {
                     "double_support": double_support,
                     "both_feet_loaded": both_feet_loaded,
-                    "height": height_m >= 0.70,
+                    "height": height_m >= settling_height_m,
                     "tilt": tilt_rad <= stable_tilt_limit_rad,
                     "angular_speed": angular_speed
                     <= support_config.start_max_angular_speed_rad_s,
